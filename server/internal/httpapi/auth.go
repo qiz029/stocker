@@ -19,6 +19,10 @@ const (
 
 var usernameRe = regexp.MustCompile(`^[A-Za-z0-9_]{3,32}$`)
 
+// dummyHash burns the same bcrypt cost on unknown usernames as on wrong
+// passwords, so login timing can't be used to enumerate accounts.
+var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("stocker-dummy-password"), bcrypt.DefaultCost)
+
 type credentials struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
@@ -86,7 +90,12 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	u, err := store.GetUserByUsername(r.Context(), s.DB, req.Username)
-	if err != nil || bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.Password)) != nil {
+	if err != nil {
+		_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(req.Password))
+		writeErr(w, http.StatusUnauthorized, "invalid username or password")
+		return
+	}
+	if bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.Password)) != nil {
 		writeErr(w, http.StatusUnauthorized, "invalid username or password")
 		return
 	}
