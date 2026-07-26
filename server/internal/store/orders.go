@@ -54,7 +54,9 @@ func PlaceOrder(ctx context.Context, db *pgxpool.Pool, room *Room, userID int64,
 
 	var out *Order
 	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
-		// Task 7 prepends: if err := SettleTx(ctx, tx, room, curDay, false); err != nil { return err }
+		if err := SettleTx(ctx, tx, room, curDay, false); err != nil {
+			return err
+		}
 		var one int
 		err := tx.QueryRow(ctx, `
 			SELECT 1 FROM room_prices
@@ -119,13 +121,15 @@ func PlaceOrder(ctx context.Context, db *pgxpool.Pool, room *Room, userID int64,
 // cancellable (spec §2.2 成交日到来前可撤单).
 func CancelOrder(ctx context.Context, db *pgxpool.Pool, room *Room, userID, orderID int64, now time.Time) error {
 	return pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
-		// Task 7 prepends lazy settlement here so due orders fill before
-		// cancellation is judged:
-		// if room.Status == "running" {
-		//     if curDay, ended, err := room.CurrentDay(now); err == nil {
-		//         if err := SettleTx(ctx, tx, room, curDay, ended); err != nil { return err }
-		//     }
-		// }
+		if room.Status == "running" {
+			curDay, ended, err := room.CurrentDay(now)
+			if err != nil {
+				return err
+			}
+			if err := SettleTx(ctx, tx, room, curDay, ended); err != nil {
+				return err
+			}
+		}
 		var side, instrumentID string
 		var amountCents int64
 		var shares float64
