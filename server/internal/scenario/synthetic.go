@@ -41,20 +41,20 @@ func Synthetic() *Scenario {
 		prices := make([]OHLC, days)
 		logp := math.Log(100)
 		for d := 0; d < days; d++ {
-			drift := 0.0005
+			drift := 0.004
 			if techy {
 				switch {
 				case d < 150:
-					drift = 0.008 // 泡沫
+					drift = 0.010 // 泡沫
 				case d == 150:
 					drift = -0.15 // scripted crash-start gap-down
 				case d < 220:
-					drift = -0.013 // 崩盘
+					drift = -0.020 // 崩盘
 				default:
-					drift = 0.0
+					drift = 0.006 // 恢复
 				}
 			}
-			ret := drift + rng.NormFloat64()*0.04
+			ret := drift + rng.NormFloat64()*0.035
 			open := math.Exp(logp)
 			logp += ret
 			cls := math.Exp(logp)
