@@ -10,7 +10,7 @@ type World struct {
 	ScenarioID string
 	Seed       uint64
 	Prices     map[string][]scenario.OHLC
-	News       []NewsEvent
+	News       []NewsEvent // 按 Day 升序; 计划 2 据此入库 room_prices / room_news
 }
 
 // GenerateWorld builds one room's complete parallel world. Deterministic in
