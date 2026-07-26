@@ -42,7 +42,8 @@ func (s *Server) storeErr(w http.ResponseWriter, err error) {
 		errors.Is(err, store.ErrInsufficientCash),
 		errors.Is(err, store.ErrInsufficientShares),
 		errors.Is(err, store.ErrRoomNotRunning),
-		errors.Is(err, store.ErrNotStarted):
+		errors.Is(err, store.ErrNotStarted),
+		errors.Is(err, store.ErrBadChatMessage):
 		writeErr(w, http.StatusBadRequest, err.Error())
 	default:
 		log.Printf("internal error: %v", err)

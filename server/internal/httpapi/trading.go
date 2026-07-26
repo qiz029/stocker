@@ -98,3 +98,29 @@ func (s *Server) handlePortfolio(w http.ResponseWriter, r *http.Request) {
 		"positions": positions, "pending": pending,
 	})
 }
+
+func (s *Server) handleMyTrades(w http.ResponseWriter, r *http.Request) {
+	room, ok := s.roomForMember(w, r)
+	if !ok {
+		return
+	}
+	if room.StartedAt != nil {
+		if _, _, err := store.SettleRoom(r.Context(), s.DB, room, s.Now()); err != nil {
+			s.storeErr(w, err)
+			return
+		}
+	}
+	trades, err := store.TradesForUser(r.Context(), s.DB, room.ID, userFrom(r).ID)
+	if err != nil {
+		s.storeErr(w, err)
+		return
+	}
+	items := []map[string]any{}
+	for _, t := range trades {
+		items = append(items, map[string]any{
+			"instrument_id": t.InstrumentID, "side": t.Side, "day": t.Day,
+			"price": t.Price, "shares": t.Shares, "amount_cents": t.AmountCents,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
