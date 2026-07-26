@@ -34,7 +34,13 @@ export function assetCurve(
     }
     let posVal = 0;
     for (const [inst, sh] of Object.entries(shares)) {
-      posVal += sh * (series[inst]?.[d] ?? 0);
+      const instSeries = series[inst];
+      // current_day can bump before the price series refetch resolves; fall
+      // back to the last known close (instead of 0) so the hero number
+      // doesn't dip by the whole position value for one tick. Truly missing
+      // instruments (empty/absent series) still value at 0.
+      const price = instSeries?.[d] ?? instSeries?.[instSeries.length - 1] ?? 0;
+      posVal += sh * price;
     }
     out.push(cash + Math.round(posVal * 100));
   }

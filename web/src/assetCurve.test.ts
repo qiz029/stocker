@@ -37,4 +37,26 @@ describe("assetCurve", () => {
     expect(curve[2]).toBe(afterSell);
     expect(curve[3]).toBe(afterSell); // all cash again — day-3 crash doesn't touch us
   });
+
+  it("falls back to the last known close when curDay outruns the price series", () => {
+    // S1's series only has days 0-3 (length 4); ask for day 4 (one past the
+    // end), simulating current_day bumping before the price refetch lands.
+    const trades: Trade[] = [
+      { instrument_id: "S1", side: "buy", day: 1, price: 110, shares: 4_000_000 / 100 / 110, amount_cents: 4_000_000 },
+    ];
+    const curve = assetCurve(trades, series, 4);
+    const shares = 4_000_000 / 100 / 110;
+    const lastClose = series.S1[series.S1.length - 1]!; // 90
+    // Should use the last known close (90), not 0.
+    expect(curve[4]).toBe(6_000_000 + Math.round(shares * lastClose * 100));
+  });
+
+  it("still values a truly missing instrument's position at 0", () => {
+    const trades: Trade[] = [
+      { instrument_id: "UNKNOWN", side: "buy", day: 1, price: 50, shares: 100, amount_cents: 5_000_000 },
+    ];
+    const curve = assetCurve(trades, series, 2);
+    // No series entry at all for UNKNOWN → position values at 0, only cash remains.
+    expect(curve[2]).toBe(10_000_000 - 5_000_000);
+  });
 });

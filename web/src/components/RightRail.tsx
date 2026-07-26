@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { api, EventItem, MEDIA_NAMES, NewsItem, RoomState } from "../api";
+import { EventItem, MEDIA_NAMES, NewsItem, RoomState } from "../api";
 import { fmtCents, fmtPct, prettifyHeadline } from "../format";
-import { usePoll } from "../usePoll";
+import { useIncrementalFeed } from "../useIncrementalFeed";
 import { useUser } from "../App";
 import Chat from "./Chat";
 
@@ -11,13 +11,13 @@ export default function RightRail({ roomId, state, aliasOf }: Props) {
   const user = useUser();
   const [newsShown, setNewsShown] = useState(8);
   const [openNews, setOpenNews] = useState<number | null>(null);
-  const { data: newsRes } = usePoll(
-    () => api.get<{ items: NewsItem[] }>(`/api/rooms/${roomId}/news?after=0`), 30_000, [roomId]);
-  const { data: eventsRes } = usePoll(
-    () => api.get<{ items: EventItem[] }>(`/api/rooms/${roomId}/events?after=0`), 30_000, [roomId]);
+  const { items: newsItems } = useIncrementalFeed<NewsItem>(
+    after => `/api/rooms/${roomId}/news?after=${after}`, 30_000, roomId);
+  const { items: eventsItems } = useIncrementalFeed<EventItem>(
+    after => `/api/rooms/${roomId}/events?after=${after}`, 30_000, roomId);
 
-  const news = [...(newsRes?.items ?? [])].sort((a, b) => b.id - a.id).slice(0, newsShown);
-  const events = [...(eventsRes?.items ?? [])].sort((a, b) => b.id - a.id).slice(0, 6);
+  const news = [...newsItems].sort((a, b) => b.id - a.id).slice(0, newsShown);
+  const events = [...eventsItems].sort((a, b) => b.id - a.id).slice(0, 6);
 
   return (
     <div>
@@ -62,7 +62,7 @@ export default function RightRail({ roomId, state, aliasOf }: Props) {
             {n.body && <div className="fi-body">{n.body}</div>}
           </div>
         ))}
-        {(newsRes?.items.length ?? 0) > newsShown && (
+        {newsItems.length > newsShown && (
           <button className="feed-more" onClick={() => setNewsShown(n => n + 8)}>更早的新闻 ↓</button>
         )}
       </div>

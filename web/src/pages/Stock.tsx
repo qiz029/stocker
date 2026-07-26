@@ -1,8 +1,8 @@
 import { useNavigate, useParams } from "react-router-dom";
-import { MEDIA_NAMES, NewsItem, api } from "../api";
+import { MEDIA_NAMES, NewsItem } from "../api";
 import { fmt$, fmtPct, prettifyHeadline } from "../format";
 import { useRoomData } from "../roomData";
-import { usePoll } from "../usePoll";
+import { useIncrementalFeed } from "../useIncrementalFeed";
 import { useState } from "react";
 import HeroChart from "../components/HeroChart";
 import TradePanel from "../components/TradePanel";
@@ -11,8 +11,8 @@ export default function Stock() {
   const { roomId, instrumentId } = useParams<{ roomId: string; instrumentId: string }>();
   const navigate = useNavigate();
   const { state, portfolio, series, reload } = useRoomData(roomId!);
-  const { data: newsRes } = usePoll(
-    () => api.get<{ items: NewsItem[] }>(`/api/rooms/${roomId}/news?after=0`), 30_000, [roomId]);
+  const { items: newsItems } = useIncrementalFeed<NewsItem>(
+    after => `/api/rooms/${roomId}/news?after=${after}`, 30_000, roomId!);
   const [openNews, setOpenNews] = useState<number | null>(null);
 
   if (!state) return null;
@@ -25,7 +25,7 @@ export default function Stock() {
   const prev = closes[closes.length - 2] ?? last;
   const q3m = closes.slice(-63);
   const held = portfolio?.positions.find(p => p.instrument_id === instrumentId)?.shares ?? 0;
-  const relatedNews = (newsRes?.items ?? [])
+  const relatedNews = newsItems
     .filter(n => n.headline.includes(instrumentId!) || n.headline.includes(inst.alias))
     .sort((a, b) => b.id - a.id)
     .slice(0, 5);

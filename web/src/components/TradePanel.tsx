@@ -104,7 +104,7 @@ export default function TradePanel({ roomId, instrumentId, lastClose, portfolio,
           {pending.map(o => (
             <div key={o.id} className="pending-item">
               <span className="num">
-                {o.side === "buy" ? `买入 ${fmtCents(o.amount_cents)}` : `卖出 ${o.shares} 股`} · 第 {o.exec_day} 日开盘
+                {o.side === "buy" ? `买入 ${fmtCents(o.amount_cents)}` : `卖出 ${o.shares.toFixed(1)} 股`} · 第 {o.exec_day} 日开盘
               </span>
               <button className="cancel" onClick={() => cancel(o.id)}>撤单</button>
             </div>
