@@ -44,7 +44,7 @@ func (s *Server) Router() http.Handler {
 		r.Post("/api/rooms/{roomID}/orders", s.handlePlaceOrder)
 		r.Delete("/api/rooms/{roomID}/orders/{orderID}", s.handleCancelOrder)
 		r.Get("/api/rooms/{roomID}/portfolio", s.handlePortfolio)
-		// Reveal route is registered here by Task 11.
+		r.Get("/api/rooms/{roomID}/reveal", s.handleReveal)
 	})
 	return r
 }
