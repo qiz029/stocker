@@ -46,6 +46,8 @@ func Synthetic() *Scenario {
 				switch {
 				case d < 150:
 					drift = 0.006 // 泡沫
+				case d == 150:
+					drift = -0.12 // scripted crash-start gap-down
 				case d < 220:
 					drift = -0.013 // 崩盘
 				default:
