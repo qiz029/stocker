@@ -93,3 +93,26 @@ func TestReportShockDecoupled(t *testing.T) {
 		t.Fatal("ReportShock identical to TrueShock everywhere; rho/noise not applied")
 	}
 }
+
+func TestNoEmptyKeyShocks(t *testing.T) {
+	// Test that instruments without idio factors don't produce empty-key shocks
+	sc := &scenario.Scenario{
+		ID:   "test",
+		Days: 100,
+		Factors: []scenario.Factor{
+			{ID: "MKT", Name: "Market", Kind: scenario.KindMarket},
+		},
+		Instruments: []scenario.Instrument{
+			{ID: "stock1", Alias: "S1", Desc: "Stock without idio", Beta: map[string]float64{"MKT": 1.0}},
+		},
+		KeyWindows: []scenario.KeyWindow{},
+	}
+	evs := GenerateShockTimeline(sc, 42)
+	for _, ev := range evs {
+		for f := range ev.TrueShock {
+			if f == "" {
+				t.Fatalf("found empty-key shock in event: %+v", ev)
+			}
+		}
+	}
+}
