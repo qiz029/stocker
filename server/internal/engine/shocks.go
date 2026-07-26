@@ -7,6 +7,17 @@ import (
 	"github.com/toddzheng/stocker/server/internal/scenario"
 )
 
+// Factor-ID conventions for NewsEvent.TrueShock / ReportShock keys:
+//   - Market shocks always target the literal factor ID "MKT".
+//   - Sector shocks target a scenario-defined sector factor ID (e.g. "TECH").
+//   - Idiosyncratic (per-instrument) shocks target "IDIO:<instrumentID>",
+//     e.g. "IDIO:S1" for instrument "S1" (see scenario.Synthetic and
+//     Instrument.Beta, which keys betas the same way).
+//
+// Every scenario must define both a "MKT" factor and, for each instrument
+// that should carry idiosyncratic shocks, an "IDIO:<instrumentID>" factor —
+// EvolveFactorStates rejects any TrueShock key that isn't a declared
+// scenario.Factor.ID.
 type Track string
 
 const (
@@ -82,9 +93,9 @@ func signedShock(rng *rand.Rand, sc *scenario.Scenario, day int) float64 {
 	return sign * mag
 }
 
-func report(rng *rand.Rand, rho float64, true_ map[string]float64) map[string]float64 {
-	rep := make(map[string]float64, len(true_))
-	for f, v := range true_ {
+func report(rng *rand.Rand, rho float64, trueShock map[string]float64) map[string]float64 {
+	rep := make(map[string]float64, len(trueShock))
+	for f, v := range trueShock {
 		rep[f] = rho*v + rng.NormFloat64()*(1-rho)*0.01
 	}
 	return rep
@@ -109,6 +120,11 @@ func GenerateShockTimeline(sc *scenario.Scenario, seed uint64) []NewsEvent {
 		}
 	}
 	var evs []NewsEvent
+	// Note: a shock emitted on the last scenario day (sc.Days-1) still
+	// publishes as news, but EvolveFactorStates applies effects on day+1,
+	// which is out of range — such a shock can never move prices. This is
+	// intentional flavor (a headline that "hasn't been priced in yet"), not
+	// a bug.
 	emit := func(day int, shock map[string]float64) {
 		m := MediaTable[rng.IntN(len(MediaTable))]
 		evs = append(evs, NewsEvent{

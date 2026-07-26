@@ -18,7 +18,10 @@ type World struct {
 // case the caller retries with a derived seed.
 func GenerateWorld(sc *scenario.Scenario, seed uint64) (*World, error) {
 	shocks := GenerateShockTimeline(sc, seed)
-	states := EvolveFactorStates(sc, shocks)
+	states, err := EvolveFactorStates(sc, shocks)
+	if err != nil {
+		return nil, err
+	}
 	prices := SynthesizePrices(sc, states, seed)
 	if err := VerifyFidelity(sc, prices); err != nil {
 		return nil, err

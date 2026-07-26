@@ -9,7 +9,10 @@ import (
 
 func TestPricesNoShocksTrackBaseline(t *testing.T) {
 	sc := scenario.Synthetic()
-	states := EvolveFactorStates(sc, nil)
+	states, err := EvolveFactorStates(sc, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	prices := SynthesizePrices(sc, states, 42)
 	for _, inst := range sc.Instruments {
 		for d := 0; d < sc.Days; d++ {
@@ -30,7 +33,10 @@ func TestPricesClampBound(t *testing.T) {
 		evs = append(evs, NewsEvent{Day: d, Track: TrackImpact,
 			TrueShock: map[string]float64{"MKT": 0.5}})
 	}
-	states := EvolveFactorStates(sc, evs)
+	states, err := EvolveFactorStates(sc, evs)
+	if err != nil {
+		t.Fatal(err)
+	}
 	prices := SynthesizePrices(sc, states, 42)
 	for _, inst := range sc.Instruments {
 		for d := 0; d < sc.Days; d++ {
@@ -44,7 +50,10 @@ func TestPricesClampBound(t *testing.T) {
 
 func TestPricesOHLCConsistent(t *testing.T) {
 	sc := scenario.Synthetic()
-	states := EvolveFactorStates(sc, GenerateShockTimeline(sc, 42))
+	states, err := EvolveFactorStates(sc, GenerateShockTimeline(sc, 42))
+	if err != nil {
+		t.Fatal(err)
+	}
 	prices := SynthesizePrices(sc, states, 42)
 	for _, inst := range sc.Instruments {
 		for d, p := range prices[inst.ID] {

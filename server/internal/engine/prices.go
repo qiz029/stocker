@@ -19,14 +19,15 @@ func SynthesizePrices(sc *scenario.Scenario, states [][]float64, seed uint64) ma
 	for _, inst := range sc.Instruments {
 		rng := Stream(seed, "eps", inst.ID)
 		prices := make([]scenario.OHLC, sc.Days)
+		// Sort factors once per instrument (inst.Beta doesn't change across
+		// days) to ensure deterministic iteration order.
+		factors := make([]string, 0, len(inst.Beta))
+		for f := range inst.Beta {
+			factors = append(factors, f)
+		}
+		sort.Strings(factors)
 		for d := 0; d < sc.Days; d++ {
 			x := rng.NormFloat64() * epsSigma
-			// Sort factors to ensure deterministic iteration order
-			factors := make([]string, 0, len(inst.Beta))
-			for f := range inst.Beta {
-				factors = append(factors, f)
-			}
-			sort.Strings(factors)
 			for _, f := range factors {
 				beta := inst.Beta[f]
 				x += beta * states[d][idx[f]]

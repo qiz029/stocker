@@ -10,7 +10,10 @@ func TestFidelityHoldsAcrossSeeds(t *testing.T) {
 	sc := scenario.Synthetic()
 	for s := uint64(0); s < 30; s++ {
 		evs := GenerateShockTimeline(sc, s)
-		states := EvolveFactorStates(sc, evs)
+		states, err := EvolveFactorStates(sc, evs)
+		if err != nil {
+			t.Fatalf("seed %d: %v", s, err)
+		}
 		prices := SynthesizePrices(sc, states, s)
 		if err := VerifyFidelity(sc, prices); err != nil {
 			t.Fatalf("seed %d violates fidelity: %v", s, err)

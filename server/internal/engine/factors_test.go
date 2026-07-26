@@ -12,7 +12,10 @@ func TestSingleShockDecay(t *testing.T) {
 	shock := 0.10
 	evs := []NewsEvent{{Day: 9, Track: TrackImpact,
 		TrueShock: map[string]float64{"MKT": shock}}}
-	states := EvolveFactorStates(sc, evs)
+	states, err := EvolveFactorStates(sc, evs)
+	if err != nil {
+		t.Fatal(err)
+	}
 	mkt := 0 // "MKT" 是 FactorIDs()[0]
 	if states[9][mkt] != 0 {
 		t.Fatal("shock must take effect on Day+1, not publish day")
@@ -35,12 +38,25 @@ func TestSingleShockDecay(t *testing.T) {
 
 func TestNoEventsZeroStates(t *testing.T) {
 	sc := scenario.Synthetic()
-	states := EvolveFactorStates(sc, nil)
+	states, err := EvolveFactorStates(sc, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for d := range states {
 		for i, x := range states[d] {
 			if x != 0 {
 				t.Fatalf("day %d factor %d nonzero without events", d, i)
 			}
 		}
+	}
+}
+
+func TestEvolveFactorStatesUnknownFactorID(t *testing.T) {
+	sc := scenario.Synthetic()
+	evs := []NewsEvent{{Day: 9, Track: TrackImpact,
+		TrueShock: map[string]float64{"NOPE_NOT_A_FACTOR": 0.05}}}
+	_, err := EvolveFactorStates(sc, evs)
+	if err == nil {
+		t.Fatal("expected error for unknown factor id, got nil")
 	}
 }
