@@ -188,3 +188,12 @@ func TestJoinStartAndClock(t *testing.T) {
 		t.Fatalf("IsMember(extra): %v, %v", member, err)
 	}
 }
+
+func scenarioMustLoad(t *testing.T, pool *pgxpool.Pool) *scenario.Scenario {
+	t.Helper()
+	sc, err := LoadScenario(context.Background(), pool, "synthetic-v1")
+	if err != nil {
+		t.Fatalf("scenarioMustLoad: %v", err)
+	}
+	return sc
+}
