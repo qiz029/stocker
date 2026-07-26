@@ -41,7 +41,10 @@ func (s *Server) Router() http.Handler {
 		r.Get("/api/rooms/{roomID}/prices/{instrumentID}", s.handlePrices)
 		r.Get("/api/rooms/{roomID}/news", s.handleNews)
 		r.Get("/api/rooms/{roomID}/events", s.handleEvents)
-		// Trading and reveal routes are registered here by later tasks.
+		r.Post("/api/rooms/{roomID}/orders", s.handlePlaceOrder)
+		r.Delete("/api/rooms/{roomID}/orders/{orderID}", s.handleCancelOrder)
+		r.Get("/api/rooms/{roomID}/portfolio", s.handlePortfolio)
+		// Reveal route is registered here by Task 11.
 	})
 	return r
 }
