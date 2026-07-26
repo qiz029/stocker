@@ -33,7 +33,15 @@ func (s *Server) Router() http.Handler {
 		r.Use(s.requireAuth)
 		r.Post("/api/logout", s.handleLogout)
 		r.Get("/api/me", s.handleMe)
-		// Room and trading routes are registered here by later tasks.
+		r.Post("/api/rooms", s.handleCreateRoom)
+		r.Post("/api/rooms/join", s.handleJoinRoom)
+		r.Get("/api/rooms", s.handleMyRooms)
+		r.Post("/api/rooms/{roomID}/start", s.handleStartRoom)
+		r.Get("/api/rooms/{roomID}", s.handleRoomState)
+		r.Get("/api/rooms/{roomID}/prices/{instrumentID}", s.handlePrices)
+		r.Get("/api/rooms/{roomID}/news", s.handleNews)
+		r.Get("/api/rooms/{roomID}/events", s.handleEvents)
+		// Trading and reveal routes are registered here by later tasks.
 	})
 	return r
 }
