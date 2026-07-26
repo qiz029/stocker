@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	minReturnCorr  = 0.85
-	extremumSlack  = 10
+	minReturnCorr = 0.85
+	extremumSlack = 10
 )
 
 func logReturns(p []scenario.OHLC) []float64 {
@@ -51,8 +51,22 @@ func argExtremum(p []scenario.OHLC, max bool) int {
 // scenario acceptance gate.
 func VerifyFidelity(sc *scenario.Scenario, prices map[string][]scenario.OHLC) error {
 	for _, inst := range sc.Instruments {
-		base, disp := sc.Baseline[inst.ID], prices[inst.ID]
-		if corr := pearson(logReturns(base), logReturns(disp)); corr < minReturnCorr {
+		base := sc.Baseline[inst.ID]
+		disp, ok := prices[inst.ID]
+		if !ok {
+			return fmt.Errorf("%s: missing prices", inst.ID)
+		}
+		if len(disp) != len(base) {
+			return fmt.Errorf("%s: length mismatch (base=%d, disp=%d)", inst.ID, len(base), len(disp))
+		}
+		if len(base) < 2 {
+			return fmt.Errorf("%s: too few days (%d) to verify fidelity", inst.ID, len(base))
+		}
+		corr := pearson(logReturns(base), logReturns(disp))
+		if math.IsNaN(corr) {
+			return fmt.Errorf("%s: return correlation is NaN (degenerate series)", inst.ID)
+		}
+		if corr < minReturnCorr {
 			return fmt.Errorf("%s: return correlation %.3f < %.2f", inst.ID, corr, minReturnCorr)
 		}
 		bDir := base[len(base)-1].Close >= base[0].Close
