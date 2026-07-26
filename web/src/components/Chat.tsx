@@ -13,9 +13,13 @@ export default function Chat({ roomId }: { roomId: string }) {
   async function fetchNew() {
     try {
       const res = await api.get<{ items: ChatMessage[] }>(`/api/rooms/${roomId}/chat?after=${lastID.current}`);
-      if (res.items.length) {
-        lastID.current = res.items[res.items.length - 1]!.id;
-        setMessages(m => [...m, ...res.items]);
+      const fresh = res.items.filter(m => m.id > lastID.current);
+      if (fresh.length) {
+        lastID.current = fresh[fresh.length - 1]!.id;
+        setMessages(m => {
+          const seen = new Set(m.map(x => x.id));
+          return [...m, ...fresh.filter(x => !seen.has(x.id))];
+        });
       }
     } catch {
       /* transient poll errors are silent; next tick retries */
