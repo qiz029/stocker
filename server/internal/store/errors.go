@@ -16,4 +16,5 @@ var (
 	ErrInsufficientCash   = errors.New("insufficient cash")
 	ErrInsufficientShares = errors.New("insufficient shares")
 	ErrNotCancellable     = errors.New("order cannot be cancelled")
+	ErrBadChatMessage     = errors.New("chat message must be 1-500 characters")
 )

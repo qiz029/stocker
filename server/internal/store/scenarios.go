@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -118,4 +119,37 @@ func LoadScenario(ctx context.Context, q Querier, id string) (*scenario.Scenario
 		sc.Baseline[instID][day] = p // assign by index: row order is irrelevant
 	}
 	return sc, priceRows.Err()
+}
+
+type InstrumentDisplay struct {
+	Alias    string `json:"-"`
+	Desc     string `json:"-"`
+	Business string `json:"business"`
+	Bull     string `json:"bull"`
+	Bear     string `json:"bear"`
+}
+
+// SetInstrumentDisplay overwrites display-only columns (alias, descr,
+// profile) for existing instruments. World generation never reads these,
+// so applying them after SaveScenario cannot affect determinism.
+func SetInstrumentDisplay(ctx context.Context, db *pgxpool.Pool, scenarioID string, display map[string]InstrumentDisplay) error {
+	return pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+		for id, d := range display {
+			profile, err := json.Marshal(d)
+			if err != nil {
+				return err
+			}
+			tag, err := tx.Exec(ctx, `
+				UPDATE instruments SET alias = $3, descr = $4, profile = $5
+				WHERE scenario_id = $1 AND id = $2`,
+				scenarioID, id, d.Alias, d.Desc, string(profile))
+			if err != nil {
+				return err
+			}
+			if tag.RowsAffected() == 0 {
+				return fmt.Errorf("set display: unknown instrument %q in scenario %q", id, scenarioID)
+			}
+		}
+		return nil
+	})
 }

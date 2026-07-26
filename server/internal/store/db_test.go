@@ -19,7 +19,7 @@ func TestMigrateCreatesSchemaAndIsIdempotent(t *testing.T) {
 	// Every table exists and is queryable.
 	for _, table := range []string{
 		"users", "sessions", "scenarios", "instruments", "scenario_prices",
-		"rooms", "room_players", "room_prices", "room_news",
+		"rooms", "room_players", "room_prices", "room_news", "room_chat",
 		"orders", "trades", "positions", "room_events",
 	} {
 		var n int
@@ -28,12 +28,12 @@ func TestMigrateCreatesSchemaAndIsIdempotent(t *testing.T) {
 		}
 	}
 
-	// Exactly one migration recorded, exactly once.
+	// Exactly two migrations recorded, exactly once.
 	var applied int
 	if err := pool.QueryRow(ctx, "SELECT count(*) FROM schema_migrations").Scan(&applied); err != nil {
 		t.Fatalf("schema_migrations: %v", err)
 	}
-	if applied != 1 {
-		t.Fatalf("applied migrations = %d, want 1", applied)
+	if applied != 2 {
+		t.Fatalf("applied migrations = %d, want 2", applied)
 	}
 }
