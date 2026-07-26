@@ -45,6 +45,9 @@ func (s *Server) Router() http.Handler {
 		r.Delete("/api/rooms/{roomID}/orders/{orderID}", s.handleCancelOrder)
 		r.Get("/api/rooms/{roomID}/portfolio", s.handlePortfolio)
 		r.Get("/api/rooms/{roomID}/reveal", s.handleReveal)
+		r.Post("/api/rooms/{roomID}/chat", s.handlePostChat)
+		r.Get("/api/rooms/{roomID}/chat", s.handleGetChat)
+		r.Get("/api/rooms/{roomID}/trades", s.handleMyTrades)
 	})
 	return r
 }

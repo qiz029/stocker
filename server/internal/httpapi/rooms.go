@@ -151,7 +151,7 @@ func (s *Server) handleRoomState(w http.ResponseWriter, r *http.Request) {
 
 	// Blind-box instrument cards: alias + description only.
 	instRows, err := s.DB.Query(r.Context(), `
-		SELECT i.id, i.alias, i.descr
+		SELECT i.id, i.alias, i.descr, i.profile
 		FROM instruments i JOIN rooms rm ON rm.scenario_id = i.scenario_id
 		WHERE rm.id = $1 ORDER BY i.ord`, room.ID)
 	if err != nil {
@@ -162,11 +162,14 @@ func (s *Server) handleRoomState(w http.ResponseWriter, r *http.Request) {
 	instruments := []map[string]any{}
 	for instRows.Next() {
 		var id, alias, desc string
-		if err := instRows.Scan(&id, &alias, &desc); err != nil {
+		var profile map[string]any // nil when column is NULL
+		if err := instRows.Scan(&id, &alias, &desc, &profile); err != nil {
 			s.storeErr(w, err)
 			return
 		}
-		instruments = append(instruments, map[string]any{"id": id, "alias": alias, "desc": desc})
+		instruments = append(instruments, map[string]any{
+			"id": id, "alias": alias, "desc": desc, "profile": profile,
+		})
 	}
 	if err := instRows.Err(); err != nil {
 		s.storeErr(w, err)
@@ -297,7 +300,7 @@ func (s *Server) handleNews(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := s.DB.Query(r.Context(), `
-		SELECT id, day, media_id, headline FROM room_news
+		SELECT id, day, media_id, headline, body FROM room_news
 		WHERE room_id = $1 AND day <= $2 AND id > $3
 		ORDER BY id LIMIT $4`, room.ID, curDay, afterParam(r), newsPageLimit)
 	if err != nil {
@@ -309,13 +312,13 @@ func (s *Server) handleNews(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var id int64
 		var day int
-		var mediaID, headline string
-		if err := rows.Scan(&id, &day, &mediaID, &headline); err != nil {
+		var mediaID, headline, body string
+		if err := rows.Scan(&id, &day, &mediaID, &headline, &body); err != nil {
 			s.storeErr(w, err)
 			return
 		}
 		items = append(items, map[string]any{
-			"id": id, "day": day, "media_id": mediaID, "headline": headline,
+			"id": id, "day": day, "media_id": mediaID, "headline": headline, "body": body,
 		})
 	}
 	if err := rows.Err(); err != nil {

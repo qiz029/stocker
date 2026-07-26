@@ -96,3 +96,39 @@ func TestTradingFlow(t *testing.T) {
 		t.Fatalf("order after end: %d", resp.StatusCode)
 	}
 }
+
+func TestMyTradesEndpoint(t *testing.T) {
+	s := newServer(t)
+	seedScenario(t, s)
+	t0 := time.Date(2026, 7, 26, 12, 0, 0, 0, time.UTC)
+	advance := fakeClock(s, t0)
+
+	host := registerClient(t, s, "host")
+	guest := registerClient(t, s, "guest")
+	created := host.mustJSON("POST", "/api/rooms",
+		map[string]any{"scenario_id": "synthetic-v1", "day_duration_secs": 60}, http.StatusOK)
+	roomID := int64(created["id"].(float64))
+	guest.mustJSON("POST", "/api/rooms/join",
+		map[string]any{"invite_code": created["invite_code"]}, http.StatusOK)
+	host.mustJSON("POST", fmt.Sprintf("/api/rooms/%d/start", roomID), nil, http.StatusOK)
+
+	guest.mustJSON("POST", fmt.Sprintf("/api/rooms/%d/orders", roomID), map[string]any{
+		"instrument_id": "S1", "side": "buy", "amount_cents": 1_000_000}, http.StatusOK)
+	advance(61 * time.Second)
+
+	// The trades endpoint settles lazily itself.
+	got := guest.mustJSON("GET", fmt.Sprintf("/api/rooms/%d/trades", roomID), nil, http.StatusOK)
+	items := got["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("trades: %v", items)
+	}
+	tr := items[0].(map[string]any)
+	if tr["instrument_id"] != "S1" || tr["day"].(float64) != 1 || tr["amount_cents"].(float64) != 1_000_000 {
+		t.Fatalf("trade: %v", tr)
+	}
+	// Host sees only their own (none).
+	got = host.mustJSON("GET", fmt.Sprintf("/api/rooms/%d/trades", roomID), nil, http.StatusOK)
+	if n := len(got["items"].([]any)); n != 0 {
+		t.Fatalf("host trades: %d", n)
+	}
+}
