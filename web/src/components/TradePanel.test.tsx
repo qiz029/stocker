@@ -66,4 +66,17 @@ describe("TradePanel", () => {
     await waitFor(() => expect(deleted).toEqual(["/api/rooms/1/orders/9"]));
     expect(onChanged).toHaveBeenCalled();
   });
+
+  it("sell chips never overshoot fractional holdings", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ id: 3 }), { status: 200 }));
+    const fractional: Portfolio = {
+      ...portfolio,
+      positions: [{ instrument_id: "S1", shares: 400.16, close: 110, value_cents: 4_401_760 }],
+    };
+    render(<TradePanel roomId="1" instrumentId="S1" lastClose={110} portfolio={fractional} onChanged={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "卖出" }));
+    fireEvent.click(screen.getByRole("button", { name: "全部" }));
+    expect((screen.getByPlaceholderText("0") as HTMLInputElement).value).toBe("400.1");
+    expect(screen.getByRole("button", { name: "下单卖出" })).not.toBeDisabled();
+  });
 });

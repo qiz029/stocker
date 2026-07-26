@@ -28,8 +28,13 @@ export default function TradePanel({ roomId, instrumentId, lastClose, portfolio,
   const overLimit = value > maxValue + 1e-9;
 
   function pickFraction(f: number) {
-    if (side === "buy") setRaw(String(Math.floor((cash / 100) * f)));
-    else setRaw((heldShares * f).toFixed(1));
+    if (side === "buy") {
+      setRaw(String(Math.floor((cash / 100) * f)));
+    } else {
+      // Round DOWN to 0.1 share, and never exceed the actual holding.
+      const target = Math.min(heldShares, Math.floor(heldShares * f * 10) / 10);
+      setRaw(target.toFixed(1));
+    }
   }
 
   async function submit() {
