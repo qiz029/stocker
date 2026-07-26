@@ -111,9 +111,14 @@ func GenerateShockTimeline(sc *scenario.Scenario, seed uint64) []NewsEvent {
 	var evs []NewsEvent
 	emit := func(day int, shock map[string]float64) {
 		m := MediaTable[rng.IntN(len(MediaTable))]
+		// Sort factors for deterministic JSON marshaling
+		shockCopy := make(map[string]float64)
+		for f, v := range shock {
+			shockCopy[f] = v
+		}
 		evs = append(evs, NewsEvent{
 			Day: day, Track: TrackImpact, MediaID: m.ID,
-			TrueShock: shock, ReportShock: report(rng, m.Rho, shock),
+			TrueShock: shockCopy, ReportShock: report(rng, m.Rho, shock),
 		})
 	}
 	for d := 0; d < sc.Days; d++ {
