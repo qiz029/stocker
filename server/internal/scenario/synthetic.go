@@ -45,16 +45,16 @@ func Synthetic() *Scenario {
 			if techy {
 				switch {
 				case d < 150:
-					drift = 0.006 // 泡沫
+					drift = 0.008 // 泡沫
 				case d == 150:
-					drift = -0.12 // scripted crash-start gap-down
+					drift = -0.15 // scripted crash-start gap-down
 				case d < 220:
 					drift = -0.013 // 崩盘
 				default:
 					drift = 0.0
 				}
 			}
-			ret := drift + rng.NormFloat64()*0.015
+			ret := drift + rng.NormFloat64()*0.04
 			open := math.Exp(logp)
 			logp += ret
 			cls := math.Exp(logp)
