@@ -48,10 +48,12 @@ func Synthetic() *Scenario {
 					drift = 0.010 // 泡沫
 				case d == 150:
 					drift = -0.15 // scripted crash-start gap-down
-				case d < 220:
+				case d < 219:
 					drift = -0.020 // 崩盘
+				case d == 219:
+					drift = -0.06 // capitulation gap
 				default:
-					drift = 0.006 // 恢复
+					drift = 0.008 // 恢复
 				}
 			}
 			ret := drift + rng.NormFloat64()*0.035
