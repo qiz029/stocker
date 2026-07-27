@@ -19,6 +19,12 @@ import (
 
 const InitialCashCents int64 = 10_000_000 // $100,000 (spec §2.2)
 
+// NewsCopyFiller rewrites news headlines/bodies before a room's world is
+// persisted (the LLM generator in internal/llm; nil keeps template copy).
+type NewsCopyFiller interface {
+	FillCopy(ctx context.Context, sc *scenario.Scenario, evs []engine.NewsEvent)
+}
+
 type Room struct {
 	ID              int64
 	InviteCode      string
@@ -86,7 +92,7 @@ func shockJSON(m map[string]float64) any {
 // CreateRoom generates this room's parallel world and persists it whole.
 // The fidelity gate (engine.VerifyFidelity) can reject a seed; we retry
 // derived seeds a bounded number of times (spec §4.6: "不达标的参数组合拒绝").
-func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, hostID int64, dayDurationSecs int) (*Room, error) {
+func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, hostID int64, dayDurationSecs int, filler NewsCopyFiller) (*Room, error) {
 	if dayDurationSecs < 60 || dayDurationSecs > 86400 {
 		return nil, ErrBadDayDuration
 	}
@@ -112,6 +118,12 @@ func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, ho
 	invite, err := newInviteCode()
 	if err != nil {
 		return nil, err
+	}
+
+	if filler != nil {
+		fctx, cancel := context.WithTimeout(ctx, 120*time.Second)
+		filler.FillCopy(fctx, sc, world.News)
+		cancel()
 	}
 
 	var room *Room
@@ -145,10 +157,11 @@ func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, ho
 		news := make([][]any, 0, len(world.News))
 		for _, ev := range world.News {
 			news = append(news, []any{room.ID, ev.Day, ev.MediaID, ev.Headline,
-				string(ev.Track), shockJSON(ev.TrueShock), shockJSON(ev.ReportShock)})
+				string(ev.Track), shockJSON(ev.TrueShock), shockJSON(ev.ReportShock),
+				ev.Body, ev.ClusterID})
 		}
 		_, err = tx.CopyFrom(ctx, pgx.Identifier{"room_news"},
-			[]string{"room_id", "day", "media_id", "headline", "track", "true_shock", "report_shock"},
+			[]string{"room_id", "day", "media_id", "headline", "track", "true_shock", "report_shock", "body", "cluster_id"},
 			pgx.CopyFromRows(news))
 		return err
 	})

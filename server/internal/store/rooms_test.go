@@ -37,7 +37,7 @@ func TestCreateRoomPersistsWorld(t *testing.T) {
 	host := mkUser(t, pool, "host")
 	sc := mkScenario(t, pool)
 
-	room, err := CreateRoom(ctx, pool, sc, host.ID, 3600)
+	room, err := CreateRoom(ctx, pool, sc, host.ID, 3600, nil)
 	if err != nil {
 		t.Fatalf("CreateRoom: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestCreateRoomValidatesDayDuration(t *testing.T) {
 	host := mkUser(t, pool, "host")
 	sc := mkScenario(t, pool)
 	for _, secs := range []int{0, 59, 86401, -5} {
-		if _, err := CreateRoom(context.Background(), pool, sc, host.ID, secs); !errors.Is(err, ErrBadDayDuration) {
+		if _, err := CreateRoom(context.Background(), pool, sc, host.ID, secs, nil); !errors.Is(err, ErrBadDayDuration) {
 			t.Errorf("duration %d: got %v, want ErrBadDayDuration", secs, err)
 		}
 	}
@@ -108,7 +108,7 @@ func TestJoinStartAndClock(t *testing.T) {
 	guest := mkUser(t, pool, "guest")
 	late := mkUser(t, pool, "late")
 	sc := mkScenario(t, pool)
-	room, err := CreateRoom(ctx, pool, sc, host.ID, 60)
+	room, err := CreateRoom(ctx, pool, sc, host.ID, 60, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,4 +196,69 @@ func scenarioMustLoad(t *testing.T, pool *pgxpool.Pool) *scenario.Scenario {
 		t.Fatalf("scenarioMustLoad: %v", err)
 	}
 	return sc
+}
+
+type fakeFiller struct{ calls int }
+
+func (f *fakeFiller) FillCopy(_ context.Context, _ *scenario.Scenario, evs []engine.NewsEvent) {
+	f.calls++
+	for i := range evs {
+		evs[i].Headline = "AI标题"
+		evs[i].Body = "AI正文。"
+	}
+}
+
+func TestCreateRoomAppliesCopyFiller(t *testing.T) {
+	pool := TestDB(t, "store")
+	ctx := context.Background()
+	host := mkUser(t, pool, "host")
+	sc := mkScenario(t, pool)
+
+	filler := &fakeFiller{}
+	room, err := CreateRoom(ctx, pool, sc, host.ID, 3600, filler)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filler.calls != 1 {
+		t.Fatalf("filler calls: %d", filler.calls)
+	}
+	var headline, body string
+	if err := pool.QueryRow(ctx, `
+		SELECT headline, body FROM room_news WHERE room_id = $1 ORDER BY id LIMIT 1`,
+		room.ID).Scan(&headline, &body); err != nil {
+		t.Fatal(err)
+	}
+	if headline != "AI标题" || body != "AI正文。" {
+		t.Fatalf("copy not persisted: %q %q", headline, body)
+	}
+	// Clusters persisted (synthetic worlds form clusters — engine Task 2).
+	var clustered int
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*) FROM room_news WHERE room_id = $1 AND cluster_id > 0`,
+		room.ID).Scan(&clustered); err != nil {
+		t.Fatal(err)
+	}
+	if clustered == 0 {
+		t.Fatal("no clustered news persisted")
+	}
+}
+
+func TestCreateRoomNilFillerKeepsTemplates(t *testing.T) {
+	pool := TestDB(t, "store")
+	ctx := context.Background()
+	host := mkUser(t, pool, "host")
+	sc := mkScenario(t, pool)
+	room, err := CreateRoom(ctx, pool, sc, host.ID, 3600, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var headline, body string
+	if err := pool.QueryRow(ctx, `
+		SELECT headline, body FROM room_news WHERE room_id = $1 ORDER BY id LIMIT 1`,
+		room.ID).Scan(&headline, &body); err != nil {
+		t.Fatal(err)
+	}
+	if headline == "" || body != "" {
+		t.Fatalf("template state wrong: %q %q", headline, body)
+	}
 }

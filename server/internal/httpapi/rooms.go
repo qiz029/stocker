@@ -70,7 +70,7 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 		s.storeErr(w, err)
 		return
 	}
-	room, err := store.CreateRoom(r.Context(), s.DB, sc, userFrom(r).ID, req.DayDurationSecs)
+	room, err := store.CreateRoom(r.Context(), s.DB, sc, userFrom(r).ID, req.DayDurationSecs, s.CopyFiller)
 	if err != nil {
 		s.storeErr(w, err)
 		return

@@ -18,7 +18,8 @@ type Server struct {
 	DB *pgxpool.Pool
 	// Now is the wall clock; tests override it to steer the deterministic
 	// timeline. Everything time-dependent must go through s.Now().
-	Now func() time.Time
+	Now        func() time.Time
+	CopyFiller store.NewsCopyFiller // nil → template news copy
 }
 
 func NewServer(db *pgxpool.Pool) *Server {

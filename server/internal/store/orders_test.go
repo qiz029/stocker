@@ -17,7 +17,7 @@ func mkRunningRoom(t *testing.T, pool *pgxpool.Pool) (*Room, *User, time.Time) {
 	host := mkUser(t, pool, "host")
 	guest := mkUser(t, pool, "guest")
 	sc := mkScenario(t, pool)
-	room, err := CreateRoom(ctx, pool, sc, host.ID, 60)
+	room, err := CreateRoom(ctx, pool, sc, host.ID, 60, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func TestPlaceOrderValidation(t *testing.T) {
 	// Orders on lobby rooms are refused.
 	host2 := mkUser(t, pool, "host2")
 	sc := scenarioMustLoad(t, pool)
-	lobby, err := CreateRoom(ctx, pool, sc, host2.ID, 60)
+	lobby, err := CreateRoom(ctx, pool, sc, host2.ID, 60, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
