@@ -12,7 +12,7 @@ func TestDotcomFidelityAcrossSeeds(t *testing.T) {
 	if testing.Short() {
 		t.Skip("multi-seed world generation is slow")
 	}
-	sc, err := BuildScenario()
+	sc, err := BuildScenario("dotcom-2000")
 	if err != nil {
 		t.Fatal(err)
 	}

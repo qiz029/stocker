@@ -1,12 +1,14 @@
-// Command pipeline builds and imports the real 2000 dot-com scenario.
+// Command pipeline builds and imports the registered scenario universes.
 //
-//	go run ./cmd/pipeline fetch    # dev-time: download raw CSVs from Yahoo Finance
-//	go run ./cmd/pipeline import   # build scenario from embedded data → Postgres (Task 7)
+//	go run ./cmd/pipeline fetch                        # dev-time: download raw CSVs from Yahoo Finance
+//	go run ./cmd/pipeline import                       # build every registered scenario → Postgres
+//	go run ./cmd/pipeline import -scenario dotcom-2000 # build just one scenario → Postgres
 package main
 
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -26,17 +28,19 @@ func main() {
 	}
 	switch os.Args[1] {
 	case "fetch":
-		fetch()
+		fetch(os.Args[2:])
 	case "import":
-		importScenario()
+		importScenarios(os.Args[2:])
 	default:
 		log.Fatalf("unknown subcommand %q", os.Args[1])
 	}
 }
 
 // Era window for the fetch, as Unix seconds: 1998-06-01 .. 2002-03-31 UTC.
-// Chosen to cover the scenario window (1999-01-04 .. 2001-12-28) with a
-// pre-window margin for β estimation.
+// Chosen to cover the dotcom scenario window (1999-01-04 .. 2001-12-28) with
+// a pre-window margin for β estimation. Other eras widen individual symbol
+// files as needed (see plan Task 3); this constant only bounds the initial
+// dotcom-era fetch.
 const (
 	period1 = 896659200
 	period2 = 1017532800
@@ -66,13 +70,51 @@ type yahooChartResponse struct {
 	} `json:"chart"`
 }
 
-func fetch() {
+// unionFetchSpecs collects every registered universe's FetchSpecs, deduped
+// by Name (symbols shared across eras, e.g. spx, are fetched once).
+func unionFetchSpecs() []pipeline.FetchSpec {
+	seen := map[string]bool{}
+	var out []pipeline.FetchSpec
+	for _, id := range pipeline.Universes() {
+		u, ok := pipeline.ByID(id)
+		if !ok {
+			continue
+		}
+		for _, spec := range u.FetchSpecs {
+			if seen[spec.Name] {
+				continue
+			}
+			seen[spec.Name] = true
+			out = append(out, spec)
+		}
+	}
+	return out
+}
+
+func fetch(args []string) {
+	fs := flag.NewFlagSet("fetch", flag.ExitOnError)
+	force := fs.Bool("force", false, "re-download even if the file already exists")
+	if err := fs.Parse(args); err != nil {
+		log.Fatal(err)
+	}
+
+	specs := unionFetchSpecs()
 	client := &http.Client{Timeout: 30 * time.Second}
 	failed := 0
-	for i, spec := range pipeline.FetchList {
-		if i > 0 {
-			time.Sleep(500 * time.Millisecond) // be polite to the source, on every iteration
+	requested := 0
+	for _, spec := range specs {
+		path := "internal/pipeline/rawdata/" + spec.Name + ".csv"
+		if !*force {
+			if _, err := os.Stat(path); err == nil {
+				log.Printf("skip %s (exists)", path)
+				continue
+			}
 		}
+		if requested > 0 {
+			time.Sleep(500 * time.Millisecond) // be polite to the source, on every network call
+		}
+		requested++
+
 		escaped := strings.ReplaceAll(spec.Symbol, "^", "%5E")
 		url := fmt.Sprintf(
 			"https://query1.finance.yahoo.com/v8/finance/chart/%s?period1=%d&period2=%d&interval=1d",
@@ -159,7 +201,6 @@ func fetch() {
 			continue
 		}
 
-		path := "internal/pipeline/rawdata/" + spec.Name + ".csv"
 		if err := os.WriteFile(path, []byte(sb.String()), 0o644); err != nil {
 			log.Fatalf("write %s: %v", path, err)
 		}
@@ -171,7 +212,23 @@ func fetch() {
 	}
 }
 
-func importScenario() {
+func importScenarios(args []string) {
+	fs := flag.NewFlagSet("import", flag.ExitOnError)
+	scenarioFlag := fs.String("scenario", "all", `scenario id to import, or "all"`)
+	if err := fs.Parse(args); err != nil {
+		log.Fatal(err)
+	}
+
+	var ids []string
+	if *scenarioFlag == "all" {
+		ids = pipeline.Universes()
+	} else {
+		if _, ok := pipeline.ByID(*scenarioFlag); !ok {
+			log.Fatalf("unknown scenario %q", *scenarioFlag)
+		}
+		ids = []string{*scenarioFlag}
+	}
+
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
 		log.Fatal("DATABASE_URL is required")
@@ -185,26 +242,32 @@ func importScenario() {
 	if err := store.Migrate(ctx, pool); err != nil {
 		log.Fatalf("migrate: %v", err)
 	}
-	sc, err := pipeline.BuildScenario()
-	if err != nil {
-		log.Fatalf("build: %v", err)
-	}
-	meta := pipeline.BuildMeta()
-	if err := store.SaveScenario(ctx, pool, sc); err != nil {
-		log.Fatalf("save: %v", err)
-	}
-	if err := store.SetScenarioMeta(ctx, pool, sc.ID, meta.Name, meta.RealPeriod); err != nil {
-		log.Fatalf("meta: %v", err)
-	}
-	display := map[string]store.InstrumentDisplay{}
-	for id, d := range meta.Dossiers {
-		display[id] = store.InstrumentDisplay{
-			Alias: d.Alias, Desc: d.Desc, RealName: d.RealName,
-			Business: d.Business, Bull: d.Bull, Bear: d.Bear,
+
+	for _, id := range ids {
+		sc, err := pipeline.BuildScenario(id)
+		if err != nil {
+			log.Fatalf("build %s: %v", id, err)
 		}
+		meta, err := pipeline.BuildMeta(id)
+		if err != nil {
+			log.Fatalf("meta %s: %v", id, err)
+		}
+		if err := store.SaveScenario(ctx, pool, sc); err != nil {
+			log.Fatalf("save %s: %v", id, err)
+		}
+		if err := store.SetScenarioMeta(ctx, pool, sc.ID, meta.Name, meta.RealPeriod); err != nil {
+			log.Fatalf("meta %s: %v", id, err)
+		}
+		display := map[string]store.InstrumentDisplay{}
+		for iid, d := range meta.Dossiers {
+			display[iid] = store.InstrumentDisplay{
+				Alias: d.Alias, Desc: d.Desc, RealName: d.RealName,
+				Business: d.Business, Bull: d.Bull, Bear: d.Bear,
+			}
+		}
+		if err := store.SetInstrumentDisplay(ctx, pool, sc.ID, display); err != nil {
+			log.Fatalf("display %s: %v", id, err)
+		}
+		log.Printf("imported %q: %d instruments, %d days", sc.ID, len(sc.Instruments), sc.Days)
 	}
-	if err := store.SetInstrumentDisplay(ctx, pool, sc.ID, display); err != nil {
-		log.Fatalf("display: %v", err)
-	}
-	log.Printf("imported %q: %d instruments, %d days", sc.ID, len(sc.Instruments), sc.Days)
 }

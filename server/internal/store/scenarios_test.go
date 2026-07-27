@@ -90,6 +90,23 @@ func TestScenarioMetaAndInfos(t *testing.T) {
 	}
 }
 
+func TestEraHintRoundTrip(t *testing.T) {
+	pool := TestDB(t, "store")
+	ctx := context.Background()
+	sc := scenario.Synthetic()
+	sc.EraHint = "测试年代"
+	if err := SaveScenario(ctx, pool, sc); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := LoadScenario(ctx, pool, sc.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.EraHint != "测试年代" {
+		t.Fatalf("EraHint round-trip: got %q, want %q", loaded.EraHint, "测试年代")
+	}
+}
+
 func TestIdioScaleAndRealNameRoundTrip(t *testing.T) {
 	pool := TestDB(t, "store")
 	ctx := context.Background()

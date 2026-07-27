@@ -13,13 +13,17 @@ type Meta struct {
 	Dossiers         map[string]Dossier
 }
 
-func BuildMeta() Meta {
-	m := Meta{Name: Universe.Name, RealPeriod: Universe.RealPeriod,
+func BuildMeta(id string) (Meta, error) {
+	u, ok := ByID(id)
+	if !ok {
+		return Meta{}, fmt.Errorf("unknown scenario %q", id)
+	}
+	m := Meta{Name: u.Name, RealPeriod: u.RealPeriod,
 		Dossiers: map[string]Dossier{}}
-	for _, spec := range Universe.Instruments {
+	for _, spec := range u.Instruments {
 		m.Dossiers[spec.ID] = spec.Dossier
 	}
-	return m
+	return m, nil
 }
 
 const (
@@ -104,15 +108,29 @@ func parseDay(s string) time.Time {
 	return t
 }
 
-// BuildScenario assembles the dotcom-2000 scenario from embedded raw data.
-// Deterministic and offline.
-func BuildScenario() (*scenario.Scenario, error) {
-	start, end := parseDay(Universe.WindowStart), parseDay(Universe.WindowEnd)
+// BuildScenario assembles the named scenario from embedded raw data.
+// Deterministic and offline. Unknown ids are an error.
+func BuildScenario(id string) (*scenario.Scenario, error) {
+	u, ok := ByID(id)
+	if !ok {
+		return nil, fmt.Errorf("unknown scenario %q", id)
+	}
+	start, end := parseDay(u.WindowStart), parseDay(u.WindowEnd)
 
-	// 1. Trading calendar = SPX trading days inside the window.
-	spxBars, err := RawSeries("spx")
+	// 1. Trading calendar = the market proxy's trading days inside the window.
+	var proxySpec *InstrumentSpec
+	for i := range u.Instruments {
+		if u.Instruments[i].ID == u.MarketProxy {
+			proxySpec = &u.Instruments[i]
+			break
+		}
+	}
+	if proxySpec == nil {
+		return nil, fmt.Errorf("market proxy %q not found among instruments", u.MarketProxy)
+	}
+	spxBars, err := RawSeries(proxySpec.Raw)
 	if err != nil {
-		return nil, fmt.Errorf("spx: %w", err)
+		return nil, fmt.Errorf("%s: %w", proxySpec.Raw, err)
 	}
 	var calendar []time.Time
 	for _, b := range spxBars {
@@ -132,7 +150,7 @@ func BuildScenario() (*scenario.Scenario, error) {
 	// 2. Per-instrument aligned, normalized series.
 	closes := map[string][]float64{} // instrument id -> normalized closes
 	baseline := map[string][]scenario.OHLC{}
-	for _, spec := range Universe.Instruments {
+	for _, spec := range u.Instruments {
 		var bars []Bar
 		if spec.Raw != "" {
 			raw, err := RawSeries(spec.Raw)
@@ -172,11 +190,11 @@ func BuildScenario() (*scenario.Scenario, error) {
 	for id, cl := range closes {
 		rets[id] = logReturns(cl)
 	}
-	mkt := rets["X22"] // SPX proxy
+	mkt := rets[u.MarketProxy]
 	sectorRet := map[string][]float64{}
-	for _, sec := range Universe.Sectors {
+	for _, sec := range u.Sectors {
 		var members [][]float64
-		for _, spec := range Universe.Instruments {
+		for _, spec := range u.Instruments {
 			if spec.Sector == sec.ID {
 				members = append(members, rets[spec.ID])
 			}
@@ -193,9 +211,9 @@ func BuildScenario() (*scenario.Scenario, error) {
 		b := olsBeta(sr, mkt)
 		sectorResid[id] = residual(sr, mkt, b)
 	}
-	instruments := make([]scenario.Instrument, 0, len(Universe.Instruments))
+	instruments := make([]scenario.Instrument, 0, len(u.Instruments))
 	factorIDs := map[string]bool{}
-	for _, spec := range Universe.Instruments {
+	for _, spec := range u.Instruments {
 		r := rets[spec.ID]
 		bMkt := clampF(olsBeta(r, mkt), betaClampLo, betaClampHi)
 		beta := map[string]float64{"MKT": bMkt, "IDIO:" + spec.ID: 1}
@@ -262,13 +280,13 @@ func BuildScenario() (*scenario.Scenario, error) {
 		{ID: "MKT", Name: "大盘", Kind: scenario.KindMarket},
 		{ID: "SENT", Name: "风险情绪", Kind: scenario.KindSentiment},
 	}
-	for _, sec := range Universe.Sectors {
+	for _, sec := range u.Sectors {
 		factors = append(factors, scenario.Factor{ID: sec.ID, Name: sec.Name, Kind: scenario.KindSector})
 	}
-	for _, mac := range Universe.Macros {
+	for _, mac := range u.Macros {
 		factors = append(factors, scenario.Factor{ID: mac.ID, Name: mac.Name, Kind: scenario.KindMacro})
 	}
-	for _, spec := range Universe.Instruments {
+	for _, spec := range u.Instruments {
 		factors = append(factors, scenario.Factor{
 			ID: "IDIO:" + spec.ID, Name: spec.Dossier.Alias, Kind: scenario.KindIdio,
 		})
@@ -276,7 +294,7 @@ func BuildScenario() (*scenario.Scenario, error) {
 
 	// 6. Key windows → day indexes.
 	var windows []scenario.KeyWindow
-	for _, w := range Universe.KeyWindows {
+	for _, w := range u.KeyWindows {
 		si, ok1 := dayIndex[w.Start]
 		ei, ok2 := dayIndex[w.End]
 		if !ok1 || !ok2 {
@@ -299,7 +317,7 @@ func BuildScenario() (*scenario.Scenario, error) {
 	}
 
 	return &scenario.Scenario{
-		ID: Universe.ScenarioID, Days: days,
+		ID: u.ScenarioID, Days: days, EraHint: u.EraHint,
 		Factors: factors, Instruments: instruments,
 		KeyWindows: windows, Baseline: baseline,
 	}, nil

@@ -8,7 +8,7 @@ import (
 )
 
 func TestBuildScenarioShape(t *testing.T) {
-	sc, err := BuildScenario()
+	sc, err := BuildScenario("dotcom-2000")
 	if err != nil {
 		t.Fatalf("BuildScenario: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestBuildScenarioShape(t *testing.T) {
 		}
 	}
 	// Determinism.
-	sc2, err := BuildScenario()
+	sc2, err := BuildScenario("dotcom-2000")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,10 @@ func TestBuildScenarioShape(t *testing.T) {
 }
 
 func TestBuildMeta(t *testing.T) {
-	meta := BuildMeta()
+	meta, err := BuildMeta("dotcom-2000")
+	if err != nil {
+		t.Fatalf("BuildMeta: %v", err)
+	}
 	if meta.Name != "2000 互联网泡沫" || meta.RealPeriod != "1999-01 ~ 2001-12" {
 		t.Fatalf("meta: %+v", meta)
 	}
@@ -99,5 +102,14 @@ func TestBuildMeta(t *testing.T) {
 	d, ok := meta.Dossiers["X02"]
 	if !ok || d.RealName == "" || d.Alias == "" || d.Bull == "" || d.Bear == "" || d.Business == "" {
 		t.Fatalf("X02 dossier incomplete: %+v", d)
+	}
+}
+
+func TestBuildUnknownScenarioErrors(t *testing.T) {
+	if _, err := BuildScenario("no-such-scenario"); err == nil {
+		t.Fatal("BuildScenario: expected error for unknown id")
+	}
+	if _, err := BuildMeta("no-such-scenario"); err == nil {
+		t.Fatal("BuildMeta: expected error for unknown id")
 	}
 }

@@ -29,8 +29,8 @@ func SaveScenario(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario) 
 			return err
 		}
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO scenarios (id, days, factors, key_windows) VALUES ($1, $2, $3, $4)`,
-			sc.ID, sc.Days, string(factors), string(keyWindows)); err != nil {
+			`INSERT INTO scenarios (id, days, factors, key_windows, era_hint) VALUES ($1, $2, $3, $4, $5)`,
+			sc.ID, sc.Days, string(factors), string(keyWindows), sc.EraHint); err != nil {
 			return err
 		}
 		for ord, inst := range sc.Instruments {
@@ -63,8 +63,8 @@ func LoadScenario(ctx context.Context, q Querier, id string) (*scenario.Scenario
 	sc := &scenario.Scenario{ID: id, Baseline: map[string][]scenario.OHLC{}}
 	var factors, keyWindows []byte
 	err := q.QueryRow(ctx,
-		`SELECT days, factors, key_windows FROM scenarios WHERE id = $1`, id).
-		Scan(&sc.Days, &factors, &keyWindows)
+		`SELECT days, factors, key_windows, era_hint FROM scenarios WHERE id = $1`, id).
+		Scan(&sc.Days, &factors, &keyWindows, &sc.EraHint)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}

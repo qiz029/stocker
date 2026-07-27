@@ -44,7 +44,7 @@ func TestParseStooqCSVRejectsBadData(t *testing.T) {
 func TestEmbeddedRawSeriesLoad(t *testing.T) {
 	// Every fetch-list entry must have committed data that parses and
 	// covers the scenario window with real history on both ends.
-	for _, spec := range FetchList {
+	for _, spec := range dotcomFetchSpecs {
 		bars, err := RawSeries(spec.Name)
 		if err != nil {
 			t.Fatalf("%s: %v", spec.Name, err)
