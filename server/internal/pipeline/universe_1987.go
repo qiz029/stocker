@@ -152,7 +152,7 @@ var crash1987Universe = ScenarioUniverse{
 		{ID: "Y17", Raw: "spx", Sector: "",
 			ExtraBeta: map[string]float64{"SENT": 0.5, "RATE": -0.35},
 			Dossier: Dossier{Alias: "大盘五百", Desc: "五百家大公司的市值加权指数", RealName: "S&P 500 指数",
-				Business: "五百家大公司的市值加权组合，一键买入整个经济体。",
+				Business: "五百家大公司的市值加权组合，一笔交易买下整个经济的横截面。",
 				Bull:     "不赌个股不赌行业，赌整体经济的长期向上。",
 				Bear:     "指数里挤满了同一批热门蓝筹，程序化抛售一来谁都躲不掉。"}},
 	},
