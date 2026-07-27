@@ -139,10 +139,13 @@ func GenerateShockTimeline(sc *scenario.Scenario, seed uint64) []NewsEvent {
 		if len(sectors) > 0 && rng.Float64() < pSectorDaily {
 			emit(d, map[string]float64{sectors[rng.IntN(len(sectors))]: signedShock(rng, sc, d)})
 		}
-		for _, inst := range sc.Instruments {
+		for i := range sc.Instruments {
+			inst := &sc.Instruments[i]
 			if fid, ok := idioOf[inst.ID]; ok {
 				if rng.Float64() < pIdioDaily {
-					emit(d, map[string]float64{fid: signedShock(rng, sc, d)})
+					emit(d, map[string]float64{
+						fid: signedShock(rng, sc, d) * inst.IdioScaleOrDefault(),
+					})
 				}
 			}
 		}

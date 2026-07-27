@@ -2,6 +2,7 @@ package engine
 
 import (
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/toddzheng/stocker/server/internal/scenario"
@@ -114,5 +115,51 @@ func TestNoEmptyKeyShocks(t *testing.T) {
 				t.Fatalf("found empty-key shock in event: %+v", ev)
 			}
 		}
+	}
+}
+
+func TestIdioScaleScalesOnlyIdioShocks(t *testing.T) {
+	sc := scenario.Synthetic()
+	base := GenerateShockTimeline(sc, 7)
+
+	scaled := scenario.Synthetic()
+	for i := range scaled.Instruments {
+		scaled.Instruments[i].IdioScale = 2.0
+	}
+	got := GenerateShockTimeline(scaled, 7)
+
+	if len(got) != len(base) {
+		t.Fatalf("event count changed: %d vs %d", len(got), len(base))
+	}
+	var checkedIdio, checkedShared int
+	for i := range base {
+		for f, v := range base[i].TrueShock {
+			gv := got[i].TrueShock[f]
+			if strings.HasPrefix(f, "IDIO:") {
+				checkedIdio++
+				if math.Abs(gv-2*v) > 1e-12 {
+					t.Fatalf("idio shock not doubled: %v vs %v", gv, v)
+				}
+			} else {
+				checkedShared++
+				if gv != v {
+					t.Fatalf("market/sector shock changed: %v vs %v", gv, v)
+				}
+			}
+		}
+	}
+	if checkedIdio == 0 || checkedShared == 0 {
+		t.Fatal("test exercised nothing")
+	}
+}
+
+func TestIdioScaleDefaultsToOne(t *testing.T) {
+	inst := scenario.Instrument{}
+	if inst.IdioScaleOrDefault() != 1 {
+		t.Fatalf("zero value must default to 1, got %v", inst.IdioScaleOrDefault())
+	}
+	inst.IdioScale = 0.5
+	if inst.IdioScaleOrDefault() != 0.5 {
+		t.Fatalf("explicit scale ignored")
 	}
 }
