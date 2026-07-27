@@ -116,12 +116,13 @@ func TestFidelityTwinExtremumFlipAccepted(t *testing.T) {
 // A display extreme landing on a day where the baseline is nowhere near its
 // own extreme is a genuine narrative violation and must still be rejected.
 func TestFidelityGenuineExtremumDisplacementRejected(t *testing.T) {
-	// Baseline peak d50=150; d200 sits ~15% below it. Small deterministic
+	// Baseline peak d50=150; d200 sits ~30% below it — well outside even the
+	// round-5 envelope-grounded tolerance (0.18). Small deterministic
 	// wiggles give the return series enough variance that the broad bump
 	// below does not drag return correlation under the 0.85 floor — the
 	// extremum clause must be what rejects this display.
 	base := piecewiseLinear(260, [][2]float64{
-		{0, 100}, {50, 150}, {120, 110}, {200, 127}, {259, 120},
+		{0, 100}, {50, 150}, {120, 110}, {200, 105}, {259, 120},
 	})
 	for d := range base {
 		w := 1 + 0.02*math.Sin(2.1*float64(d))
@@ -130,10 +131,10 @@ func TestFidelityGenuineExtremumDisplacementRejected(t *testing.T) {
 	}
 	sc := oneInstScenario(base)
 	// Broad multiplicative bump centered on d200 lifts the display's global
-	// max to ~158 there while leaving returns nearly identical day-to-day.
+	// max to ~160 there while leaving returns nearly identical day-to-day.
 	disp := make([]scenario.OHLC, len(base))
 	for d := range base {
-		m := math.Exp(0.218 * math.Exp(-math.Pow(float64(d)-200, 2)/(2*25*25)))
+		m := math.Exp(0.44 * math.Exp(-math.Pow(float64(d)-200, 2)/(2*25*25)))
 		c := base[d].Close * m
 		disp[d] = scenario.OHLC{Open: c, High: c + 1, Low: c - 1, Close: c}
 	}

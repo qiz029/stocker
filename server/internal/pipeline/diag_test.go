@@ -86,6 +86,15 @@ func TestDiagFidelity(t *testing.T) {
 				corrFail[inst.ID]++
 				fmt.Printf("seed=%d %s CORR %.4f\n", seed, inst.ID, corr)
 			}
+			baseNet := math.Log(base[len(base)-1].Close / base[0].Close)
+			if math.Abs(baseNet) >= 0.10 {
+				bDir := base[len(base)-1].Close >= base[0].Close
+				dDir := disp[len(disp)-1].Close >= disp[0].Close
+				if bDir != dDir {
+					dispNet := math.Log(disp[len(disp)-1].Close / disp[0].Close)
+					fmt.Printf("seed=%d %s DIR baseNet=%.4f dispNet=%.4f\n", seed, inst.ID, baseNet, dispNet)
+				}
+			}
 			for _, mx := range []bool{true, false} {
 				bd, dd := argExt(base, mx), argExt(disp, mx)
 				if d := bd - dd; d > 10 || d < -10 {
@@ -116,7 +125,7 @@ func TestDiagFidelity(t *testing.T) {
 						aGap = base[dd].Close/base[bd].Close - 1
 						bGap = nb/disp[dd].Close - 1
 					}
-					const tol = 0.05
+					const tol = 0.18 // mirrors engine extremumValueTol (round 5)
 					if aGap > tol || bGap > tol {
 						extFail[inst.ID]++
 						fmt.Printf("seed=%d %s EXT max=%v base=%d disp=%d moved=%d aGap=%.4f bGap=%.4f\n",

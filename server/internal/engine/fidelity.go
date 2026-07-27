@@ -14,14 +14,23 @@ const (
 	// 跳过方向检查（相关性与极值检查仍然生效）。spec §4.6 的方向条款保护
 	// 的是历史大势，不是 ±2% 的噪声符号。
 	minNetLogForDirection = 0.10
-	// 双子极值等价容差（round-4 amendment, task-5-report.md）：spec §4.6 的
-	// 极值条款要求历史峰/谷日在 ±extremumSlack 内"仍为局部极值"，并未要求
+	// 双子极值等价容差（round-4/5 amendments, task-5-report.md）：spec §4.6
+	// 的极值条款要求历史峰/谷日在 ±extremumSlack 内"仍为局部极值"，并未要求
 	// display 的全局 argmax 日等于基线的。真实数据常有相隔数百天、仅差
 	// 千分之几的双子极值（如 IBM 双底 0.23%/473 天），任何非零扰动都会以
 	// 接近抛硬币的概率翻转全局 argmax——这不破坏历史叙事。因此 argmax 位移
 	// 超出 slack 时，若 display 的极值落在基线另一处几乎等高（容差内）的
 	// 真实极值上，且基线极值日邻域内 display 仍是近极值，则通过。
-	extremumValueTol = 0.05
+	//
+	// extremumValueTol bounds how far a displaced extremum's baseline value
+	// may sit below the true extreme (multiplicative, applied symmetrically
+	// in both sub-conditions of twinExtremumOK). 0.18 ≈ 2× the spec's §4.2
+	// p95 deviation (中位~3%, p95~9%, 最大~26%): displacements inside the
+	// sanctioned perturbation envelope are "深一点浅一点" (spec §4.6), not
+	// infidelity. Extremes MORE prominent than the envelope (the actual
+	// 大势 — e.g. the NDX bubble top, where every non-peak-region day sits
+	// 40%+ below the peak) remain strictly pinned by this same condition.
+	extremumValueTol = 0.18
 )
 
 func logReturns(p []scenario.OHLC) []float64 {
