@@ -220,3 +220,39 @@ func TestAllScenariosCalibration(t *testing.T) {
 		})
 	}
 }
+
+// TestCrash1987SingleDayDrop is crash-1987's scenario-specific sanity check
+// (plan-5 Task 4): the real -20%+ single-day crash must survive alignment
+// and normalization, landing inside the scripted crash-week key window.
+func TestCrash1987SingleDayDrop(t *testing.T) {
+	sc, err := BuildScenario("crash-1987")
+	if err != nil {
+		t.Fatalf("BuildScenario(crash-1987): %v", err)
+	}
+	base := sc.Baseline["Y17"]
+	if base == nil {
+		t.Fatal("crash-1987: no baseline for Y17")
+	}
+	worstDay := -1
+	worstRet := 0.0
+	for d := 1; d < len(base); d++ {
+		ret := math.Log(base[d].Close / base[d-1].Close)
+		if worstDay == -1 || ret < worstRet {
+			worstDay = d
+			worstRet = ret
+		}
+	}
+	if worstRet > -0.18 {
+		t.Fatalf("crash-1987: worst single-day log return %.4f (day %d) does not exceed -0.18", worstRet, worstDay)
+	}
+	inWindow := false
+	for _, w := range sc.KeyWindows {
+		if w.Direction == -1 && worstDay >= w.StartDay && worstDay <= w.EndDay {
+			inWindow = true
+		}
+	}
+	if !inWindow {
+		t.Fatalf("crash-1987: worst day %d (ret %.4f) not inside the crash-week key window; windows=%+v",
+			worstDay, worstRet, sc.KeyWindows)
+	}
+}

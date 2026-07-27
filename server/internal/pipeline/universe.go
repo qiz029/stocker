@@ -99,13 +99,15 @@ func ByID(id string) (*ScenarioUniverse, bool) {
 }
 
 // pendingFetchSpecs holds FetchSpecs for symbols that plan-5 Task 3 fetches
-// ahead of the universes that will consume them. crash-1987, nifty-1972,
-// and gfc-2008 (Tasks 4-6) don't exist yet when this list is populated, so
-// their raw data can't live on a ScenarioUniverse.FetchSpecs field the way
-// dotcom-2000's does. Each Task 4-6 universe_<era>.go should move its own
-// symbols' entries out of this slice and onto its own FetchSpecs when that
-// universe is created; once all three eras are registered this slice
-// should be empty and can be deleted along with PendingFetchSpecs.
+// ahead of the universes that will consume them. nifty-1972 and gfc-2008
+// (Tasks 5-6) don't exist yet when most of this list is populated, so their
+// raw data can't live on a ScenarioUniverse.FetchSpecs field the way
+// dotcom-2000's does. crash-1987 (Task 4) is now registered and has moved
+// its own symbols (mrk/ba/axp, plus the shared names it re-lists on its own
+// FetchSpecs) off this slice onto universe_1987.go's crash1987FetchSpecs.
+// Each remaining Task 5-6 universe_<era>.go should do the same when that
+// universe is created; once every era is registered this slice should be
+// empty and can be deleted along with PendingFetchSpecs.
 //
 // Until then, `pipeline fetch` (cmd/pipeline/main.go) and the
 // embedded-load test (csv_test.go) both union this list with every
@@ -124,10 +126,8 @@ var pendingFetchSpecs = []FetchSpec{
 	{Name: "pg", Symbol: "PG", From: "1970-06-01", To: "1989-06-30"},
 	{Name: "mmm", Symbol: "MMM", From: "1970-06-01", To: "1989-06-30"},
 	{Name: "cat", Symbol: "CAT", From: "1970-06-01", To: "1989-06-30"},
-	// 1987-only names: IPO'd or only relevant from the mid-80s.
-	{Name: "mrk", Symbol: "MRK", From: "1985-06-01", To: "1989-06-30"},
-	{Name: "ba", Symbol: "BA", From: "1985-06-01", To: "1989-06-30"},
-	{Name: "axp", Symbol: "AXP", From: "1985-06-01", To: "1989-06-30"},
+	// mrk/ba/axp (1987-only names) moved to universe_1987.go's
+	// crash1987FetchSpecs now that crash-1987 is registered (Task 4).
 	// dji: requested from 1970-06-01, but Yahoo's chart API has no daily
 	// ^DJI history before 1992-01-02 no matter how early period1 is set
 	// (verified live against several period1 values spanning 1970-1985 —
