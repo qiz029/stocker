@@ -31,7 +31,11 @@ var crash1987FetchSpecs = []FetchSpec{
 	{Name: "ibm", Symbol: "IBM", From: "1970-06-01", To: "2002-03-31"},
 	{Name: "hpq", Symbol: "HPQ", From: "1985-06-01", To: "2002-03-31"},
 	{Name: "ge", Symbol: "GE", From: "1985-06-01", To: "2010-06-30"},
-	{Name: "xom", Symbol: "XOM", From: "1985-06-01", To: "2010-06-30"},
+	// xom: widened to 1970-06-01 by nifty-1972 (Task 5) — its N13 needs the
+	// file back to 1972-01-03; kept identical here so FetchSpec dedup by
+	// Name (cmd/pipeline's unionFetchSpecs) never depends on registration
+	// order across universes.
+	{Name: "xom", Symbol: "XOM", From: "1970-06-01", To: "2010-06-30"},
 	{Name: "wmt", Symbol: "WMT", From: "1985-06-01", To: "2010-06-30"},
 	{Name: "spx", Symbol: "^GSPC", From: "1970-06-01", To: "2010-06-30"},
 	// This universe's own symbols, moved off pendingFetchSpecs.

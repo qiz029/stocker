@@ -98,6 +98,17 @@ const (
 	// deterministic — plain arithmetic over the round-2 Monte-Carlo-measured
 	// channel constants above; no sampling at build time.
 	budgetFrac = 0.50
+	// minIdioScaleAfterBudget is the degenerate-budget floor for IdioScale
+	// (see the "bi <= epsVol" branch below): the shape gate's actual
+	// enforced bound (TestAllScenariosShape checks IdioScale ∈ [0.1, 3],
+	// not idioScaleMin's 0.4 — see that test). Only reached when an
+	// instrument's own historical vol is so low that even zero beta/idio
+	// contribution still leaves the engine's fixed per-day noise (epsVol)
+	// above its budget target — doesn't happen for any dotcom-2000/
+	// crash-1987 instrument, only nifty-1972's N15 (real 1972-75 SPX daily
+	// vol 0.0103, below epsVol/budgetFrac; task-5-report.md "N15 vol
+	// budget").
+	minIdioScaleAfterBudget = 0.1
 )
 
 func parseDay(s string) time.Time {
@@ -251,20 +262,38 @@ func BuildScenario(id string) (*scenario.Scenario, error) {
 		vi := math.Sqrt(scalable2 + epsVol*epsVol)
 		bi := budgetFrac * sigma
 		if vi > bi && scalable2 > 0 {
-			if bi <= epsVol {
-				// The engine's fixed display noise alone already exceeds this
-				// instrument's budget — unbudgetable without engine changes.
-				return nil, fmt.Errorf("%s: vol budget %.5f below engine noise floor %.5f",
-					spec.ID, bi, epsVol)
-			}
-			gamma := math.Sqrt((bi*bi - epsVol*epsVol) / scalable2)
-			for f := range beta {
-				if f == "IDIO:"+spec.ID {
-					continue // carried by IdioScale below, see budgetFrac doc
+			if bi > epsVol {
+				gamma := math.Sqrt((bi*bi - epsVol*epsVol) / scalable2)
+				for f := range beta {
+					if f == "IDIO:"+spec.ID {
+						continue // carried by IdioScale below, see budgetFrac doc
+					}
+					beta[f] *= gamma
 				}
-				beta[f] *= gamma
+				scale *= gamma
+			} else {
+				// Round-4 amendment (task-5-report.md, nifty-1972's N15):
+				// bi is analytically unreachable via any uniform gamma
+				// (bi²−epsVol² < 0 — the engine's fixed display noise alone
+				// already exceeds this instrument's budget target). Rather
+				// than erroring, or shrinking every channel by the same
+				// factor, zero the beta-routed channels (MKT/sector — these
+				// carry no lower-bound contract) entirely and let IdioScale
+				// settle at the shape gate's enforced floor
+				// (minIdioScaleAfterBudget, not further reducible). Since
+				// mktVolPerBeta/sectorVolPerBeta > idioBaseVol, this
+				// minimizes total perturbation vol — and hence maximizes
+				// the achievable return-correlation — subject to the one
+				// binding constraint (IdioScale ∈ [0.1, 3]) the shape gate
+				// imposes; a uniform gamma wastes headroom shrinking the
+				// already-small idio channel instead of fully eliminating
+				// the larger MKT/sector ones.
+				beta["MKT"] = 0
+				if spec.Sector != "" {
+					beta[spec.Sector] = 0
+				}
+				scale = minIdioScaleAfterBudget
 			}
-			scale *= gamma
 		}
 		instruments = append(instruments, scenario.Instrument{
 			ID: spec.ID, Alias: spec.Dossier.Alias, Desc: spec.Dossier.Desc,

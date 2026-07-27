@@ -27,6 +27,16 @@ package pipeline
 // (see build.go), so the extra pre/post-window rows only cost repo bytes,
 // not correctness — dotcom-2000's own fidelity/calibration gates are
 // unaffected and re-verified after every widen (task-3-report.md).
+//
+// xom was widened a second time in Task 5: the original plan-5 Task 3 table
+// only widened it to 1985-06-01 (covering crash-1987/gfc-2008), but
+// nifty-1972's N13 (磐石石油/Exxon) needs real data back to its 1972-01-03
+// window start — a gap the Task 3 table missed (its "1972+1987" blue-chip
+// group listed ko/mcd/dis/jnj/pg/mmm/cat but not xom). Verified live against
+// Yahoo's chart API: XOM's firstTradeDate is 1962-01-02 (predecessor-ticker
+// history is carried under the current symbol), so 1970-06-01 is a real,
+// fetchable start — widened to match the ko/mcd/etc. blue-chip group
+// instead of inventing anchors for an otherwise-real instrument.
 var dotcomFetchSpecs = []FetchSpec{
 	{Name: "msft", Symbol: "MSFT"}, {Name: "csco", Symbol: "CSCO"}, {Name: "intc", Symbol: "INTC"},
 	{Name: "orcl", Symbol: "ORCL"},
@@ -41,7 +51,9 @@ var dotcomFetchSpecs = []FetchSpec{
 	// hpq: needed from 1987 (1985-06 margin) through the original dotcom window.
 	{Name: "hpq", Symbol: "HPQ", From: "1985-06-01", To: "2002-03-31"},
 	{Name: "ge", Symbol: "GE", From: "1985-06-01", To: "2010-06-30"},
-	{Name: "xom", Symbol: "XOM", From: "1985-06-01", To: "2010-06-30"},
+	// xom: widened again in Task 5 (1970-06-01, not 1985-06-01) — see the
+	// doc comment above this var for why.
+	{Name: "xom", Symbol: "XOM", From: "1970-06-01", To: "2010-06-30"},
 	{Name: "wmt", Symbol: "WMT", From: "1985-06-01", To: "2010-06-30"},
 	{Name: "ndx", Symbol: "^NDX"},
 	// spx: market proxy for dotcom-2000, also usable as a market/context

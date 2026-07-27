@@ -1,6 +1,7 @@
 package pipeline
 
 import (
+	"fmt"
 	"math"
 	"reflect"
 	"regexp"
@@ -8,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/toddzheng/stocker/server/internal/engine"
+	"github.com/toddzheng/stocker/server/internal/scenario"
 )
 
 // realNamePattern is the blind-box spot list: real company names must never
@@ -255,4 +257,75 @@ func TestCrash1987SingleDayDrop(t *testing.T) {
 		t.Fatalf("crash-1987: worst day %d (ret %.4f) not inside the crash-week key window; windows=%+v",
 			worstDay, worstRet, sc.KeyWindows)
 	}
+}
+
+// maxLogDrawdown returns the worst (most negative) log peak-to-trough
+// drawdown of a baseline close series: max over t of log(close[t]/peakSoFar).
+func maxLogDrawdown(base []scenario.OHLC) float64 {
+	worst := 0.0
+	peak := base[0].Close
+	for _, b := range base {
+		if b.Close > peak {
+			peak = b.Close
+		}
+		dd := math.Log(b.Close / peak)
+		if dd < worst {
+			worst = dd
+		}
+	}
+	return worst
+}
+
+// TestNifty1972BearMarketDepth is nifty-1972's scenario-specific sanity
+// check (plan-5 Task 5): the "最优质的公司也跌八成" texture the scenario exists
+// to teach must survive alignment/normalization/reconstruction — the SPX
+// proxy itself must show a deep bear market, and at least 4 of the NIFT
+// (一流成长/"nifty fifty") sector instruments must show a baseline drawdown
+// severe enough to make the point.
+func TestNifty1972BearMarketDepth(t *testing.T) {
+	sc, err := BuildScenario("nifty-1972")
+	if err != nil {
+		t.Fatalf("BuildScenario(nifty-1972): %v", err)
+	}
+	u, ok := ByID("nifty-1972")
+	if !ok {
+		t.Fatal("nifty-1972 not registered")
+	}
+
+	proxyBase := sc.Baseline[u.MarketProxy]
+	if proxyBase == nil {
+		t.Fatalf("nifty-1972: no baseline for market proxy %s", u.MarketProxy)
+	}
+	proxyDD := maxLogDrawdown(proxyBase)
+	if proxyDD > -0.5 {
+		t.Fatalf("nifty-1972: SPX proxy %s max log drawdown %.4f does not exceed -0.5",
+			u.MarketProxy, proxyDD)
+	}
+
+	niftIDs := map[string]bool{}
+	for _, spec := range u.Instruments {
+		if spec.Sector == "NIFT" {
+			niftIDs[spec.ID] = true
+		}
+	}
+	deepCount := 0
+	var report []string
+	for id := range niftIDs {
+		base := sc.Baseline[id]
+		if base == nil {
+			t.Fatalf("nifty-1972: no baseline for NIFT instrument %s", id)
+		}
+		dd := maxLogDrawdown(base)
+		// -60% drawdown in price terms is log(0.4) ≈ -0.9163.
+		if dd <= math.Log(0.4) {
+			deepCount++
+		}
+		report = append(report, fmt.Sprintf("%s=%.4f", id, dd))
+	}
+	if deepCount < 4 {
+		t.Fatalf("nifty-1972: only %d/%d NIFT instruments have baseline drawdown >= 60%% (need >= 4); drawdowns: %v",
+			deepCount, len(niftIDs), report)
+	}
+	t.Logf("nifty-1972: SPX proxy drawdown=%.4f, NIFT drawdowns: %v (>=60%% count=%d/%d)",
+		proxyDD, report, deepCount, len(niftIDs))
 }
