@@ -162,3 +162,39 @@ func TestNewsIsBlindBoxSafe(t *testing.T) {
 		t.Fatalf("incremental fetch returned %d items, want 0", n)
 	}
 }
+
+func TestScenarioListAndIsHost(t *testing.T) {
+	s := newServer(t)
+	seedScenario(t, s)
+	if err := store.SetScenarioMeta(context.Background(), s.DB, "synthetic-v1", "合成测试剧本", ""); err != nil {
+		t.Fatal(err)
+	}
+	host := registerClient(t, s, "host")
+	guest := registerClient(t, s, "guest")
+
+	scen := host.mustJSON("GET", "/api/scenarios", nil, http.StatusOK)
+	items := scen["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("scenarios: %v", items)
+	}
+	first := items[0].(map[string]any)
+	if first["id"] != "synthetic-v1" || first["name"] != "合成测试剧本" || first["days"].(float64) != 300 {
+		t.Fatalf("scenario info: %v", first)
+	}
+
+	created := host.mustJSON("POST", "/api/rooms",
+		map[string]any{"scenario_id": "synthetic-v1", "day_duration_secs": 60}, http.StatusOK)
+	if created["is_host"] != true {
+		t.Fatalf("creator not host: %v", created)
+	}
+	roomID := int64(created["id"].(float64))
+	joined := guest.mustJSON("POST", "/api/rooms/join",
+		map[string]any{"invite_code": created["invite_code"]}, http.StatusOK)
+	if joined["is_host"] != false {
+		t.Fatalf("guest is host: %v", joined)
+	}
+	state := guest.mustJSON("GET", fmt.Sprintf("/api/rooms/%d", roomID), nil, http.StatusOK)
+	if state["room"].(map[string]any)["is_host"] != false {
+		t.Fatalf("state is_host wrong for guest")
+	}
+}

@@ -59,4 +59,29 @@ describe("Room page", () => {
     // day counter is split across nodes; assert the pill's combined text
     expect(document.querySelector(".day-pill")?.textContent).toContain("第 2 / 300");
   });
+
+  it("shows the start button only to the host", async () => {
+    const lobbyState = {
+      ...state,
+      room: { ...state.room, status: "lobby", started_at: undefined, current_day: undefined, is_host: false },
+      quotes: [], leaderboard: [],
+    };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async url => {
+      const u = String(url);
+      let body: unknown = { items: [] };
+      if (u === "/api/rooms/1") body = lobbyState;
+      else if (u.endsWith("/portfolio")) body = { cash_cents: 10_000_000, total_cents: 10_000_000, positions: [], pending: [] };
+      else if (u.endsWith("/trades")) body = { items: [] };
+      return new Response(JSON.stringify(body), { status: 200 });
+    });
+    render(
+      <MemoryRouter initialEntries={["/rooms/1"]}>
+        <UserCtxForTest.Provider value={{ id: 1, username: "me" }}>
+          <Routes><Route path="/rooms/:roomId" element={<Room />} /></Routes>
+        </UserCtxForTest.Provider>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText(/等待房主启动/)).toBeInTheDocument();
+    expect(screen.queryByText(/启动时间轴/)).not.toBeInTheDocument();
+  });
 });

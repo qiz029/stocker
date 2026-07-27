@@ -36,3 +36,4 @@ npm run build
 - `src/components/HeroChart.tsx` — big-number hero + hover-scrub canvas chart
 - `src/roomData.ts` — one hook per room: state + portfolio + trades + price series + asset curve
 - `src/pages/` — Login / Lobby / Room / Stock / Reveal
+- Scenario picker — available in the Lobby to select which historical market era to play

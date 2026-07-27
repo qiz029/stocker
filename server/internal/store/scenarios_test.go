@@ -67,3 +67,56 @@ func TestLoadedScenarioGeneratesIdenticalWorld(t *testing.T) {
 		t.Fatal("news differ between original and DB-loaded scenario")
 	}
 }
+
+func TestScenarioMetaAndInfos(t *testing.T) {
+	pool := TestDB(t, "store")
+	ctx := context.Background()
+	sc := scenario.Synthetic()
+	if err := SaveScenario(ctx, pool, sc); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetScenarioMeta(ctx, pool, sc.ID, "合成测试剧本", ""); err != nil {
+		t.Fatalf("SetScenarioMeta: %v", err)
+	}
+	if err := SetScenarioMeta(ctx, pool, "nope", "x", ""); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing scenario: %v", err)
+	}
+	infos, err := ScenarioInfos(ctx, pool)
+	if err != nil || len(infos) != 1 {
+		t.Fatalf("infos: %+v err=%v", infos, err)
+	}
+	if infos[0].ID != sc.ID || infos[0].Name != "合成测试剧本" || infos[0].Days != sc.Days {
+		t.Fatalf("info: %+v", infos[0])
+	}
+}
+
+func TestIdioScaleAndRealNameRoundTrip(t *testing.T) {
+	pool := TestDB(t, "store")
+	ctx := context.Background()
+	sc := scenario.Synthetic()
+	sc.Instruments[0].IdioScale = 1.7
+	sc.Instruments[0].Reconstructed = true
+	if err := SaveScenario(ctx, pool, sc); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := LoadScenario(ctx, pool, sc.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Instruments[0].IdioScale != 1.7 || !loaded.Instruments[0].Reconstructed {
+		t.Fatalf("round-trip lost calibration fields: %+v", loaded.Instruments[0])
+	}
+	if err := SetInstrumentDisplay(ctx, pool, sc.ID, map[string]InstrumentDisplay{
+		"S1": {Alias: "郊狼网络", Desc: "d", RealName: "Cisco Systems", Business: "b", Bull: "u", Bear: "r"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var realName string
+	if err := pool.QueryRow(ctx,
+		`SELECT real_name FROM instruments WHERE scenario_id=$1 AND id='S1'`, sc.ID).Scan(&realName); err != nil {
+		t.Fatal(err)
+	}
+	if realName != "Cisco Systems" {
+		t.Fatalf("real_name: %q", realName)
+	}
+}

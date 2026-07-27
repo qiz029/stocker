@@ -12,7 +12,7 @@ import (
 
 const newsPageLimit = 200
 
-func roomJSON(room *store.Room, curDay int, ended, started bool) map[string]any {
+func roomJSON(room *store.Room, curDay int, ended, started bool, userID int64) map[string]any {
 	m := map[string]any{
 		"id":                room.ID,
 		"invite_code":       room.InviteCode,
@@ -20,6 +20,7 @@ func roomJSON(room *store.Room, curDay int, ended, started bool) map[string]any 
 		"days":              room.Days,
 		"status":            room.Status,
 		"day_duration_secs": room.DayDurationSecs,
+		"is_host":           room.HostUserID == userID,
 	}
 	if room.StartedAt != nil {
 		m["started_at"] = room.StartedAt.UTC().Format(time.RFC3339)
@@ -69,12 +70,12 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 		s.storeErr(w, err)
 		return
 	}
-	room, err := store.CreateRoom(r.Context(), s.DB, sc, userFrom(r).ID, req.DayDurationSecs)
+	room, err := store.CreateRoom(r.Context(), s.DB, sc, userFrom(r).ID, req.DayDurationSecs, s.CopyFiller)
 	if err != nil {
 		s.storeErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, roomJSON(room, 0, false, false))
+	writeJSON(w, http.StatusOK, roomJSON(room, 0, false, false, userFrom(r).ID))
 }
 
 func (s *Server) handleJoinRoom(w http.ResponseWriter, r *http.Request) {
@@ -95,7 +96,7 @@ func (s *Server) handleJoinRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	day, ended, started := s.roomProgress(room)
-	writeJSON(w, http.StatusOK, roomJSON(room, day, ended, started))
+	writeJSON(w, http.StatusOK, roomJSON(room, day, ended, started, userFrom(r).ID))
 }
 
 // roomProgress computes clock state without settling (cheap display path).
@@ -120,7 +121,7 @@ func (s *Server) handleStartRoom(w http.ResponseWriter, r *http.Request) {
 		s.storeErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, roomJSON(room, 0, false, true))
+	writeJSON(w, http.StatusOK, roomJSON(room, 0, false, true, userFrom(r).ID))
 }
 
 func (s *Server) handleMyRooms(w http.ResponseWriter, r *http.Request) {
@@ -132,7 +133,7 @@ func (s *Server) handleMyRooms(w http.ResponseWriter, r *http.Request) {
 	out := make([]map[string]any, 0, len(rooms))
 	for i := range rooms {
 		day, ended, started := s.roomProgress(&rooms[i])
-		out = append(out, roomJSON(&rooms[i], day, ended, started))
+		out = append(out, roomJSON(&rooms[i], day, ended, started, userFrom(r).ID))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"rooms": out})
 }
@@ -227,7 +228,7 @@ func (s *Server) handleRoomState(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"room":        roomJSON(room, curDay, ended, started),
+		"room":        roomJSON(room, curDay, ended, started, userFrom(r).ID),
 		"instruments": instruments,
 		"quotes":      quotes,
 		"leaderboard": leaderboard,
@@ -284,7 +285,7 @@ func afterParam(r *http.Request) int64 {
 }
 
 // handleNews serves the player-visible feed. Blind box: id, day, media,
-// headline — nothing else. Track and shock vectors never leave the server.
+// headline, body — nothing else. Track and shock vectors never leave the server.
 func (s *Server) handleNews(w http.ResponseWriter, r *http.Request) {
 	room, ok := s.roomForMember(w, r)
 	if !ok {
@@ -361,6 +362,23 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 	if err := rows.Err(); err != nil {
 		s.storeErr(w, err)
 		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (s *Server) handleScenarios(w http.ResponseWriter, r *http.Request) {
+	infos, err := store.ScenarioInfos(r.Context(), s.DB)
+	if err != nil {
+		s.storeErr(w, err)
+		return
+	}
+	items := []map[string]any{}
+	for _, info := range infos {
+		name := info.Name
+		if name == "" {
+			name = info.ID
+		}
+		items = append(items, map[string]any{"id": info.ID, "name": name, "days": info.Days})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }

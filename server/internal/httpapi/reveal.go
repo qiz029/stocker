@@ -97,9 +97,18 @@ func (s *Server) handleReveal(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	var realPeriod string
+	if err := s.DB.QueryRow(r.Context(), `
+		SELECT s.real_period FROM scenarios s JOIN rooms rm ON rm.scenario_id = s.id
+		WHERE rm.id = $1`, room.ID).Scan(&realPeriod); err != nil {
+		s.storeErr(w, err)
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"instruments": instruments,
 		"trades":      trades,
 		"leaderboard": leaderboard,
+		"real_period": realPeriod,
 	})
 }

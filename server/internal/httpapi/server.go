@@ -18,7 +18,8 @@ type Server struct {
 	DB *pgxpool.Pool
 	// Now is the wall clock; tests override it to steer the deterministic
 	// timeline. Everything time-dependent must go through s.Now().
-	Now func() time.Time
+	Now        func() time.Time
+	CopyFiller store.NewsCopyFiller // nil → template news copy
 }
 
 func NewServer(db *pgxpool.Pool) *Server {
@@ -33,6 +34,7 @@ func (s *Server) Router() http.Handler {
 		r.Use(s.requireAuth)
 		r.Post("/api/logout", s.handleLogout)
 		r.Get("/api/me", s.handleMe)
+		r.Get("/api/scenarios", s.handleScenarios)
 		r.Post("/api/rooms", s.handleCreateRoom)
 		r.Post("/api/rooms/join", s.handleJoinRoom)
 		r.Get("/api/rooms", s.handleMyRooms)

@@ -2,6 +2,7 @@ package engine
 
 import (
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/toddzheng/stocker/server/internal/scenario"
@@ -61,5 +62,26 @@ func TestFillFallbackCopy(t *testing.T) {
 		if ev.Headline == "" {
 			t.Fatalf("event %d has empty headline", i)
 		}
+	}
+}
+
+func TestClusterFallbackCopyPrefixes(t *testing.T) {
+	sc := scenario.Synthetic()
+	evs := ExpandClusters(sc, 42, GenerateShockTimeline(sc, 42))
+	FillFallbackCopy(sc, evs, 42)
+	var sawRumor, sawFollow bool
+	for _, ev := range evs {
+		if ev.ClusterID == 0 || ev.TrueShock != nil {
+			continue
+		}
+		if strings.HasPrefix(ev.Headline, "【传闻】") {
+			sawRumor = true
+		}
+		if strings.HasPrefix(ev.Headline, "【追踪】") {
+			sawFollow = true
+		}
+	}
+	if !sawRumor || !sawFollow {
+		t.Fatalf("cluster copy prefixes missing: rumor=%v follow=%v", sawRumor, sawFollow)
 	}
 }

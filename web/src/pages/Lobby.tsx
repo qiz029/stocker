@@ -1,16 +1,18 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, ApiError, Room } from "../api";
+import { api, ApiError, Room, ScenarioInfo } from "../api";
 import { usePoll } from "../usePoll";
 import { useToast } from "../Toast";
 import { useUser } from "../App";
 
-const DURATIONS: [string, number][] = [
-  ["1 周局（约 34 分钟/交易日）", 2016],
-  ["2 周局（约 67 分钟/交易日）", 4032],
-  ["4 周局（约 134 分钟/交易日）", 8064],
-  ["测试局（1 分钟/交易日）", 60],
-];
+function durationOptions(days: number): [string, number][] {
+  const opts: [string, number][] = [1, 2, 4].map(weeks => {
+    const secs = Math.max(60, Math.round((weeks * 604800) / days));
+    return [`${weeks} 周局（约 ${Math.max(1, Math.round(secs / 60))} 分钟/交易日）`, secs];
+  });
+  opts.push(["测试局（1 分钟/交易日）", 60]);
+  return opts;
+}
 
 export default function Lobby() {
   const user = useUser();
@@ -19,8 +21,21 @@ export default function Lobby() {
   const { data, reload } = usePoll(() => api.get<{ rooms: Room[] }>("/api/rooms"), 30_000, []);
   const [invite, setInvite] = useState("");
   const [showCreate, setShowCreate] = useState(false);
-  const [duration, setDuration] = useState(4032);
+  const [scenarios, setScenarios] = useState<ScenarioInfo[]>([]);
+  const [scenarioID, setScenarioID] = useState("");
+  const [duration, setDuration] = useState(0);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api.get<{ items: ScenarioInfo[] }>("/api/scenarios")
+      .then(res => {
+        const items = res.items ?? []; // defensive: older mocks/tests may omit it
+        setScenarios(items);
+        if (items.length && !scenarioID) setScenarioID(items[0]!.id);
+      })
+      .catch(() => setScenarios([]));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function join(e: FormEvent) {
     e.preventDefault();
@@ -35,8 +50,10 @@ export default function Lobby() {
   async function create() {
     setBusy(true);
     try {
+      const currentScenario = scenarios.find(sc => sc.id === scenarioID);
+      const finalDuration = duration || durationOptions(currentScenario?.days ?? 300)[1]![1];
       const room = await api.post<Room>("/api/rooms", {
-        scenario_id: "synthetic-v1", day_duration_secs: duration,
+        scenario_id: scenarioID, day_duration_secs: finalDuration,
       });
       toast("平行世界生成完毕");
       void reload();
@@ -91,11 +108,17 @@ export default function Lobby() {
 
       {showCreate ? (
         <div className="lobby-form">
-          <select value={duration} onChange={e => setDuration(Number(e.target.value))}>
-            {DURATIONS.map(([label, secs]) => <option key={secs} value={secs}>{label}</option>)}
+          <select value={scenarioID} onChange={e => { setScenarioID(e.target.value); setDuration(0); }}>
+            {scenarios.map(sc => <option key={sc.id} value={sc.id}>{sc.name}（{sc.days} 交易日）</option>)}
+          </select>
+          <select value={duration || durationOptions(scenarios.find(sc => sc.id === scenarioID)?.days ?? 300)[1]![1]}
+            onChange={e => setDuration(Number(e.target.value))}>
+            {durationOptions(scenarios.find(sc => sc.id === scenarioID)?.days ?? 300).map(([label, secs]) => (
+              <option key={secs} value={secs}>{label}</option>
+            ))}
           </select>
           <button className="submit" style={{ width: "auto", padding: "10px 22px" }}
-            onClick={create} disabled={busy}>{busy ? "生成平行世界…" : "创建"}</button>
+            onClick={create} disabled={busy || !scenarioID}>{busy ? "生成平行世界…" : "创建"}</button>
         </div>
       ) : (
         <button className="ghost-btn" onClick={() => setShowCreate(true)}>＋ 创建新房间</button>

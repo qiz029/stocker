@@ -22,7 +22,10 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("Lobby", () => {
   it("lists my rooms with status tags", async () => {
-    mockRoutes(() => ({ rooms }));
+    mockRoutes((url) => url === "/api/scenarios" ? { items: [
+      { id: "dotcom-2000", name: "2000 互联网泡沫", days: 750 },
+      { id: "synthetic-v1", name: "合成测试剧本", days: 300 },
+    ] } : { rooms });
     render(
       <MemoryRouter>
         <UserCtxForTest.Provider value={{ id: 1, username: "alice" }}>
@@ -40,6 +43,10 @@ describe("Lobby", () => {
     const calls: string[] = [];
     mockRoutes((url, init) => {
       calls.push(`${init?.method ?? "GET"} ${url}`);
+      if (url === "/api/scenarios") return { items: [
+        { id: "dotcom-2000", name: "2000 互联网泡沫", days: 750 },
+        { id: "synthetic-v1", name: "合成测试剧本", days: 300 },
+      ] };
       if (url === "/api/rooms/join") return rooms[0];
       return { rooms: [] };
     });
@@ -55,24 +62,26 @@ describe("Lobby", () => {
     await waitFor(() => expect(calls).toContain("POST /api/rooms/join"));
   });
 
-  it("creates a room", async () => {
+  it("creates a room with the selected scenario and computed duration", async () => {
     const bodies: unknown[] = [];
     mockRoutes((url, init) => {
+      if (url === "/api/scenarios") return { items: [
+        { id: "dotcom-2000", name: "2000 互联网泡沫", days: 750 },
+        { id: "synthetic-v1", name: "合成测试剧本", days: 300 },
+      ] };
       if (url === "/api/rooms" && init?.method === "POST") {
         bodies.push(JSON.parse(String(init.body)));
         return rooms[2];
       }
       return { rooms: [] };
     });
-    render(
-      <MemoryRouter>
-        <UserCtxForTest.Provider value={{ id: 1, username: "alice" }}>
-          <Lobby />
-        </UserCtxForTest.Provider>
-      </MemoryRouter>
-    );
+    render(<MemoryRouter><UserCtxForTest.Provider value={{ id: 1, username: "me" }}><Lobby /></UserCtxForTest.Provider></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: "＋ 创建新房间" }));
+    // scenario defaults to the first entry; pick the 2-week duration
+    const selects = screen.getAllByRole("combobox");
+    fireEvent.change(selects[1], { target: { value: String(Math.round(2 * 604800 / 750)) } });
     fireEvent.click(screen.getByRole("button", { name: "创建" }));
-    await waitFor(() => expect(bodies).toEqual([{ scenario_id: "synthetic-v1", day_duration_secs: 4032 }]));
+    await waitFor(() => expect(bodies).toEqual([
+      { scenario_id: "dotcom-2000", day_duration_secs: Math.round(2 * 604800 / 750) }]));
   });
 });

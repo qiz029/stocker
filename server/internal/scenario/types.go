@@ -23,6 +23,21 @@ type KeyWindow struct{ StartDay, EndDay, Direction int }
 type Instrument struct {
 	ID, Alias, Desc string
 	Beta            map[string]float64
+	// IdioScale multiplies this instrument's idiosyncratic shock
+	// magnitudes (per-stock calibration, spec §4.2). Zero means 1.0 so
+	// pre-existing data keeps its behavior.
+	IdioScale float64
+	// Reconstructed marks series rebuilt from documented anchor points
+	// rather than exchange data (dead dot-com companies).
+	Reconstructed bool
+}
+
+// IdioScaleOrDefault treats the zero value as the neutral 1.0 multiplier.
+func (i *Instrument) IdioScaleOrDefault() float64 {
+	if i.IdioScale <= 0 {
+		return 1
+	}
+	return i.IdioScale
 }
 
 type Scenario struct {

@@ -67,6 +67,7 @@ func Synthetic() *Scenario {
 		}
 		sc.Instruments = append(sc.Instruments, Instrument{
 			ID: id, Alias: "Syn " + id, Desc: "synthetic", Beta: beta,
+			IdioScale: 1,
 		})
 		prices := make([]OHLC, days)
 		logp := math.Log(100)

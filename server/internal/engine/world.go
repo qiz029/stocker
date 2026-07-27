@@ -17,7 +17,7 @@ type World struct {
 // (scenario, seed); returns an error if the fidelity gate fails, in which
 // case the caller retries with a derived seed.
 func GenerateWorld(sc *scenario.Scenario, seed uint64) (*World, error) {
-	shocks := GenerateShockTimeline(sc, seed)
+	shocks := ExpandClusters(sc, seed, GenerateShockTimeline(sc, seed))
 	states, err := EvolveFactorStates(sc, shocks)
 	if err != nil {
 		return nil, err

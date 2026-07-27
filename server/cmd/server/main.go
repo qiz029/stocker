@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/toddzheng/stocker/server/internal/httpapi"
+	"github.com/toddzheng/stocker/server/internal/llm"
 	"github.com/toddzheng/stocker/server/internal/store"
 )
 
@@ -36,7 +37,14 @@ func main() {
 		log.Fatalf("migrate: %v", err)
 	}
 
-	srv := &http.Server{Addr: addr, Handler: httpapi.NewServer(pool).Router()}
+	api := httpapi.NewServer(pool)
+	if cfg := llm.FromEnv(); cfg != nil {
+		api.CopyFiller = llm.New(*cfg)
+		log.Printf("llm news copy enabled: model=%s concurrency=%d", cfg.Model, cfg.Concurrency)
+	} else {
+		log.Printf("llm news copy disabled (LLM_BASE_URL unset) — template copy")
+	}
+	srv := &http.Server{Addr: addr, Handler: api.Router()}
 	go func() {
 		log.Printf("listening on %s", addr)
 		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {

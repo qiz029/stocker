@@ -39,9 +39,10 @@ func SaveScenario(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario) 
 				return err
 			}
 			if _, err := tx.Exec(ctx, `
-				INSERT INTO instruments (scenario_id, id, ord, alias, descr, beta)
-				VALUES ($1, $2, $3, $4, $5, $6)`,
-				sc.ID, inst.ID, ord, inst.Alias, inst.Desc, string(beta)); err != nil {
+				INSERT INTO instruments (scenario_id, id, ord, alias, descr, beta, idio_scale, reconstructed)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+				sc.ID, inst.ID, ord, inst.Alias, inst.Desc, string(beta),
+				inst.IdioScale, inst.Reconstructed); err != nil {
 				return err
 			}
 		}
@@ -78,7 +79,7 @@ func LoadScenario(ctx context.Context, q Querier, id string) (*scenario.Scenario
 	}
 
 	instRows, err := q.Query(ctx, `
-		SELECT id, alias, descr, beta FROM instruments
+		SELECT id, alias, descr, beta, idio_scale, reconstructed FROM instruments
 		WHERE scenario_id = $1 ORDER BY ord`, id)
 	if err != nil {
 		return nil, err
@@ -87,7 +88,8 @@ func LoadScenario(ctx context.Context, q Querier, id string) (*scenario.Scenario
 	for instRows.Next() {
 		var inst scenario.Instrument
 		var beta []byte
-		if err := instRows.Scan(&inst.ID, &inst.Alias, &inst.Desc, &beta); err != nil {
+		if err := instRows.Scan(&inst.ID, &inst.Alias, &inst.Desc, &beta,
+			&inst.IdioScale, &inst.Reconstructed); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal(beta, &inst.Beta); err != nil {
@@ -124,6 +126,7 @@ func LoadScenario(ctx context.Context, q Querier, id string) (*scenario.Scenario
 type InstrumentDisplay struct {
 	Alias    string `json:"-"`
 	Desc     string `json:"-"`
+	RealName string `json:"-"`
 	Business string `json:"business"`
 	Bull     string `json:"bull"`
 	Bear     string `json:"bear"`
@@ -140,9 +143,9 @@ func SetInstrumentDisplay(ctx context.Context, db *pgxpool.Pool, scenarioID stri
 				return err
 			}
 			tag, err := tx.Exec(ctx, `
-				UPDATE instruments SET alias = $3, descr = $4, profile = $5
+				UPDATE instruments SET alias = $3, descr = $4, profile = $5, real_name = $6
 				WHERE scenario_id = $1 AND id = $2`,
-				scenarioID, id, d.Alias, d.Desc, string(profile))
+				scenarioID, id, d.Alias, d.Desc, string(profile), d.RealName)
 			if err != nil {
 				return err
 			}
@@ -152,4 +155,39 @@ func SetInstrumentDisplay(ctx context.Context, db *pgxpool.Pool, scenarioID stri
 		}
 		return nil
 	})
+}
+
+func SetScenarioMeta(ctx context.Context, q Querier, id, name, realPeriod string) error {
+	tag, err := q.Exec(ctx,
+		`UPDATE scenarios SET name = $2, real_period = $3 WHERE id = $1`,
+		id, name, realPeriod)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+type ScenarioInfo struct {
+	ID, Name string
+	Days     int
+}
+
+func ScenarioInfos(ctx context.Context, q Querier) ([]ScenarioInfo, error) {
+	rows, err := q.Query(ctx, `SELECT id, name, days FROM scenarios ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ScenarioInfo
+	for rows.Next() {
+		var s ScenarioInfo
+		if err := rows.Scan(&s.ID, &s.Name, &s.Days); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
 }

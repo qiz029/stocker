@@ -10,9 +10,9 @@ schedulers, no external services at runtime.
 createdb stocker
 export DATABASE_URL=postgres://localhost:5432/stocker?sslmode=disable
 
-# Load the built-in synthetic scenario (real scenarios come from the
-# data pipeline, plan 4)
-go run ./cmd/seedscenario
+# Load scenarios
+go run ./cmd/seedscenario        # synthetic test scenario
+go run ./cmd/pipeline import     # real 2000 dot-com scenario (from committed data)
 
 # Run the API on :8080
 go run ./cmd/server
@@ -26,6 +26,27 @@ curl -c /tmp/jar -X POST localhost:8080/api/register \
 curl -b /tmp/jar -X POST localhost:8080/api/rooms \
   -d '{"scenario_id":"synthetic-v1","day_duration_secs":60}'
 ```
+
+## LLM news copy (optional)
+
+Set these to generate news copy at room creation via any OpenAI-compatible
+endpoint (e.g. DeepSeek). Unset = built-in template copy; generation
+failures always fall back to templates.
+
+```bash
+export LLM_BASE_URL=https://api.deepseek.com   # /chat/completions appended
+export LLM_API_KEY=sk-...
+export LLM_MODEL=deepseek-chat
+# optional: LLM_CONCURRENCY (default 4), LLM_TIMEOUT_SECS (default 90)
+```
+
+## Data pipeline
+
+`internal/pipeline` builds the dotcom-2000 scenario offline from raw CSVs
+committed under `internal/pipeline/rawdata/` (fetched once from the Yahoo
+Finance chart API via `go run ./cmd/pipeline fetch`). Four dead companies
+(WorldCom, Lucent, Nortel, Global Crossing) are reconstructed from
+documented price anchors — marked `reconstructed` in code and data.
 
 ## Tests
 
