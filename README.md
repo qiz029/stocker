@@ -1,8 +1,9 @@
 # stocker
 
 Web-based multiplayer stock game: friends travel back to a historical
-market era (dot-com bubble first), trade a blind-box version of real
-history, and compete. Deterministic parallel worlds, no schedulers.
+market era, trade a blind-box version of real history, and compete.
+Four scenarios: 2000 dot-com bubble, 1987 Black Monday, 1972 Nifty Fifty,
+2008 financial crisis. Deterministic parallel worlds, no schedulers.
 
 - `server/` — Go backend: deterministic world engine + Postgres + REST API
 - `web/` — React SPA (Vite + TS), Robinhood-style watch screen

@@ -12,7 +12,15 @@ export DATABASE_URL=postgres://localhost:5432/stocker?sslmode=disable
 
 # Load scenarios
 go run ./cmd/seedscenario        # synthetic test scenario
-go run ./cmd/pipeline import     # real 2000 dot-com scenario (from committed data)
+go run ./cmd/pipeline import     # all four production scenarios
+
+# Four production scenarios (imported by pipeline)
+| 剧本 | 时期 | 交易日 | 标的 | 剧情 |
+|---|---|---|---|---|
+| 2000 互联网泡沫 | 1999-01 ~ 2001-12 | ~752 | 22 | 泡沫、见顶、漫长阴跌 |
+| 1987 黑色星期一 | 1986-01 ~ 1988-12 | ~756 | 17 | 疯牛、单日 −22%、默默收复 |
+| 1972 漂亮50 | 1972-01 ~ 1975-06 | ~875 | 15 | 信仰蓝筹的慢刀子 + 石油危机 |
+| 2008 金融危机 | 2006-10 ~ 2009-12 | ~815 | 18 | 系统性崩塌与绝望底反转 |
 
 # Run the API on :8080
 go run ./cmd/server
