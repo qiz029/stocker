@@ -69,6 +69,9 @@ func main() {
 	if err := store.SetInstrumentDisplay(ctx, pool, sc.ID, display); err != nil {
 		log.Fatalf("set instrument display: %v", err)
 	}
+	if err := store.SetScenarioMeta(ctx, pool, sc.ID, "合成测试剧本", ""); err != nil {
+		log.Fatalf("set scenario meta: %v", err)
+	}
 	log.Printf("seeded scenario %q (%d instruments, %d days)", sc.ID, len(sc.Instruments), sc.Days)
 	log.Printf("applied display profiles for %d instruments", len(display))
 }

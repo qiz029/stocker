@@ -1,15 +1,21 @@
 package httpapi
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/toddzheng/stocker/server/internal/store"
 )
 
 func TestRevealOnlyAfterGameEnds(t *testing.T) {
 	s := newServer(t)
 	seedScenario(t, s)
+	if err := store.SetScenarioMeta(context.Background(), s.DB, "synthetic-v1", "合成测试剧本", "1999-01 ~ 2001-12"); err != nil {
+		t.Fatal(err)
+	}
 	t0 := time.Date(2026, 7, 26, 12, 0, 0, 0, time.UTC)
 	advance := fakeClock(s, t0)
 
@@ -56,5 +62,8 @@ func TestRevealOnlyAfterGameEnds(t *testing.T) {
 	}
 	if len(got["leaderboard"].([]any)) != 1 {
 		t.Fatalf("reveal leaderboard: %v", got["leaderboard"])
+	}
+	if got["real_period"] != "1999-01 ~ 2001-12" {
+		t.Fatalf("real_period: %v", got["real_period"])
 	}
 }

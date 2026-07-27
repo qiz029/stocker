@@ -33,6 +33,7 @@ func (s *Server) Router() http.Handler {
 		r.Use(s.requireAuth)
 		r.Post("/api/logout", s.handleLogout)
 		r.Get("/api/me", s.handleMe)
+		r.Get("/api/scenarios", s.handleScenarios)
 		r.Post("/api/rooms", s.handleCreateRoom)
 		r.Post("/api/rooms/join", s.handleJoinRoom)
 		r.Get("/api/rooms", s.handleMyRooms)

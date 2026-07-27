@@ -5,6 +5,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/toddzheng/stocker/server/internal/pipeline"
+	"github.com/toddzheng/stocker/server/internal/store"
 )
 
 func main() {
@@ -25,6 +27,8 @@ func main() {
 	switch os.Args[1] {
 	case "fetch":
 		fetch()
+	case "import":
+		importScenario()
 	default:
 		log.Fatalf("unknown subcommand %q", os.Args[1])
 	}
@@ -165,4 +169,42 @@ func fetch() {
 		log.Printf("%d symbols failed — investigate before building", failed)
 		os.Exit(1)
 	}
+}
+
+func importScenario() {
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		log.Fatal("DATABASE_URL is required")
+	}
+	ctx := context.Background()
+	pool, err := store.Connect(ctx, dbURL)
+	if err != nil {
+		log.Fatalf("connect: %v", err)
+	}
+	defer pool.Close()
+	if err := store.Migrate(ctx, pool); err != nil {
+		log.Fatalf("migrate: %v", err)
+	}
+	sc, err := pipeline.BuildScenario()
+	if err != nil {
+		log.Fatalf("build: %v", err)
+	}
+	meta := pipeline.BuildMeta()
+	if err := store.SaveScenario(ctx, pool, sc); err != nil {
+		log.Fatalf("save: %v", err)
+	}
+	if err := store.SetScenarioMeta(ctx, pool, sc.ID, meta.Name, meta.RealPeriod); err != nil {
+		log.Fatalf("meta: %v", err)
+	}
+	display := map[string]store.InstrumentDisplay{}
+	for id, d := range meta.Dossiers {
+		display[id] = store.InstrumentDisplay{
+			Alias: d.Alias, Desc: d.Desc, RealName: d.RealName,
+			Business: d.Business, Bull: d.Bull, Bear: d.Bear,
+		}
+	}
+	if err := store.SetInstrumentDisplay(ctx, pool, sc.ID, display); err != nil {
+		log.Fatalf("display: %v", err)
+	}
+	log.Printf("imported %q: %d instruments, %d days", sc.ID, len(sc.Instruments), sc.Days)
 }
