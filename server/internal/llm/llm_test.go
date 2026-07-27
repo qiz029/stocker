@@ -31,7 +31,9 @@ func chatResponse(items string) string {
 }
 
 func TestFillCopyHappyPath(t *testing.T) {
-	var gotAuth, gotModel atomic.Value
+	var gotAuth, gotModel, gotBodies atomic.Value
+	gotBodies.Store([]string{})
+	var mu sync.Mutex
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth.Store(r.Header.Get("Authorization"))
 		var req struct {
@@ -42,6 +44,10 @@ func TestFillCopyHappyPath(t *testing.T) {
 		gotModel.Store(req.Model)
 		// Echo back copy for every idx mentioned in the user message.
 		user := req.Messages[len(req.Messages)-1]["content"].(string)
+		mu.Lock()
+		bodies := gotBodies.Load().([]string)
+		gotBodies.Store(append(bodies, user))
+		mu.Unlock()
 		var out []map[string]any
 		for idx := 0; idx < 100; idx++ {
 			if strings.Contains(user, fmt.Sprintf(`"idx":%d`, idx)) {
@@ -63,6 +69,11 @@ func TestFillCopyHappyPath(t *testing.T) {
 		{Day: 3, Track: engine.TrackImpact, MediaID: "wire",
 			ReportShock: map[string]float64{"MKT": -0.03}, Headline: "模板标题"},
 		{Day: 5, Track: engine.TrackNoise, MediaID: "forum", Headline: "模板花边"},
+		// Day 150 is the synthetic scenario's scripted crash-start gap-down
+		// (drift -0.15 across S1-S5), so the baseline's mean day-150 log
+		// return is unambiguously negative — exercises the historical-track
+		// direction wording without depending on RNG noise.
+		{Day: 150, Track: engine.TrackHistorical, MediaID: "wire", Headline: "模板历史"},
 	}
 	g.FillCopy(context.Background(), sc, evs)
 
@@ -77,6 +88,15 @@ func TestFillCopyHappyPath(t *testing.T) {
 	}
 	if gotModel.Load() != "deepseek-chat" {
 		t.Fatalf("model: %v", gotModel.Load())
+	}
+	var sawDirection bool
+	for _, body := range gotBodies.Load().([]string) {
+		if strings.Contains(body, "上涨") || strings.Contains(body, "下跌") {
+			sawDirection = true
+		}
+	}
+	if !sawDirection {
+		t.Fatal("historical item's marshaled Kind missing day direction (上涨/下跌)")
 	}
 }
 

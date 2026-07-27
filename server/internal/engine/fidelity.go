@@ -12,13 +12,12 @@ const (
 	extremumSlack = 10
 	// 近似横盘的标的没有"大势"可保真：净变动小于 minNetLogForDirection 时
 	// 跳过方向检查（相关性与极值检查仍然生效）。spec §4.6 的方向条款保护
-	// 的是历史大势（如纳指 −78% 这种量级的走势），不是噪声符号。阈值与
-	// extremumValueTol 同源（round-5/final amendments, task-5-report.md，
-	// human-authorized）：0.18 ≈ 2× spec §4.2 认可的扰动包络 p95 偏离
-	// （中位~3%, p95~9%, 最大~26%）——净变动落在包络之内的标的，其符号
-	// 本就可能被合规扰动翻转，没有可保护的方向；超出包络的真实大势仍被
-	// 严格保真。
-	minNetLogForDirection = 0.18
+	// 的是历史大势（如纳指 −78% 这种量级的走势），不是噪声符号。阈值收紧至
+	// 0.13（final review amendment, human-authorized）：豁免带仅覆盖真正
+	// 无趋势的净变动——dotcom 全域中，唯一落在带内的是 AMD（净变动
+	// +0.125），纳指（−0.162）与 GE（+0.179）仍在保护范围内，方向检查
+	// 对二者继续严格生效。
+	minNetLogForDirection = 0.13
 	// 双子极值等价容差（round-4/5 amendments, task-5-report.md）：spec §4.6
 	// 的极值条款要求历史峰/谷日在 ±extremumSlack 内"仍为局部极值"，并未要求
 	// display 的全局 argmax 日等于基线的。真实数据常有相隔数百天、仅差

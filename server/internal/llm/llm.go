@@ -110,6 +110,7 @@ func (g *Generator) FillCopy(ctx context.Context, sc *scenario.Scenario, evs []e
 	for _, inst := range sc.Instruments {
 		displayName["IDIO:"+inst.ID] = inst.Alias
 	}
+	dayDir := dayDirections(sc)
 
 	// Order indexes so cluster members are adjacent, then chunk.
 	order := make([]int, 0, len(evs))
@@ -169,7 +170,7 @@ func (g *Generator) FillCopy(ctx context.Context, sc *scenario.Scenario, evs []e
 		sem <- struct{}{}
 		go func(ch []int) {
 			defer func() { <-sem }()
-			done <- g.fillChunk(ctx, displayName, evs, ch)
+			done <- g.fillChunk(ctx, displayName, evs, ch, dayDir)
 		}(ch)
 	}
 	for range chunks {
@@ -178,7 +179,43 @@ func (g *Generator) FillCopy(ctx context.Context, sc *scenario.Scenario, evs []e
 	log.Printf("llm: filled %d/%d news items", filled, len(evs))
 }
 
-func (g *Generator) fillChunk(ctx context.Context, displayName map[string]string, evs []engine.NewsEvent, idxs []int) int {
+// minDayDirLog is the mean-log-return floor below which a day's overall
+// direction is too tame to call "上涨"/"下跌"; such days get no parenthetical.
+const minDayDirLog = 0.002
+
+// dayDirections computes, for each day in the scenario baseline, a
+// qualitative market direction word from the mean log return across all
+// instruments that day: positive → "上涨", negative → "下跌", empty when the
+// magnitude is below minDayDirLog (near-flat day, no direction to report).
+// Index 0 is always empty (no prior day to return from).
+func dayDirections(sc *scenario.Scenario) []string {
+	dirs := make([]string, sc.Days)
+	for d := 1; d < sc.Days; d++ {
+		var sum float64
+		n := 0
+		for _, inst := range sc.Instruments {
+			p := sc.Baseline[inst.ID]
+			if d >= len(p) {
+				continue
+			}
+			sum += math.Log(p[d].Close / p[d-1].Close)
+			n++
+		}
+		if n == 0 {
+			continue
+		}
+		mean := sum / float64(n)
+		switch {
+		case mean >= minDayDirLog:
+			dirs[d] = "上涨"
+		case mean <= -minDayDirLog:
+			dirs[d] = "下跌"
+		}
+	}
+	return dirs
+}
+
+func (g *Generator) fillChunk(ctx context.Context, displayName map[string]string, evs []engine.NewsEvent, idxs []int, dayDir []string) int {
 	items := make([]promptItem, 0, len(idxs))
 	for _, i := range idxs {
 		ev := &evs[i]
@@ -186,6 +223,9 @@ func (g *Generator) fillChunk(ctx context.Context, displayName map[string]string
 		switch ev.Track {
 		case engine.TrackHistorical:
 			it.Kind = "行情解读：当日市场出现剧烈波动，为其撰写现场报道"
+			if ev.Day > 0 && ev.Day < len(dayDir) && dayDir[ev.Day] != "" {
+				it.Kind = fmt.Sprintf("行情解读：当日市场剧烈波动（整体%s），为其撰写现场报道", dayDir[ev.Day])
+			}
 		case engine.TrackNoise:
 			it.Kind = "花边闲谈：与行情无直接关系的市场八卦"
 		default:

@@ -43,10 +43,10 @@ export LLM_MODEL=deepseek-chat
 ## Data pipeline
 
 `internal/pipeline` builds the dotcom-2000 scenario offline from raw CSVs
-committed under `internal/pipeline/rawdata/` (fetched once from stooq.com
-via `go run ./cmd/pipeline fetch`). Four dead companies (WorldCom, Lucent,
-Nortel, Global Crossing) are reconstructed from documented price anchors —
-marked `reconstructed` in code and data.
+committed under `internal/pipeline/rawdata/` (fetched once from the Yahoo
+Finance chart API via `go run ./cmd/pipeline fetch`). Four dead companies
+(WorldCom, Lucent, Nortel, Global Crossing) are reconstructed from
+documented price anchors — marked `reconstructed` in code and data.
 
 ## Tests
 

@@ -285,7 +285,7 @@ func afterParam(r *http.Request) int64 {
 }
 
 // handleNews serves the player-visible feed. Blind box: id, day, media,
-// headline — nothing else. Track and shock vectors never leave the server.
+// headline, body — nothing else. Track and shock vectors never leave the server.
 func (s *Server) handleNews(w http.ResponseWriter, r *http.Request) {
 	room, ok := s.roomForMember(w, r)
 	if !ok {
