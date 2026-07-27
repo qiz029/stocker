@@ -88,6 +88,7 @@ func TestReconstructValidation(t *testing.T) {
 		{{cal[3].Format("2006-01-02"), 60}, {cal[1].Format("2006-01-02"), 50}}, // unordered
 		{{cal[0].Format("2006-01-02"), -1}, {cal[9].Format("2006-01-02"), 50}}, // bad price
 		{{"1990-01-01", 60}, {cal[9].Format("2006-01-02"), 50}},                // outside calendar
+		{{cal[2].Format("2006-01-02"), 60}, {cal[7].Format("2006-01-02"), 50}}, // doesn't pin calendar endpoints
 	}
 	for i, a := range bad {
 		if _, err := Reconstruct(a, cal, 1); err == nil {

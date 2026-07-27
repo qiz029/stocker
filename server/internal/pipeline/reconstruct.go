@@ -81,6 +81,9 @@ func Reconstruct(anchors []Anchor, calendar []time.Time, seed uint64) ([]Bar, er
 			o = bars[i-1].Close
 		}
 		wick := math.Abs(rng.NormFloat64() * reconWickSigma)
+		if wick > 0.5 {
+			wick = 0.5 // theoretical-only guard: keeps Low strictly positive
+		}
 		hi := math.Max(o, c) * (1 + wick)
 		lo := math.Min(o, c) * (1 - wick)
 		bars[i] = Bar{Date: calendar[i], Open: o, High: hi, Low: lo, Close: c}
