@@ -14,7 +14,8 @@ history, and compete. Deterministic parallel worlds, no schedulers.
 # 1. Backend
 createdb stocker
 export DATABASE_URL=postgres://localhost:5432/stocker?sslmode=disable
-cd server && go run ./cmd/seedscenario && go run ./cmd/server
+cd server && go run ./cmd/pipeline import && go run ./cmd/server
+# (or use go run ./cmd/seedscenario for the built-in synthetic scenario)
 
 # 2. Frontend (second terminal)
 cd web && npm install && npm run dev
