@@ -36,7 +36,8 @@ func TestBuildScenarioShape(t *testing.T) {
 		if inst.Beta["IDIO:"+inst.ID] != 1 {
 			t.Fatalf("%s: idio beta missing", inst.ID)
 		}
-		if inst.IdioScale < 0.4 || inst.IdioScale > 3.0 {
+		// Vol-budget amendment (task-5 round 3): post-budget IdioScale is γ·[0.4,3.0], floor 0.1.
+		if inst.IdioScale < 0.1 || inst.IdioScale > 3.0 {
 			t.Fatalf("%s: idio scale %v outside clamp", inst.ID, inst.IdioScale)
 		}
 		if b := inst.Beta["MKT"]; b < -0.5 || b > 3 {
@@ -56,7 +57,8 @@ func TestBuildScenarioShape(t *testing.T) {
 	// The market proxy instrument tracks the market factor strongly.
 	for i := range sc.Instruments {
 		if sc.Instruments[i].ID == "X22" {
-			if b := sc.Instruments[i].Beta["MKT"]; b < 0.7 || b > 1.3 {
+			// Vol-budget amendment (task-5 round 3): X22's β_MKT=1.0 is scaled by its γ, range (0.2, 1.3].
+			if b := sc.Instruments[i].Beta["MKT"]; b <= 0.2 || b > 1.3 {
 				t.Fatalf("SPX-tracking instrument MKT beta %v", b)
 			}
 		}

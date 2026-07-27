@@ -70,6 +70,30 @@ const (
 	idioScaleMax = 3.0
 	betaClampLo  = -0.5
 	betaClampHi  = 3.0
+	// budgetFrac is the round-3 per-instrument volatility budget (plan
+	// amendment, see task-5-report.md "Round 3"). After betas and IdioScale
+	// are computed, each instrument's model-implied TOTAL perturbation vol
+	//   v_i = sqrt((β_MKT·mktVolPerBeta)² + (β_sec·sectorVolPerBeta)²
+	//              + (IdioScale·idioBaseVol)² + epsVol²)
+	// is capped at b_i = budgetFrac·σ_i (σ_i = baseline daily log-return
+	// stddev). The return-correlation ceiling σ_i/sqrt(σ_i²+v_i²) then sits
+	// at 1/sqrt(1+budgetFrac²) ≈ 0.894, above the 0.85 fidelity gate with
+	// margin. When v_i exceeds the budget, every beta-routed channel of that
+	// instrument is shrunk by
+	//   γ_i = sqrt((b_i² − epsVol²) / (v_i² − epsVol²))
+	// — the exact solution for "post-budget total vol = b_i" given that
+	// epsVol (the engine's fixed per-day display noise) is NOT routed
+	// through betas and therefore cannot be scaled down; in the epsVol→0
+	// limit this reduces to the plain γ = b_i/v_i form. γ_i multiplies every
+	// Beta entry of the instrument; its "IDIO:<id>" share is carried by
+	// IdioScale instead (engine's idio price contribution is
+	// Beta[IDIO]·IdioScale·shock, so IdioScale *= γ is identical to
+	// Beta[IDIO] *= γ, and keeps the Beta[IDIO]==1 shape invariant). This
+	// preserves the factor mix and is game-semantically sound: low-vol
+	// instruments respond proportionally less to game news. Estimation is
+	// deterministic — plain arithmetic over the round-2 Monte-Carlo-measured
+	// channel constants above; no sampling at build time.
+	budgetFrac = 0.50
 )
 
 func parseDay(s string) time.Time {
@@ -201,6 +225,29 @@ func BuildScenario() (*scenario.Scenario, error) {
 			scale = idioScaleMin
 		}
 		scale = clampF(scale, idioScaleMin, idioScaleMax)
+		// Round-3 volatility budgeting (see budgetFrac above). scalable2 is
+		// the beta-routed part of the perturbation variance, i.e. v_i²−epsVol².
+		scalable2 := bMkt*bMkt*mktVolPerBeta*mktVolPerBeta +
+			bSec*bSec*sectorVolPerBeta*sectorVolPerBeta +
+			scale*scale*idioBaseVol*idioBaseVol
+		vi := math.Sqrt(scalable2 + epsVol*epsVol)
+		bi := budgetFrac * sigma
+		if vi > bi && scalable2 > 0 {
+			if bi <= epsVol {
+				// The engine's fixed display noise alone already exceeds this
+				// instrument's budget — unbudgetable without engine changes.
+				return nil, fmt.Errorf("%s: vol budget %.5f below engine noise floor %.5f",
+					spec.ID, bi, epsVol)
+			}
+			gamma := math.Sqrt((bi*bi - epsVol*epsVol) / scalable2)
+			for f := range beta {
+				if f == "IDIO:"+spec.ID {
+					continue // carried by IdioScale below, see budgetFrac doc
+				}
+				beta[f] *= gamma
+			}
+			scale *= gamma
+		}
 		instruments = append(instruments, scenario.Instrument{
 			ID: spec.ID, Alias: spec.Dossier.Alias, Desc: spec.Dossier.Desc,
 			Beta: beta, IdioScale: scale, Reconstructed: spec.Raw == "",
