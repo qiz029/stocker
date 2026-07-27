@@ -84,9 +84,29 @@ func FillFallbackCopy(sc *scenario.Scenario, evs []NewsEvent, seed uint64) {
 			if mag > 0 {
 				tone = "获得提振"
 			}
-			evs[i].Headline = fmt.Sprintf("消息面变化，%s板块%s，市场解读不一", name[top], tone)
+			headline := fmt.Sprintf("消息面变化，%s板块%s，市场解读不一", name[top], tone)
+			if evs[i].ClusterID != 0 && evs[i].TrueShock == nil {
+				prefix := "【追踪】"
+				if isRumor(evs, i) {
+					prefix = "【传闻】"
+				}
+				headline = prefix + headline
+			}
+			evs[i].Headline = headline
 		default:
 			evs[i].Headline = noiseTemplates[rng.IntN(len(noiseTemplates))]
 		}
 	}
+}
+
+// isRumor reports whether the cluster companion at index i precedes its
+// cluster's main event (events are not yet day-sorted when copy is filled,
+// so find the main event by ClusterID).
+func isRumor(evs []NewsEvent, i int) bool {
+	for j := range evs {
+		if evs[j].ClusterID == evs[i].ClusterID && evs[j].TrueShock != nil {
+			return evs[i].Day < evs[j].Day
+		}
+	}
+	return false
 }

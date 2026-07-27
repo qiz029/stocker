@@ -3,6 +3,7 @@ package engine
 import (
 	"math"
 	"math/rand/v2"
+	"strings"
 
 	"github.com/toddzheng/stocker/server/internal/scenario"
 )
@@ -47,6 +48,8 @@ type NewsEvent struct {
 	TrueShock   map[string]float64
 	ReportShock map[string]float64
 	Headline    string
+	Body        string // LLM copy (plan 4); empty on template fallback
+	ClusterID   int    // 0 = standalone; shared by 传闻/主事件/追踪 triplets
 }
 
 const (
@@ -151,4 +154,59 @@ func GenerateShockTimeline(sc *scenario.Scenario, seed uint64) []NewsEvent {
 		}
 	}
 	return evs
+}
+
+const pCluster = 0.6
+
+// ExpandClusters turns big market/sector impact events into 传闻→主事件→追踪
+// narratives (spec §4.4). Companions carry only ReportShock (TrueShock nil),
+// so factor states and prices are untouched — clusters are pure narrative.
+func ExpandClusters(sc *scenario.Scenario, seed uint64, evs []NewsEvent) []NewsEvent {
+	rng := Stream(seed, "clusters")
+	lowRho := []string{"tabloid", "forum"}
+	highRho := []string{"wire", "paper"}
+	out := make([]NewsEvent, 0, len(evs)+len(evs)/2)
+	nextCluster := 1
+	for _, ev := range evs {
+		big := false
+		if ev.Track == TrackImpact && len(ev.TrueShock) == 1 {
+			for f, v := range ev.TrueShock {
+				if !strings.HasPrefix(f, "IDIO:") && math.Abs(v) >= bigShock {
+					big = true
+				}
+			}
+		}
+		if !big || rng.Float64() >= pCluster {
+			out = append(out, ev)
+			continue
+		}
+		id := nextCluster
+		nextCluster++
+		ev.ClusterID = id
+		if ev.Day > 0 {
+			rumorReport := make(map[string]float64, 1)
+			mismatch := 0.5 + rng.Float64() // 幅度错配: ×[0.5, 1.5)
+			for f, v := range ev.ReportShock {
+				rumorReport[f] = v * mismatch
+			}
+			out = append(out, NewsEvent{
+				Day: ev.Day - 1, Track: TrackImpact,
+				MediaID:     lowRho[rng.IntN(len(lowRho))],
+				ReportShock: rumorReport, ClusterID: id,
+			})
+		}
+		out = append(out, ev)
+		if ev.Day+1 < sc.Days {
+			followReport := make(map[string]float64, 1)
+			for f, v := range ev.TrueShock {
+				followReport[f] = v * 0.9
+			}
+			out = append(out, NewsEvent{
+				Day: ev.Day + 1, Track: TrackImpact,
+				MediaID:     highRho[rng.IntN(len(highRho))],
+				ReportShock: followReport, ClusterID: id,
+			})
+		}
+	}
+	return out
 }

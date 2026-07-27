@@ -2,6 +2,7 @@ package engine
 
 import (
 	"math"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -161,5 +162,94 @@ func TestIdioScaleDefaultsToOne(t *testing.T) {
 	inst.IdioScale = 0.5
 	if inst.IdioScaleOrDefault() != 0.5 {
 		t.Fatalf("explicit scale ignored")
+	}
+}
+
+func TestExpandClustersShape(t *testing.T) {
+	sc := scenario.Synthetic()
+	base := GenerateShockTimeline(sc, 42)
+	out := ExpandClusters(sc, 42, base)
+
+	if len(out) < len(base) {
+		t.Fatalf("clusters removed events: %d < %d", len(out), len(base))
+	}
+	byCluster := map[int][]NewsEvent{}
+	for _, ev := range out {
+		if ev.ClusterID != 0 {
+			byCluster[ev.ClusterID] = append(byCluster[ev.ClusterID], ev)
+		}
+	}
+	if len(byCluster) == 0 {
+		t.Fatal("no clusters formed over 300 days at pCluster=0.6 — implausible")
+	}
+	lowRho := map[string]bool{"tabloid": true, "forum": true}
+	highRho := map[string]bool{"wire": true, "paper": true}
+	for id, evs := range byCluster {
+		var main, rumor, follow int
+		var mainDay int
+		for _, ev := range evs {
+			if ev.TrueShock != nil {
+				main++
+				mainDay = ev.Day
+				// only market/sector events cluster
+				for f := range ev.TrueShock {
+					if strings.HasPrefix(f, "IDIO:") {
+						t.Fatalf("cluster %d built around idio event", id)
+					}
+					if math.Abs(ev.TrueShock[f]) < bigShock {
+						t.Fatalf("cluster %d around small shock %v", id, ev.TrueShock[f])
+					}
+				}
+			}
+		}
+		if main != 1 {
+			t.Fatalf("cluster %d has %d main events", id, main)
+		}
+		for _, ev := range evs {
+			if ev.TrueShock != nil {
+				continue
+			}
+			if ev.ReportShock == nil {
+				t.Fatalf("cluster %d companion missing report shock", id)
+			}
+			switch {
+			case ev.Day == mainDay-1:
+				rumor++
+				if !lowRho[ev.MediaID] {
+					t.Fatalf("rumor from %s", ev.MediaID)
+				}
+			case ev.Day == mainDay+1:
+				follow++
+				if !highRho[ev.MediaID] {
+					t.Fatalf("follow-up from %s", ev.MediaID)
+				}
+			default:
+				t.Fatalf("companion on unexpected day %d (main %d)", ev.Day, mainDay)
+			}
+		}
+		if rumor > 1 || follow > 1 {
+			t.Fatalf("cluster %d duplicated companions", id)
+		}
+	}
+	// Determinism.
+	again := ExpandClusters(sc, 42, GenerateShockTimeline(sc, 42))
+	if len(again) != len(out) {
+		t.Fatal("ExpandClusters not deterministic")
+	}
+}
+
+func TestClusterCompanionsDoNotMovePrices(t *testing.T) {
+	sc := scenario.Synthetic()
+	shocks := GenerateShockTimeline(sc, 42)
+	statesPlain, err := EvolveFactorStates(sc, shocks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	statesClustered, err := EvolveFactorStates(sc, ExpandClusters(sc, 42, shocks))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(statesPlain, statesClustered) {
+		t.Fatal("zero-impact companions changed factor states")
 	}
 }
