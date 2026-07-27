@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -146,5 +147,82 @@ func TestFromEnv(t *testing.T) {
 	cfg := FromEnv()
 	if cfg == nil || cfg.Model != "deepseek-chat" || cfg.Concurrency != 4 || cfg.Timeout != 90*time.Second {
 		t.Fatalf("cfg: %+v", cfg)
+	}
+}
+
+func TestClusterAwareChunking(t *testing.T) {
+	// Capture each request's user message to verify cluster members are in the same request.
+	var requestBodies atomic.Value
+	requestBodies.Store([]string{})
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Model    string           `json:"model"`
+			Messages []map[string]any `json:"messages"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		userMsg := req.Messages[len(req.Messages)-1]["content"].(string)
+		mu.Lock()
+		bodies := requestBodies.Load().([]string)
+		bodies = append(bodies, userMsg)
+		requestBodies.Store(bodies)
+		mu.Unlock()
+
+		// Echo back copy for every idx mentioned.
+		var out []map[string]any
+		for idx := 0; idx < 100; idx++ {
+			if strings.Contains(userMsg, fmt.Sprintf(`"idx":%d`, idx)) {
+				out = append(out, map[string]any{
+					"idx": idx, "headline": fmt.Sprintf("标题%d", idx),
+					"body": fmt.Sprintf("正文%d", idx),
+				})
+			}
+		}
+		b, _ := json.Marshal(out)
+		fmt.Fprint(w, chatResponse(string(b)))
+	}))
+	defer srv.Close()
+
+	g := New(Config{BaseURL: srv.URL, Model: "m", Concurrency: 2, Timeout: 10 * time.Second})
+	sc := testScenario()
+
+	// Create 11 standalone events + 3-member cluster to trigger split at chunkSize boundary.
+	evs := make([]engine.NewsEvent, 14)
+	for i := 0; i < 11; i++ {
+		evs[i] = engine.NewsEvent{
+			Day: i, Track: engine.TrackImpact, MediaID: "wire",
+			ReportShock: map[string]float64{"MKT": 0.01},
+			Headline:    "模板",
+		}
+	}
+	// Add 3-member cluster with IDs 11, 12, 13.
+	for i := 11; i < 14; i++ {
+		evs[i] = engine.NewsEvent{
+			Day: i, Track: engine.TrackImpact, MediaID: "wire",
+			ClusterID:   1,
+			ReportShock: map[string]float64{"MKT": 0.01},
+			Headline:    "模板",
+		}
+		if i == 11 {
+			evs[i].TrueShock = map[string]float64{"MKT": 0.01}
+		}
+	}
+
+	g.FillCopy(context.Background(), sc, evs)
+
+	// Verify all 3 cluster members appear in the same request.
+	clusterIdxsFound := false
+	bodies := requestBodies.Load().([]string)
+	for _, body := range bodies {
+		hasIdx11 := strings.Contains(body, `"idx":11`)
+		hasIdx12 := strings.Contains(body, `"idx":12`)
+		hasIdx13 := strings.Contains(body, `"idx":13`)
+		if hasIdx11 && hasIdx12 && hasIdx13 {
+			clusterIdxsFound = true
+			break
+		}
+	}
+	if !clusterIdxsFound {
+		t.Fatalf("cluster members not in same request; requests: %v", bodies)
 	}
 }

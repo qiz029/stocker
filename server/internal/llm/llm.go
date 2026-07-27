@@ -54,6 +54,9 @@ func New(cfg Config) *Generator {
 	if cfg.Concurrency <= 0 {
 		cfg.Concurrency = 4
 	}
+	if cfg.Timeout <= 0 {
+		cfg.Timeout = 90 * time.Second
+	}
 	return &Generator{cfg: cfg, httpc: &http.Client{Timeout: cfg.Timeout}}
 }
 
@@ -128,14 +131,35 @@ func (g *Generator) FillCopy(ctx context.Context, sc *scenario.Scenario, evs []e
 		}
 	}
 
-	type chunk []int
-	var chunks []chunk
-	for start := 0; start < len(order); start += chunkSize {
-		end := start + chunkSize
-		if end > len(order) {
-			end = len(order)
+	// Build runs: each run is one cluster's indexes (or a single standalone).
+	var runs [][]int
+	{
+		i := 0
+		for i < len(order) {
+			j := i + 1
+			c := evs[order[i]].ClusterID
+			if c != 0 {
+				for j < len(order) && evs[order[j]].ClusterID == c {
+					j++
+				}
+			}
+			runs = append(runs, order[i:j])
+			i = j
 		}
-		chunks = append(chunks, chunk(order[start:end]))
+	}
+	// Pack runs into chunks of ≤chunkSize without splitting a run
+	// (a run larger than chunkSize gets its own oversized chunk).
+	var chunks [][]int
+	var cur []int
+	for _, run := range runs {
+		if len(cur) > 0 && len(cur)+len(run) > chunkSize {
+			chunks = append(chunks, cur)
+			cur = nil
+		}
+		cur = append(cur, run...)
+	}
+	if len(cur) > 0 {
+		chunks = append(chunks, cur)
 	}
 
 	sem := make(chan struct{}, g.cfg.Concurrency)
@@ -143,7 +167,7 @@ func (g *Generator) FillCopy(ctx context.Context, sc *scenario.Scenario, evs []e
 	filled := 0
 	for _, ch := range chunks {
 		sem <- struct{}{}
-		go func(ch chunk) {
+		go func(ch []int) {
 			defer func() { <-sem }()
 			done <- g.fillChunk(ctx, displayName, evs, ch)
 		}(ch)
@@ -252,7 +276,7 @@ func (g *Generator) fillChunk(ctx context.Context, displayName map[string]string
 	for _, o := range outs {
 		h := strings.TrimSpace(o.Headline)
 		b := strings.TrimSpace(o.Body)
-		if !valid[o.Idx] || h == "" || len([]rune(h)) > 60 || len([]rune(b)) > 400 {
+		if !valid[o.Idx] || h == "" || b == "" || len([]rune(h)) > 60 || len([]rune(b)) > 400 {
 			continue
 		}
 		evs[o.Idx].Headline = h
