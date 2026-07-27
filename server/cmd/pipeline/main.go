@@ -65,7 +65,10 @@ type yahooChartResponse struct {
 func fetch() {
 	client := &http.Client{Timeout: 30 * time.Second}
 	failed := 0
-	for _, spec := range pipeline.FetchList {
+	for i, spec := range pipeline.FetchList {
+		if i > 0 {
+			time.Sleep(500 * time.Millisecond) // be polite to the source, on every iteration
+		}
 		escaped := strings.ReplaceAll(spec.Symbol, "^", "%5E")
 		url := fmt.Sprintf(
 			"https://query1.finance.yahoo.com/v8/finance/chart/%s?period1=%d&period2=%d&interval=1d",
@@ -157,7 +160,6 @@ func fetch() {
 			log.Fatalf("write %s: %v", path, err)
 		}
 		log.Printf("ok   %s ← %s (%d bars)", path, spec.Symbol, rows)
-		time.Sleep(500 * time.Millisecond) // be polite to the source
 	}
 	if failed > 0 {
 		log.Printf("%d symbols failed — investigate before building", failed)

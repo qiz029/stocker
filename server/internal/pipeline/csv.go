@@ -22,7 +22,8 @@ type Bar struct {
 //go:embed rawdata/*.csv
 var rawFS embed.FS
 
-// RawSeries loads a committed Stooq download by short name.
+// RawSeries loads a committed raw market-data download (fetched via
+// cmd/pipeline fetch) by short name.
 func RawSeries(name string) ([]Bar, error) {
 	f, err := rawFS.Open("rawdata/" + name + ".csv")
 	if err != nil {
@@ -34,6 +35,11 @@ func RawSeries(name string) ([]Bar, error) {
 
 // ParseStooqCSV parses Stooq's daily CSV (Date,Open,High,Low,Close,Volume).
 // Dates must be strictly ascending; prices must be positive.
+//
+// The name refers to the CSV column format, not the data source: when the
+// fetch source was switched to the Yahoo Finance chart API (see
+// cmd/pipeline), its JSON response was translated into this same
+// Date,Open,High,Low,Close,Volume layout so this parser needed no changes.
 func ParseStooqCSV(r io.Reader) ([]Bar, error) {
 	sc := bufio.NewScanner(r)
 	var bars []Bar
