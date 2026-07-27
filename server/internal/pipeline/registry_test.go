@@ -124,6 +124,28 @@ func TestAllScenariosShape(t *testing.T) {
 				t.Errorf("%s: EraHint %q leaks a real name", id, sc.EraHint)
 			}
 
+			// Blind-box scan of the authored dossier PROSE (Business/Bull/
+			// Bear), not just Alias/Desc/EraHint. RealName is deliberately
+			// exempt — it's the one field that's supposed to hold the real
+			// name, surfaced only on reveal.
+			meta, err := BuildMeta(id)
+			if err != nil {
+				t.Fatalf("BuildMeta(%s): %v", id, err)
+			}
+			for instID, d := range meta.Dossiers {
+				for _, field := range []struct {
+					name, val string
+				}{
+					{"Alias", d.Alias}, {"Desc", d.Desc},
+					{"Business", d.Business}, {"Bull", d.Bull}, {"Bear", d.Bear},
+				} {
+					if realNamePattern.MatchString(field.val) {
+						t.Errorf("%s: instrument %s dossier field %s %q leaks a real name",
+							id, instID, field.name, field.val)
+					}
+				}
+			}
+
 			for _, w := range sc.KeyWindows {
 				if w.StartDay < 0 || w.EndDay >= sc.Days || w.StartDay >= w.EndDay {
 					t.Errorf("%s: key window out of range: %+v (Days=%d)", id, w, sc.Days)
