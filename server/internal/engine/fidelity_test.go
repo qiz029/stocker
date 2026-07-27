@@ -2,6 +2,7 @@ package engine
 
 import (
 	"math"
+	"strings"
 	"testing"
 
 	"github.com/toddzheng/stocker/server/internal/scenario"
@@ -64,6 +65,84 @@ func TestFidelityRejectsLengthMismatch(t *testing.T) {
 	err := VerifyFidelity(sc, prices)
 	if err == nil {
 		t.Fatal("length-mismatched prices should fail fidelity, got nil error")
+	}
+}
+
+// oneInstScenario builds a minimal scenario around a single baseline series.
+func oneInstScenario(base []scenario.OHLC) *scenario.Scenario {
+	return &scenario.Scenario{
+		ID: "twin", Days: len(base),
+		Factors:     []scenario.Factor{{ID: "MKT", Kind: scenario.KindMarket}},
+		Instruments: []scenario.Instrument{{ID: "F1", Beta: map[string]float64{"MKT": 1}, IdioScale: 1}},
+		Baseline:    map[string][]scenario.OHLC{"F1": base},
+	}
+}
+
+// piecewiseLinear interpolates closes through (day, value) knots.
+func piecewiseLinear(days int, knots [][2]float64) []scenario.OHLC {
+	out := make([]scenario.OHLC, days)
+	k := 0
+	for d := 0; d < days; d++ {
+		for k+1 < len(knots)-1 && float64(d) >= knots[k+1][0] {
+			k++
+		}
+		a, b := knots[k], knots[k+1]
+		v := a[1] + (b[1]-a[1])*(float64(d)-a[0])/(b[0]-a[0])
+		out[d] = scenario.OHLC{Open: v, High: v + 1, Low: v - 1, Close: v}
+	}
+	return out
+}
+
+// Round-4 amendment (twin-extreme equivalence): a display whose global max
+// flips to a near-equal historical twin peak far outside the slack window
+// must be accepted — spec §4.6 requires the historical extremum day to remain
+// a LOCAL extremum, not that the global argmax day is preserved.
+func TestFidelityTwinExtremumFlipAccepted(t *testing.T) {
+	// Twin peaks 0.3% apart, 150 days apart: d50=130 vs d200=129.61.
+	base := piecewiseLinear(260, [][2]float64{
+		{0, 100}, {50, 130}, {125, 110}, {200, 129.61}, {259, 120},
+	})
+	sc := oneInstScenario(base)
+	disp := make([]scenario.OHLC, len(base))
+	copy(disp, base)
+	// Nudge the far twin 0.5% higher: display's global max flips to d200.
+	c := base[200].Close * 1.005
+	disp[200] = scenario.OHLC{Open: c, High: c + 1, Low: c - 1, Close: c}
+	if err := VerifyFidelity(sc, map[string][]scenario.OHLC{"F1": disp}); err != nil {
+		t.Fatalf("twin-peak flip must be accepted, got: %v", err)
+	}
+}
+
+// A display extreme landing on a day where the baseline is nowhere near its
+// own extreme is a genuine narrative violation and must still be rejected.
+func TestFidelityGenuineExtremumDisplacementRejected(t *testing.T) {
+	// Baseline peak d50=150; d200 sits ~15% below it. Small deterministic
+	// wiggles give the return series enough variance that the broad bump
+	// below does not drag return correlation under the 0.85 floor — the
+	// extremum clause must be what rejects this display.
+	base := piecewiseLinear(260, [][2]float64{
+		{0, 100}, {50, 150}, {120, 110}, {200, 127}, {259, 120},
+	})
+	for d := range base {
+		w := 1 + 0.02*math.Sin(2.1*float64(d))
+		base[d].Close *= w
+		base[d].Open, base[d].High, base[d].Low = base[d].Close, base[d].Close+1, base[d].Close-1
+	}
+	sc := oneInstScenario(base)
+	// Broad multiplicative bump centered on d200 lifts the display's global
+	// max to ~158 there while leaving returns nearly identical day-to-day.
+	disp := make([]scenario.OHLC, len(base))
+	for d := range base {
+		m := math.Exp(0.218 * math.Exp(-math.Pow(float64(d)-200, 2)/(2*25*25)))
+		c := base[d].Close * m
+		disp[d] = scenario.OHLC{Open: c, High: c + 1, Low: c - 1, Close: c}
+	}
+	err := VerifyFidelity(sc, map[string][]scenario.OHLC{"F1": disp})
+	if err == nil {
+		t.Fatal("genuine extremum displacement must be rejected")
+	}
+	if !strings.Contains(err.Error(), "extremum moved") {
+		t.Fatalf("expected the extremum error, got: %v", err)
 	}
 }
 

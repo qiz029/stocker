@@ -89,8 +89,39 @@ func TestDiagFidelity(t *testing.T) {
 			for _, mx := range []bool{true, false} {
 				bd, dd := argExt(base, mx), argExt(disp, mx)
 				if d := bd - dd; d > 10 || d < -10 {
-					extFail[inst.ID]++
-					fmt.Printf("seed=%d %s EXT max=%v base=%d disp=%d moved=%d\n", seed, inst.ID, mx, bd, dd, d)
+					// Mirror engine.twinExtremumOK's dual condition and
+					// report the two gaps it measures: aGap = how far the
+					// baseline at the display's extremum day sits from the
+					// baseline's true extreme; bGap = how far the display's
+					// best value near the baseline extremum day sits from
+					// the display's own global extreme.
+					lo, hi := bd-10, bd+10
+					if lo < 0 {
+						lo = 0
+					}
+					if hi > len(disp)-1 {
+						hi = len(disp) - 1
+					}
+					nb := disp[lo].Close
+					for i := lo + 1; i <= hi; i++ {
+						if (mx && disp[i].Close > nb) || (!mx && disp[i].Close < nb) {
+							nb = disp[i].Close
+						}
+					}
+					var aGap, bGap float64
+					if mx {
+						aGap = 1 - base[dd].Close/base[bd].Close
+						bGap = 1 - nb/disp[dd].Close
+					} else {
+						aGap = base[dd].Close/base[bd].Close - 1
+						bGap = nb/disp[dd].Close - 1
+					}
+					const tol = 0.05
+					if aGap > tol || bGap > tol {
+						extFail[inst.ID]++
+						fmt.Printf("seed=%d %s EXT max=%v base=%d disp=%d moved=%d aGap=%.4f bGap=%.4f\n",
+							seed, inst.ID, mx, bd, dd, d, aGap, bGap)
+					}
 				}
 			}
 		}
