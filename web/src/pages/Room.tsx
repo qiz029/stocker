@@ -75,8 +75,10 @@ export default function Room() {
         {room.status === "lobby" ? (
           <div className="room-card" style={{ cursor: "default" }}>
             <h3>房间尚未开局</h3>
-            <p className="rc-meta">把邀请码 <b className="num">{room.invite_code}</b> 发给朋友；人齐后由房主启动时间轴。</p>
-            <button className="submit" style={{ marginTop: 14 }} onClick={startRoom}>启动时间轴（房主）</button>
+            <p className="rc-meta">把邀请码 <b className="num">{room.invite_code}</b> 发给朋友{room.is_host && "；人齐后由房主启动时间轴"}。</p>
+            {room.is_host
+              ? <button className="submit" style={{ marginTop: 14 }} onClick={startRoom}>启动时间轴（房主）</button>
+              : <p className="rc-meta" style={{ marginTop: 14 }}>等待房主启动…</p>}
           </div>
         ) : (
           <div className="grid">

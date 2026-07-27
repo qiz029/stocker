@@ -31,10 +31,11 @@ export const api = {
 
 /* ---------- API types (mirror the Go handlers exactly) ---------- */
 export type User = { id: number; username: string };
+export type ScenarioInfo = { id: string; name: string; days: number };
 export type Room = {
   id: number; invite_code: string; scenario_id: string; days: number;
   status: "lobby" | "running"; day_duration_secs: number;
-  started_at?: string; current_day?: number; ended?: boolean;
+  started_at?: string; current_day?: number; ended?: boolean; is_host?: boolean;
 };
 export type InstrumentProfile = { business: string; bull: string; bear: string };
 export type Instrument = { id: string; alias: string; desc: string; profile: InstrumentProfile | null };
@@ -51,7 +52,7 @@ export type Portfolio = { cash_cents: number; total_cents: number; positions: Po
 export type Trade = { instrument_id: string; side: string; day: number; price: number; shares: number; amount_cents: number };
 export type RevealInstrument = { id: string; alias: string; real_name: string };
 export type RevealTrade = Trade & { username: string };
-export type RevealData = { instruments: RevealInstrument[]; trades: RevealTrade[]; leaderboard: LeaderboardRow[] };
+export type RevealData = { instruments: RevealInstrument[]; trades: RevealTrade[]; leaderboard: LeaderboardRow[]; real_period?: string };
 
 export const INITIAL_CASH_CENTS = 10_000_000;
 export const MEDIA_NAMES: Record<string, string> = {

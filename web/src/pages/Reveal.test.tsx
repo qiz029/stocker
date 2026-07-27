@@ -17,6 +17,7 @@ const reveal = {
     { username: "amy", total_cents: 13_420_000, return_pct: 0.342, late_join: false },
     { username: "me", total_cents: 9_100_000, return_pct: -0.09, late_join: false },
   ],
+  real_period: "1999-01 ~ 2001-12",
 };
 
 function renderAt(handler: () => Response) {
@@ -36,6 +37,7 @@ describe("Reveal page", () => {
     expect(screen.getByText("+34.20%")).toBeInTheDocument();
     expect(screen.getAllByText("amy")[0].closest(".lb-row")).toBeTruthy();
     expect(screen.getByText("$40,000.00")).toBeInTheDocument();
+    expect(screen.getByText(/1999-01 ~ 2001-12/)).toBeInTheDocument();
   });
 
   it("shows a waiting message before the game ends", async () => {

@@ -54,6 +54,9 @@ export default function Reveal() {
 
       <div className="card">
         <h2>身份揭晓</h2>
+        {data.real_period && (
+          <p className="rc-meta">真实时期：<b className="num">{data.real_period}</b></p>
+        )}
         {!hasRealNames && (
           <p className="rc-meta">本局使用合成剧本，标的没有真实历史身份；真实剧本（如 2000 年互联网泡沫）会在这里揭晓每只股票的真名与真实日期区间。</p>
         )}
