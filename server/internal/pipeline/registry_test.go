@@ -14,8 +14,11 @@ import (
 
 // realNamePattern is the blind-box spot list: real company names must never
 // leak into alias, desc, or EraHint (spec, plan-5 Global Constraints).
+// Covers dotcom-2000 + crash-1987 + nifty-1972 + the upcoming gfc-2008 names.
 var realNamePattern = regexp.MustCompile(
-	`Microsoft|Cisco|Intel|IBM|Apple|Amazon|Lehman|Goldman|Kodak|Xerox`)
+	`Microsoft|Cisco|Intel|IBM|Apple|Amazon|Lehman|Goldman|Kodak|Xerox|` +
+		`Coca-Cola|McDonald|Disney|Johnson|Procter|Gamble|Caterpillar|Exxon|Avon|` +
+		`Merck|Boeing|American Express|Morgan|Citigroup|Wells Fargo|Bear Stearns|AIG|Lennar|Chevron`)
 
 func TestRegistryLists(t *testing.T) {
 	ids := Universes()
@@ -81,6 +84,20 @@ func TestAllScenariosShape(t *testing.T) {
 				if inst.IdioScale < 0.1 || inst.IdioScale > 3 {
 					t.Errorf("%s: instrument %s idio scale %v outside [0.1, 3]",
 						id, inst.ID, inst.IdioScale)
+				}
+				// build.go's degenerate volatility-budget branch (see its
+				// doc comment) zeros MKT/sector betas when an instrument's
+				// own historical vol is too low to budget even at zero
+				// beta contribution. That's expected — and news-inert by
+				// design — for a universe's own market-proxy/index
+				// instrument (nifty-1972's N15 is the first case), but if
+				// it ever fires for an ordinary instrument, that's a real
+				// modeling bug (a stock silently going deaf to MKT/sector
+				// news) worth catching here rather than letting it pass
+				// silently.
+				if inst.Beta["MKT"] == 0 && inst.ID != u.MarketProxy {
+					t.Errorf("degenerate vol budget fired for non-index instrument %s in %s — review the universe composition",
+						inst.ID, id)
 				}
 				base := sc.Baseline[inst.ID]
 				if len(base) != sc.Days {

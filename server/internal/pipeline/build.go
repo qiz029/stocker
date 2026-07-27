@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"time"
 
@@ -288,6 +289,15 @@ func BuildScenario(id string) (*scenario.Scenario, error) {
 				// imposes; a uniform gamma wastes headroom shrinking the
 				// already-small idio channel instead of fully eliminating
 				// the larger MKT/sector ones.
+				//
+				// This branch has no other notice mechanism, so a future
+				// scenario tripping it on a NON-index instrument (whose
+				// MKT/sector betas silently going to zero would be a real
+				// modeling bug, not the expected outcome) would otherwise
+				// pass silently. Log it here; TestAllScenariosShape asserts
+				// it only ever fires for a universe's own MarketProxy.
+				log.Printf("pipeline: %s/%s vol budget below engine noise floor — betas zeroed, idio floored (news-inert)",
+					u.ScenarioID, spec.ID)
 				beta["MKT"] = 0
 				if spec.Sector != "" {
 					beta[spec.Sector] = 0
