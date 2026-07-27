@@ -70,10 +70,8 @@ type yahooChartResponse struct {
 	} `json:"chart"`
 }
 
-// unionFetchSpecs collects every registered universe's FetchSpecs plus
-// pipeline.PendingFetchSpecs() (symbols for eras not yet registered — see
-// that var's doc comment), deduped by Name (symbols shared across eras,
-// e.g. spx, are fetched once).
+// unionFetchSpecs collects every registered universe's FetchSpecs, deduped
+// by Name (symbols shared across eras, e.g. spx, are fetched once).
 func unionFetchSpecs() []pipeline.FetchSpec {
 	seen := map[string]bool{}
 	var out []pipeline.FetchSpec
@@ -93,7 +91,6 @@ func unionFetchSpecs() []pipeline.FetchSpec {
 		}
 		add(u.FetchSpecs)
 	}
-	add(pipeline.PendingFetchSpecs())
 	return out
 }
 

@@ -91,23 +91,4 @@ func TestEmbeddedRawSeriesLoad(t *testing.T) {
 			}
 		})
 	}
-
-	// pendingFetchSpecs (plan-5 Task 3): symbols fetched ahead of the
-	// crash-1987/nifty-1972/gfc-2008 universes that will consume them
-	// (Tasks 4-6, not yet registered), so there's no scenario window to
-	// check against — check each spec's own requested From/To instead.
-	// None of these symbols has a recent-IPO complication like ebay's.
-	t.Run("pending", func(t *testing.T) {
-		for _, spec := range pendingFetchSpecs {
-			from, err := time.Parse("2006-01-02", spec.From)
-			if err != nil {
-				t.Fatalf("%s: bad From %q: %v", spec.Name, spec.From, err)
-			}
-			to, err := time.Parse("2006-01-02", spec.To)
-			if err != nil {
-				t.Fatalf("%s: bad To %q: %v", spec.Name, spec.To, err)
-			}
-			checkCoverage(t, spec.Name, from, to)
-		}
-	})
 }

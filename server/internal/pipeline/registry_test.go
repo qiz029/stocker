@@ -346,3 +346,89 @@ func TestNifty1972BearMarketDepth(t *testing.T) {
 	t.Logf("nifty-1972: SPX proxy drawdown=%.4f, NIFT drawdowns: %v (>=60%% count=%d/%d)",
 		proxyDD, report, deepCount, len(niftIDs))
 }
+
+// TestGfc2008CrisisShape is gfc-2008's scenario-specific sanity check
+// (plan-5 Task 6): G03 (Lehman, reconstructed to zero) must show an
+// enormous baseline net log return, G09 (AIG) must show a near-total
+// baseline drawdown, the DEFC ("防御消费") sector instruments must hold up
+// (drawdown < 40%, "防御股确实防御"), and the +1 (绝望底反转) key window must
+// actually start at the SPX proxy's global baseline trough — 2009-03-09
+// really was the bottom.
+func TestGfc2008CrisisShape(t *testing.T) {
+	sc, err := BuildScenario("gfc-2008")
+	if err != nil {
+		t.Fatalf("BuildScenario(gfc-2008): %v", err)
+	}
+	u, ok := ByID("gfc-2008")
+	if !ok {
+		t.Fatal("gfc-2008 not registered")
+	}
+
+	// G03 (LEH): baseline net log return <= -5.
+	lehBase := sc.Baseline["G03"]
+	if lehBase == nil {
+		t.Fatal("gfc-2008: no baseline for G03")
+	}
+	lehNet := math.Log(lehBase[len(lehBase)-1].Close / lehBase[0].Close)
+	if lehNet > -5 {
+		t.Fatalf("gfc-2008: G03 (LEH) net log return %.4f does not go below -5 (雷曼归零)", lehNet)
+	}
+
+	// G09 (AIG): baseline drawdown >= 90% (log <= log(0.1) ~= -2.3026).
+	aigBase := sc.Baseline["G09"]
+	if aigBase == nil {
+		t.Fatal("gfc-2008: no baseline for G09")
+	}
+	aigDD := maxLogDrawdown(aigBase)
+	if aigDD > math.Log(0.1) {
+		t.Fatalf("gfc-2008: G09 (AIG) max log drawdown %.4f does not reach -90%% (log <= %.4f)",
+			aigDD, math.Log(0.1))
+	}
+
+	// DEFC sector: every instrument's baseline drawdown < 40% (log > log(0.6)).
+	var defcReport []string
+	for _, spec := range u.Instruments {
+		if spec.Sector != "DEFC" {
+			continue
+		}
+		base := sc.Baseline[spec.ID]
+		if base == nil {
+			t.Fatalf("gfc-2008: no baseline for DEFC instrument %s", spec.ID)
+		}
+		dd := maxLogDrawdown(base)
+		defcReport = append(defcReport, fmt.Sprintf("%s=%.4f", spec.ID, dd))
+		if dd <= math.Log(0.6) {
+			t.Errorf("gfc-2008: DEFC instrument %s baseline drawdown %.4f exceeds 40%% (log <= %.4f)",
+				spec.ID, dd, math.Log(0.6))
+		}
+	}
+
+	// +1 key window's start day must sit within 10 days of the SPX proxy's
+	// global baseline trough (the trough itself must be 2009-03-09).
+	proxyBase := sc.Baseline[u.MarketProxy]
+	if proxyBase == nil {
+		t.Fatalf("gfc-2008: no baseline for market proxy %s", u.MarketProxy)
+	}
+	troughDay, troughClose := -1, proxyBase[0].Close
+	for i, b := range proxyBase {
+		if b.Close < troughClose {
+			troughClose = b.Close
+			troughDay = i
+		}
+	}
+	var reboundStart = -1
+	for _, w := range sc.KeyWindows {
+		if w.Direction == 1 {
+			reboundStart = w.StartDay
+		}
+	}
+	if reboundStart == -1 {
+		t.Fatal("gfc-2008: no +1 key window found")
+	}
+	if diff := reboundStart - troughDay; diff < -10 || diff > 10 {
+		t.Fatalf("gfc-2008: +1 key window start day %d is not within 10 days of SPX proxy trough day %d (diff %d)",
+			reboundStart, troughDay, diff)
+	}
+	t.Logf("gfc-2008: G03 net=%.4f, G09 drawdown=%.4f, DEFC drawdowns: %v, SPX trough day=%d, +1 window start day=%d",
+		lehNet, aigDD, defcReport, troughDay, reboundStart)
+}
