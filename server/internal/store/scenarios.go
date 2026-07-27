@@ -39,9 +39,10 @@ func SaveScenario(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario) 
 				return err
 			}
 			if _, err := tx.Exec(ctx, `
-				INSERT INTO instruments (scenario_id, id, ord, alias, descr, beta)
-				VALUES ($1, $2, $3, $4, $5, $6)`,
-				sc.ID, inst.ID, ord, inst.Alias, inst.Desc, string(beta)); err != nil {
+				INSERT INTO instruments (scenario_id, id, ord, alias, descr, beta, idio_scale, reconstructed)
+				VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+				sc.ID, inst.ID, ord, inst.Alias, inst.Desc, string(beta),
+				inst.IdioScale, inst.Reconstructed); err != nil {
 				return err
 			}
 		}
@@ -78,7 +79,7 @@ func LoadScenario(ctx context.Context, q Querier, id string) (*scenario.Scenario
 	}
 
 	instRows, err := q.Query(ctx, `
-		SELECT id, alias, descr, beta FROM instruments
+		SELECT id, alias, descr, beta, idio_scale, reconstructed FROM instruments
 		WHERE scenario_id = $1 ORDER BY ord`, id)
 	if err != nil {
 		return nil, err
@@ -87,7 +88,8 @@ func LoadScenario(ctx context.Context, q Querier, id string) (*scenario.Scenario
 	for instRows.Next() {
 		var inst scenario.Instrument
 		var beta []byte
-		if err := instRows.Scan(&inst.ID, &inst.Alias, &inst.Desc, &beta); err != nil {
+		if err := instRows.Scan(&inst.ID, &inst.Alias, &inst.Desc, &beta,
+			&inst.IdioScale, &inst.Reconstructed); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal(beta, &inst.Beta); err != nil {
