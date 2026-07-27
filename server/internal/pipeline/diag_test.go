@@ -87,7 +87,7 @@ func TestDiagFidelity(t *testing.T) {
 				fmt.Printf("seed=%d %s CORR %.4f\n", seed, inst.ID, corr)
 			}
 			baseNet := math.Log(base[len(base)-1].Close / base[0].Close)
-			if math.Abs(baseNet) >= 0.10 {
+			if math.Abs(baseNet) >= 0.18 { // mirrors engine minNetLogForDirection (final round)
 				bDir := base[len(base)-1].Close >= base[0].Close
 				dDir := disp[len(disp)-1].Close >= disp[0].Close
 				if bDir != dDir {
