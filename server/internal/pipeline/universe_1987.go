@@ -6,17 +6,15 @@ package pipeline
 // shared symbols (ko/mcd/dis/jnj/pg/mmm/cat/ibm/hpq/ge/xom/wmt/spx) again
 // here — even though dotcom-2000/universe_dotcom.go already lists most of
 // them with a wider From/To — is correct: it documents which universes
-// actually consume each file, mirroring the comment convention already
-// used in universe_dotcom.go and universe.go's (soon-empty) pendingFetchSpecs.
+// actually consume each file, mirroring the shared-symbol convention.
 //
-// mrk/ba/axp are this universe's own symbols, moved here from
-// pendingFetchSpecs (plan-5 Task 3 fetched them ahead of this universe's
-// existence; see universe.go's pendingFetchSpecs doc comment).
+// mrk/ba/axp are this universe's own symbols, moved here during plan-5
+// Task 3 when they were fetched ahead of this universe's existence.
 //
 // Y16 (dji, 三十巨头/道琼斯工业指数) is DROPPED per controller ruling: ^DJI has
-// no pre-1992 daily history on Yahoo's chart API (see pendingFetchSpecs'
-// dji comment in universe.go — verified against several period1 values
-// spanning 1970-1985, every one returns the same 1992-01-02 first bar),
+// no pre-1992 daily history on Yahoo's chart API (verified against several
+// period1 values spanning 1970-1985, every one returns the same 1992-01-02
+// first bar; see the dji entry doc in universe_2008.go for the full detail),
 // which is after this scenario's entire 1986-1988 window. This universe
 // has 16 instruments (Y01..Y15, Y17); Y17 remains "Y17" (MarketProxy) per
 // the controller's explicit instruction not to renumber.

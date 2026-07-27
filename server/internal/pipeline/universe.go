@@ -6,13 +6,9 @@ import "sort"
 type FetchSpec struct {
 	Name   string // rawdata/<Name>.csv
 	Symbol string // Yahoo Finance chart-API symbol
-	// From/To bound the fetch window as "2006-01-02" dates (UTC). Empty
-	// defaults to the plan-4 dotcom fetch window (cmd/pipeline's
-	// period1/period2 constants, 1998-06-01..2002-03-31) — the window most
-	// of the original dotcom-2000 symbols still use. Dates before 1970
-	// (e.g. "1970-06-01" boundaries land fine, but some series need to
-	// start earlier) resolve to negative Unix seconds, which time.Unix
-	// handles natively.
+	// From/To bound the fetch window (YYYY-MM-DD; empty = the dotcom-era
+	// default). Pre-1970 dates resolve to negative Unix seconds, which the
+	// Yahoo API accepts.
 	From, To string
 }
 

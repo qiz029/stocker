@@ -6,26 +6,23 @@ package pipeline
 // shared symbols (ko/mcd/dis/jnj/pg/mmm/cat/ibm/xom/spx) again here — even
 // though universe_dotcom.go/universe_1987.go already list most of them with
 // their own From/To — is correct: it documents which universes actually
-// consume each file, mirroring the convention already used in
-// universe_1987.go and universe.go's (soon-empty) pendingFetchSpecs. Shared
-// symbols keep IDENTICAL From/To values across every universe.go that lists
-// them, so `cmd/pipeline`'s FetchSpec dedup (first-seen-by-Name, across
-// Universes() in sorted id order) never depends on which universe happens
-// to be processed first.
+// consume each file, following the shared-symbol convention. Shared symbols
+// keep IDENTICAL From/To values across all universes, so `cmd/pipeline`'s
+// FetchSpec dedup (first-seen-by-Name, across Universes() in sorted id order)
+// never depends on which universe happens to be processed first.
 //
-// xrx is this universe's own symbol, moved here from pendingFetchSpecs
-// (plan-5 Task 3 fetched it ahead of this universe's existence; see
-// universe.go's pendingFetchSpecs doc comment). xom's From was widened a
-// second time by this universe (1970-06-01, not the 1985-06-01 the plan-5
-// Task 3 table originally used) — see the doc comment on xom's entry in
-// universe_dotcom.go for why.
+// xrx is this universe's own symbol, moved here during plan-5 Task 3
+// when it was fetched ahead of this universe's existence. xom's From was
+// widened a second time by this universe (1970-06-01, not the 1985-06-01
+// the plan-5 Task 3 table originally used) — see the doc comment on xom's
+// entry in universe_dotcom.go for why.
 //
 // N14 (dji, 三十巨头/道琼斯工业指数) is DROPPED per controller ruling: ^DJI has no
-// pre-1992 daily history on Yahoo's chart API (see pendingFetchSpecs' dji
-// comment in universe.go), which is after this scenario's entire
-// 1972-01..1975-06 window. This universe has 14 instruments (N01..N13,
-// N15); N15 remains "N15" (MarketProxy) per the controller's explicit
-// instruction not to renumber.
+// pre-1992 daily history on Yahoo's chart API (see the dji entry doc in
+// universe_2008.go), which is after this scenario's entire 1972-01..1975-06
+// window. This universe has 14 instruments (N01..N13, N15); N15 remains
+// "N15" (MarketProxy) per the controller's explicit instruction not to
+// renumber.
 //
 // avp/ek have no FetchSpec entries: both are unfetchable per the
 // pre-authorized availability contingency (verified live in plan-5 Task 3 —

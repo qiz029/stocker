@@ -48,6 +48,26 @@ func TestRegistryLists(t *testing.T) {
 	}
 }
 
+// TestFetchSpec verifies that shared symbols (FetchSpecs with identical Names
+// across universes) have identical From/To/Symbol values; the pipeline dedup
+// logic relies on first-seen-by-Name, so divergence would silently narrow the
+// fetch window.
+func TestFetchSpec(t *testing.T) {
+	seen := map[string]FetchSpec{}
+	for _, id := range Universes() {
+		u, _ := ByID(id)
+		for _, spec := range u.FetchSpecs {
+			if prev, exists := seen[spec.Name]; exists {
+				if prev.From != spec.From || prev.To != spec.To || prev.Symbol != spec.Symbol {
+					t.Errorf("shared fetch spec %s diverges between universes — dedup is first-seen and would silently narrow the fetch: %+v vs %+v", spec.Name, prev, spec)
+				}
+			} else {
+				seen[spec.Name] = spec
+			}
+		}
+	}
+}
+
 // TestAllScenariosShape runs the plan-4 shape invariants over every
 // registered scenario, so a future universe_<era>.go automatically gets the
 // same gate dotcom-2000 has always had.
@@ -159,8 +179,6 @@ func TestAllScenariosShape(t *testing.T) {
 			if !reflect.DeepEqual(sc, sc2) {
 				t.Errorf("%s: BuildScenario is not deterministic", id)
 			}
-
-			_ = u // u.FidelitySeeds/FetchSpecs are exercised by the other registry tests
 		})
 	}
 }

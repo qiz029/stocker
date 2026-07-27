@@ -12,20 +12,17 @@ package pipeline
 // processed first.
 //
 // gs/ms/jpm/bac/c/wfc/aig/len/gld/cvx/dji are this universe's own symbols,
-// moved here from universe.go's pendingFetchSpecs (plan-5 Task 3 fetched
-// them ahead of this universe's existence; see that var's doc comment).
-// This is the LAST universe to move its symbols off pendingFetchSpecs — the
-// slice (and PendingFetchSpecs/its call sites in cmd/pipeline/main.go and
-// csv_test.go) is now deleted; every registered universe carries its own
-// FetchSpecs.
+// fetched during plan-5 Task 3 ahead of this universe's existence.
 //
 // dji's From is 1992-01-01 (not the brief's aspirational 1970 start): Yahoo's
 // chart API has no daily ^DJI history before 1992-01-02 no matter how early
 // period1 is set (verified live in plan-5 Task 3 against several period1
 // values spanning 1970-1985 — every one returns the same first bar). That
 // floor is well before this scenario's 2006-10..2009-12 window, so G18 (道琼斯
-// 工业指数) uses real data with no anchors, unlike crash-1987/nifty-1972 which
-// had to drop their DJI instrument entirely.
+// 工业指数) uses real data with no anchors. Unlike this universe, crash-1987
+// and nifty-1972 had to drop their DJI instruments entirely because ^DJI's
+// 1992 start date lies outside their historical windows (1986-1988 and
+// 1972-1975 respectively).
 var gfc2008FetchSpecs = []FetchSpec{
 	{Name: "aapl", Symbol: "AAPL", From: "1985-06-01", To: "2010-06-30"},
 	{Name: "xom", Symbol: "XOM", From: "1970-06-01", To: "2010-06-30"},

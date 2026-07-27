@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -114,6 +115,9 @@ func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, ho
 	}
 	if world == nil {
 		return nil, fmt.Errorf("world generation failed after 10 seeds: %w", lastErr)
+	}
+	if seed != base {
+		log.Printf("room: scenario %s took %d world-gen attempts (fidelity rejections are by design; see spec §4.6)", sc.ID, seed-base+1)
 	}
 	invite, err := newInviteCode()
 	if err != nil {
