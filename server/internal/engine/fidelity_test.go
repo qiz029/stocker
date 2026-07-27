@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"math"
 	"testing"
 
 	"github.com/toddzheng/stocker/server/internal/scenario"
@@ -63,5 +64,36 @@ func TestFidelityRejectsLengthMismatch(t *testing.T) {
 	err := VerifyFidelity(sc, prices)
 	if err == nil {
 		t.Fatal("length-mismatched prices should fail fidelity, got nil error")
+	}
+}
+
+func TestFidelityDirectionExemptForNearFlat(t *testing.T) {
+	// A baseline with ~zero net move must not fail on direction sign alone.
+	sc := &scenario.Scenario{
+		ID: "flat", Days: 260,
+		Factors:     []scenario.Factor{{ID: "MKT", Kind: scenario.KindMarket}},
+		Instruments: []scenario.Instrument{{ID: "F1", Beta: map[string]float64{"MKT": 1}, IdioScale: 1}},
+		Baseline:    map[string][]scenario.OHLC{},
+	}
+	base := make([]scenario.OHLC, sc.Days)
+	prices := make([]scenario.OHLC, sc.Days)
+	for d := 0; d < sc.Days; d++ {
+		// A single smooth oscillation (one full sine period across the
+		// window) so the series has one unique global max and one unique
+		// global min — no repeated-tie plateaus for argExtremum to latch
+		// onto. base[0] == base[Days-1] exactly, so net ≈ 0 (« 0.10).
+		b := 100 + 2*math.Sin(2*math.Pi*float64(d)/float64(sc.Days-1))
+		base[d] = scenario.OHLC{Open: b, High: b + 1, Low: b - 1, Close: b}
+		prices[d] = scenario.OHLC{Open: b, High: b + 1, Low: b - 1, Close: b}
+	}
+	// Flip the display's net direction: end 1% below start while tracking base.
+	for d := range prices {
+		f := 1.0 - 0.02*float64(d)/float64(sc.Days-1)
+		prices[d].Close = base[d].Close * f
+		prices[d].Open, prices[d].High, prices[d].Low = prices[d].Close, prices[d].Close+1, prices[d].Close-1
+	}
+	sc.Baseline["F1"] = base
+	if err := VerifyFidelity(sc, map[string][]scenario.OHLC{"F1": prices}); err != nil {
+		t.Fatalf("near-flat direction flip must be exempt, got: %v", err)
 	}
 }

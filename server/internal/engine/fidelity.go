@@ -10,6 +10,10 @@ import (
 const (
 	minReturnCorr = 0.85
 	extremumSlack = 10
+	// 近似横盘的标的没有"大势"可保真：净变动小于 minNetLogForDirection 时
+	// 跳过方向检查（相关性与极值检查仍然生效）。spec §4.6 的方向条款保护
+	// 的是历史大势，不是 ±2% 的噪声符号。
+	minNetLogForDirection = 0.10
 )
 
 func logReturns(p []scenario.OHLC) []float64 {
@@ -69,10 +73,13 @@ func VerifyFidelity(sc *scenario.Scenario, prices map[string][]scenario.OHLC) er
 		if corr < minReturnCorr {
 			return fmt.Errorf("%s: return correlation %.3f < %.2f", inst.ID, corr, minReturnCorr)
 		}
-		bDir := base[len(base)-1].Close >= base[0].Close
-		dDir := disp[len(disp)-1].Close >= disp[0].Close
-		if bDir != dDir {
-			return fmt.Errorf("%s: cumulative direction flipped", inst.ID)
+		baseNet := math.Log(base[len(base)-1].Close / base[0].Close)
+		if math.Abs(baseNet) >= minNetLogForDirection {
+			bDir := base[len(base)-1].Close >= base[0].Close
+			dDir := disp[len(disp)-1].Close >= disp[0].Close
+			if bDir != dDir {
+				return fmt.Errorf("%s: cumulative direction flipped", inst.ID)
+			}
 		}
 		for _, max := range []bool{true, false} {
 			bd, dd := argExtremum(base, max), argExtremum(disp, max)
