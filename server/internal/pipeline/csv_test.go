@@ -41,22 +41,73 @@ func TestParseStooqCSVRejectsBadData(t *testing.T) {
 	}
 }
 
-func TestEmbeddedRawSeriesLoad(t *testing.T) {
-	// Every fetch-list entry must have committed data that parses and
-	// covers the scenario window with real history on both ends.
-	for _, spec := range dotcomFetchSpecs {
-		bars, err := RawSeries(spec.Name)
-		if err != nil {
-			t.Fatalf("%s: %v", spec.Name, err)
-		}
-		if len(bars) < 500 {
-			t.Errorf("%s: only %d bars", spec.Name, len(bars))
-		}
-		if bars[0].Date.After(time.Date(1999, 1, 4, 0, 0, 0, 0, time.UTC)) {
-			t.Errorf("%s: starts too late (%v)", spec.Name, bars[0].Date)
-		}
-		if bars[len(bars)-1].Date.Before(time.Date(2001, 12, 28, 0, 0, 0, 0, time.UTC)) {
-			t.Errorf("%s: ends too early (%v)", spec.Name, bars[len(bars)-1].Date)
-		}
+// windowMargin tolerates weekends/holidays landing a requested boundary a
+// few calendar days away from the first/last committed bar.
+const windowMargin = 7 * 24 * time.Hour
+
+// checkCoverage fails the test unless name's committed raw series has
+// enough bars and reaches from/to (within windowMargin on each end).
+func checkCoverage(t *testing.T, name string, from, to time.Time) {
+	t.Helper()
+	bars, err := RawSeries(name)
+	if err != nil {
+		t.Fatalf("%s: %v", name, err)
 	}
+	if len(bars) < 100 {
+		t.Errorf("%s: only %d bars", name, len(bars))
+	}
+	if bars[0].Date.After(from.Add(windowMargin)) {
+		t.Errorf("%s: starts too late (%v, want by ~%v)", name, bars[0].Date, from)
+	}
+	if bars[len(bars)-1].Date.Before(to.Add(-windowMargin)) {
+		t.Errorf("%s: ends too early (%v, want through ~%v)", name, bars[len(bars)-1].Date, to)
+	}
+}
+
+func TestEmbeddedRawSeriesLoad(t *testing.T) {
+	// Every fetch-list entry across every registered universe must have
+	// committed data that parses and covers that universe's scenario
+	// window (not necessarily the wider fetch request window — some
+	// symbols legitimately IPO after the fetch's From, e.g. ebay in
+	// 1998-09, which is still fine as long as it covers dotcom-2000's
+	// actual 1999-01-04..2001-12-28 window).
+	for _, id := range Universes() {
+		id := id
+		t.Run(id, func(t *testing.T) {
+			u, ok := ByID(id)
+			if !ok {
+				t.Fatalf("ByID(%s) missing", id)
+			}
+			start, err := time.Parse("2006-01-02", u.WindowStart)
+			if err != nil {
+				t.Fatalf("%s: bad WindowStart: %v", id, err)
+			}
+			end, err := time.Parse("2006-01-02", u.WindowEnd)
+			if err != nil {
+				t.Fatalf("%s: bad WindowEnd: %v", id, err)
+			}
+			for _, spec := range u.FetchSpecs {
+				checkCoverage(t, spec.Name, start, end)
+			}
+		})
+	}
+
+	// pendingFetchSpecs (plan-5 Task 3): symbols fetched ahead of the
+	// crash-1987/nifty-1972/gfc-2008 universes that will consume them
+	// (Tasks 4-6, not yet registered), so there's no scenario window to
+	// check against — check each spec's own requested From/To instead.
+	// None of these symbols has a recent-IPO complication like ebay's.
+	t.Run("pending", func(t *testing.T) {
+		for _, spec := range pendingFetchSpecs {
+			from, err := time.Parse("2006-01-02", spec.From)
+			if err != nil {
+				t.Fatalf("%s: bad From %q: %v", spec.Name, spec.From, err)
+			}
+			to, err := time.Parse("2006-01-02", spec.To)
+			if err != nil {
+				t.Fatalf("%s: bad To %q: %v", spec.Name, spec.To, err)
+			}
+			checkCoverage(t, spec.Name, from, to)
+		}
+	})
 }

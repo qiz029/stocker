@@ -70,17 +70,15 @@ type yahooChartResponse struct {
 	} `json:"chart"`
 }
 
-// unionFetchSpecs collects every registered universe's FetchSpecs, deduped
-// by Name (symbols shared across eras, e.g. spx, are fetched once).
+// unionFetchSpecs collects every registered universe's FetchSpecs plus
+// pipeline.PendingFetchSpecs() (symbols for eras not yet registered — see
+// that var's doc comment), deduped by Name (symbols shared across eras,
+// e.g. spx, are fetched once).
 func unionFetchSpecs() []pipeline.FetchSpec {
 	seen := map[string]bool{}
 	var out []pipeline.FetchSpec
-	for _, id := range pipeline.Universes() {
-		u, ok := pipeline.ByID(id)
-		if !ok {
-			continue
-		}
-		for _, spec := range u.FetchSpecs {
+	add := func(specs []pipeline.FetchSpec) {
+		for _, spec := range specs {
 			if seen[spec.Name] {
 				continue
 			}
@@ -88,7 +86,38 @@ func unionFetchSpecs() []pipeline.FetchSpec {
 			out = append(out, spec)
 		}
 	}
+	for _, id := range pipeline.Universes() {
+		u, ok := pipeline.ByID(id)
+		if !ok {
+			continue
+		}
+		add(u.FetchSpecs)
+	}
+	add(pipeline.PendingFetchSpecs())
 	return out
+}
+
+// fetchWindow resolves a spec's period1/period2 (Unix seconds), falling
+// back to the plan-4 dotcom window when From/To are empty. Dates before
+// 1970 resolve to negative Unix seconds; time.Unix/time.Parse handle that
+// natively, no special-casing needed.
+func fetchWindow(spec pipeline.FetchSpec) (p1, p2 int64) {
+	p1, p2 = period1, period2
+	if spec.From != "" {
+		t, err := time.Parse("2006-01-02", spec.From)
+		if err != nil {
+			log.Fatalf("%s: bad From %q: %v", spec.Name, spec.From, err)
+		}
+		p1 = t.Unix()
+	}
+	if spec.To != "" {
+		t, err := time.Parse("2006-01-02", spec.To)
+		if err != nil {
+			log.Fatalf("%s: bad To %q: %v", spec.Name, spec.To, err)
+		}
+		p2 = t.Unix()
+	}
+	return p1, p2
 }
 
 func fetch(args []string) {
@@ -115,10 +144,11 @@ func fetch(args []string) {
 		}
 		requested++
 
+		p1, p2 := fetchWindow(spec)
 		escaped := strings.ReplaceAll(spec.Symbol, "^", "%5E")
 		url := fmt.Sprintf(
 			"https://query1.finance.yahoo.com/v8/finance/chart/%s?period1=%d&period2=%d&interval=1d",
-			escaped, period1, period2,
+			escaped, p1, p2,
 		)
 		req, err := http.NewRequest(http.MethodGet, url, nil)
 		if err != nil {

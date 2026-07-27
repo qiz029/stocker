@@ -18,21 +18,43 @@ package pipeline
 // this era and is dropped from the fetch list per the pre-authorized
 // macro-proxy contingency: the OIL factor keeps curated (non-fitted) beta
 // values in Task 5 instead of a regression-fitted one.
+//
+// spx/ibm/hpq/aapl/ge/xom/wmt carry widened From/To windows (plan-5 Task
+// 3): those seven symbols are also needed by crash-1987/nifty-1972/gfc-2008
+// (Tasks 4-6), and rather than fetch a second file for the same company
+// under a different name, one file per symbol covers the union of every
+// era's need. Alignment slices its own scenario window at build time
+// (see build.go), so the extra pre/post-window rows only cost repo bytes,
+// not correctness — dotcom-2000's own fidelity/calibration gates are
+// unaffected and re-verified after every widen (task-3-report.md).
 var dotcomFetchSpecs = []FetchSpec{
-	{"msft", "MSFT"}, {"csco", "CSCO"}, {"intc", "INTC"},
-	{"orcl", "ORCL"}, {"ibm", "IBM"}, {"aapl", "AAPL"},
-	{"amzn", "AMZN"}, {"ebay", "EBAY"}, {"amd", "AMD"},
-	{"qcom", "QCOM"}, {"txn", "TXN"}, {"adbe", "ADBE"},
-	{"hpq", "HPQ"}, {"ge", "GE"}, {"xom", "XOM"}, {"wmt", "WMT"},
-	{"ndx", "^NDX"}, {"spx", "^GSPC"},
+	{Name: "msft", Symbol: "MSFT"}, {Name: "csco", Symbol: "CSCO"}, {Name: "intc", Symbol: "INTC"},
+	{Name: "orcl", Symbol: "ORCL"},
+	// ibm: union of 1970-06..1989-06 (1972+1987) and the original
+	// 1998-06..2002-03 dotcom window → fetch the whole 1970-06..2002-03 span.
+	{Name: "ibm", Symbol: "IBM", From: "1970-06-01", To: "2002-03-31"},
+	// aapl/ge/xom/wmt: also needed from 1987 (and, for ge/xom/wmt, 2008)
+	// onward → widen to 1985-06..2010-06 to cover every era at once.
+	{Name: "aapl", Symbol: "AAPL", From: "1985-06-01", To: "2010-06-30"},
+	{Name: "amzn", Symbol: "AMZN"}, {Name: "ebay", Symbol: "EBAY"}, {Name: "amd", Symbol: "AMD"},
+	{Name: "qcom", Symbol: "QCOM"}, {Name: "txn", Symbol: "TXN"}, {Name: "adbe", Symbol: "ADBE"},
+	// hpq: needed from 1987 (1985-06 margin) through the original dotcom window.
+	{Name: "hpq", Symbol: "HPQ", From: "1985-06-01", To: "2002-03-31"},
+	{Name: "ge", Symbol: "GE", From: "1985-06-01", To: "2010-06-30"},
+	{Name: "xom", Symbol: "XOM", From: "1985-06-01", To: "2010-06-30"},
+	{Name: "wmt", Symbol: "WMT", From: "1985-06-01", To: "2010-06-30"},
+	{Name: "ndx", Symbol: "^NDX"},
+	// spx: market proxy for dotcom-2000, also usable as a market/context
+	// series for the other three eras → widen to the full 1970-06..2010-06 span.
+	{Name: "spx", Symbol: "^GSPC", From: "1970-06-01", To: "2010-06-30"},
 	// gold: no free Yahoo history for a bullion spot/future in this era;
 	// ^XAU (PHLX Gold/Silver Sector index of gold/silver miners) is used
 	// as the GOLD factor proxy instead.
-	{"gold", "^XAU"},
+	{Name: "gold", Symbol: "^XAU"},
 	// us10y: ^TNX is the CBOE 10-Year Treasury Note yield index (yield in
 	// index points, i.e. 10x the yield in percent), used as the US10Y
 	// factor proxy.
-	{"us10y", "^TNX"},
+	{Name: "us10y", Symbol: "^TNX"},
 }
 
 var dotcomUniverse = ScenarioUniverse{
