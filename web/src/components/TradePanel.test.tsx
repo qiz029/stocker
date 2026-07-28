@@ -79,4 +79,16 @@ describe("TradePanel", () => {
     expect((screen.getByPlaceholderText("0") as HTMLInputElement).value).toBe("400.1");
     expect(screen.getByRole("button", { name: "下单卖出" })).not.toBeDisabled();
   });
+
+  it("shows the after-hours note when the market is closed", () => {
+    render(<TradePanel roomId="1" instrumentId="S1" lastClose={100}
+      portfolio={null} onChanged={() => {}} afterHours />);
+    expect(screen.getByText(/已收盘.*次日开盘成交/)).toBeInTheDocument();
+  });
+
+  it("hides the after-hours note while the market is open", () => {
+    render(<TradePanel roomId="1" instrumentId="S1" lastClose={100}
+      portfolio={null} onChanged={() => {}} />);
+    expect(screen.queryByText(/已收盘/)).not.toBeInTheDocument();
+  });
 });

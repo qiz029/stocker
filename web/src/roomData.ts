@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, Portfolio, RoomState, Trade } from "./api";
+import { api, Portfolio, Room, RoomState, Trade } from "./api";
 import { assetCurve } from "./assetCurve";
 import { usePoll } from "./usePoll";
+import { SimClockState, simClock } from "./simClock";
 
 export type PriceResponse = { days: { open: number; high: number; low: number; close: number }[] };
 
@@ -9,13 +10,6 @@ export function buildSeriesMap(entries: [string, PriceResponse][]): Record<strin
   const out: Record<string, number[]> = {};
   for (const [id, res] of entries) out[id] = res.days.map(d => d.close);
   return out;
-}
-
-/** Seconds until the next historical trading day begins. */
-export function dayCountdown(startedAt: string, dayDurationSecs: number): number {
-  const elapsed = (Date.now() - new Date(startedAt).getTime()) / 1000;
-  const into = elapsed % dayDurationSecs;
-  return Math.max(0, Math.round(dayDurationSecs - into));
 }
 
 export function useRoomData(roomId: string) {
@@ -50,4 +44,25 @@ export function useRoomData(roomId: string) {
     state, portfolio, trades, series, curve, error,
     reload: () => { void reloadState(); void reloadPortfolio(); void reloadTrades(); },
   };
+}
+
+/** 房间运行中每秒刷新的模拟市场时钟;未启动或已结束时为 null。 */
+export function useSimClock(room: Room | undefined): SimClockState | null {
+  const [clock, setClock] = useState<SimClockState | null>(null);
+  const startedAt = room?.started_at;
+  const ended = room?.ended ?? false;
+  const durationSecs = room?.day_duration_secs;
+  const roomId = room?.id;
+  const days = room?.days;
+  useEffect(() => {
+    if (!startedAt || ended || !durationSecs || !roomId || !days) {
+      setClock(null);
+      return;
+    }
+    const update = () => setClock(simClock(startedAt, durationSecs, roomId, days));
+    update();
+    const t = setInterval(update, 1000);
+    return () => clearInterval(t);
+  }, [startedAt, ended, durationSecs, roomId, days]);
+  return clock;
 }

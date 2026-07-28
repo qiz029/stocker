@@ -84,4 +84,34 @@ describe("Room page", () => {
     expect(await screen.findByText(/等待房主启动/)).toBeInTheDocument();
     expect(screen.queryByText(/启动时间轴/)).not.toBeInTheDocument();
   });
+
+  it("shows the sim market clock while a day is open", async () => {
+    mockApi();
+    const openState = {
+      ...state,
+      room: { ...state.room, started_at: new Date(Date.now() - 1000).toISOString(), current_day: 0 },
+    };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async url => {
+      const u = String(url);
+      let body: unknown = { items: [] };
+      if (u === "/api/rooms/1") body = openState;
+      else if (u.endsWith("/portfolio")) body = portfolio;
+      else if (u.endsWith("/trades")) body = { items: [] };
+      else if (u.includes("/prices/")) body = priceDays;
+      return new Response(JSON.stringify(body), { status: 200 });
+    });
+    render(
+      <MemoryRouter initialEntries={["/rooms/1"]}>
+        <UserCtxForTest.Provider value={{ id: 1, username: "me" }}>
+          <Routes><Route path="/rooms/:roomId" element={<Room />} /></Routes>
+        </UserCtxForTest.Provider>
+      </MemoryRouter>,
+    );
+    // day 0 开盘:虚构日历 + 盘中时刻(9:30 起跳)
+    await waitFor(() => {
+      const el = document.querySelector(".countdown");
+      expect(el?.textContent).toContain("第1周 · 周一");
+      expect(el?.textContent).toMatch(/\d{1,2}:\d{2}/);
+    });
+  });
 });
