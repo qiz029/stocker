@@ -251,3 +251,44 @@ func TestClusterAwareChunking(t *testing.T) {
 		t.Fatalf("cluster members not in same request; requests: %v", bodies)
 	}
 }
+
+func TestDisableThinkingFieldInRequest(t *testing.T) {
+	var captured atomic.Value
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		b, _ := json.Marshal(req)
+		captured.Store(string(b))
+		fmt.Fprint(w, chatResponse("[]"))
+	}))
+	defer srv.Close()
+
+	evs := []engine.NewsEvent{{Day: 1, Track: engine.TrackNoise, MediaID: "forum", Headline: "模板"}}
+
+	g := New(Config{BaseURL: srv.URL, Model: "m", Concurrency: 1,
+		Timeout: 5 * time.Second, DisableThinking: true})
+	g.FillCopy(context.Background(), testScenario(), evs)
+	if !strings.Contains(captured.Load().(string), `"thinking":{"type":"disabled"}`) {
+		t.Fatal("thinking-disabled field missing when DisableThinking is set")
+	}
+
+	g2 := New(Config{BaseURL: srv.URL, Model: "m", Concurrency: 1, Timeout: 5 * time.Second})
+	g2.FillCopy(context.Background(), testScenario(), evs)
+	if strings.Contains(captured.Load().(string), `"thinking"`) {
+		t.Fatal("thinking field must be absent by default")
+	}
+}
+
+func TestFromEnvDisableThinking(t *testing.T) {
+	t.Setenv("LLM_BASE_URL", "https://api.example.com")
+	t.Setenv("LLM_MODEL", "m")
+	t.Setenv("LLM_DISABLE_THINKING", "1")
+	cfg := FromEnv()
+	if cfg == nil || !cfg.DisableThinking {
+		t.Fatalf("LLM_DISABLE_THINKING=1 not honored: %+v", cfg)
+	}
+	t.Setenv("LLM_DISABLE_THINKING", "")
+	if cfg := FromEnv(); cfg == nil || cfg.DisableThinking {
+		t.Fatalf("unset must default off: %+v", cfg)
+	}
+}

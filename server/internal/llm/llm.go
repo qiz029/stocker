@@ -25,6 +25,12 @@ type Config struct {
 	BaseURL, APIKey, Model string
 	Concurrency            int
 	Timeout                time.Duration
+	// DisableThinking adds DeepSeek's {"thinking":{"type":"disabled"}} to
+	// requests. Reasoning models otherwise burn most of the room-creation
+	// budget "thinking" about each batch; copy quality stays adequate
+	// without it. Off by default — other OpenAI-compatible providers may
+	// reject the unknown field.
+	DisableThinking bool
 }
 
 // FromEnv reads LLM_* variables; nil disables generation entirely.
@@ -41,6 +47,9 @@ func FromEnv() *Config {
 	}
 	if v, err := strconv.Atoi(os.Getenv("LLM_TIMEOUT_SECS")); err == nil && v > 0 {
 		cfg.Timeout = time.Duration(v) * time.Second
+	}
+	if os.Getenv("LLM_DISABLE_THINKING") == "1" {
+		cfg.DisableThinking = true
 	}
 	return cfg
 }
@@ -279,14 +288,18 @@ func (g *Generator) fillChunk(ctx context.Context, sysPrompt string, displayName
 	if err != nil {
 		return 0
 	}
-	reqBody, err := json.Marshal(map[string]any{
+	body := map[string]any{
 		"model": g.cfg.Model,
 		"messages": []map[string]string{
 			{"role": "system", "content": sysPrompt},
 			{"role": "user", "content": string(userJSON)},
 		},
 		"temperature": 0.9,
-	})
+	}
+	if g.cfg.DisableThinking {
+		body["thinking"] = map[string]string{"type": "disabled"}
+	}
+	reqBody, err := json.Marshal(body)
 	if err != nil {
 		return 0
 	}
