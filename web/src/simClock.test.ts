@@ -79,4 +79,30 @@ describe("simClock", () => {
     expect(c.time).toBeNull();
     expect(c.nextOpenSecs).toBeNull();
   });
+
+  it("has no phantom next-open countdown on the final day (weekend)", () => {
+    // totalDays 10 → last day index 9; 9 % 5 === 4 → weekend
+    const c = simClock(started, D, 1, 10, t0 + 9 * 100_000 + 90_000);
+    expect(c.phase).toBe("weekend");
+    expect(c.nextOpenSecs).toBeNull();
+  });
+
+  it("has no phantom next-open countdown on the final day (non-friday close)", () => {
+    // totalDays 9 → last day index 8; 8 % 5 === 3 → closed, not weekend
+    const c = simClock(started, D, 1, 9, t0 + 8 * 100_000 + 90_000);
+    expect(c.phase).toBe("closed");
+    expect(c.nextOpenSecs).toBeNull();
+  });
+
+  it("still counts down to next open on a mid-game close", () => {
+    const c = simClock(started, D, 1, 10, t0 + 78_000);
+    expect(c.phase).toBe("closed");
+    expect(c.nextOpenSecs).toBe(22);
+  });
+
+  it("clamps the next-open countdown above zero at a day boundary", () => {
+    const c = simClock(started, D, 1, 10, t0 + 99_999);
+    expect(c.phase).toBe("closed");
+    expect(c.nextOpenSecs).toBeGreaterThanOrEqual(1);
+  });
 });

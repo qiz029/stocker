@@ -59,7 +59,9 @@ export default function Room() {
               ? <>{clock.dateLabel} <b className="num">{clock.time}</b></>
               : <>
                   {clock.phase === "weekend" ? "周末休市" : `${clock.dateLabel} · 已收盘`}
-                  {" · 距开盘 "}<b className="num">{mmss(clock.nextOpenSecs!)}</b>
+                  {clock.nextOpenSecs !== null && <>
+                    {" · 距开盘 "}<b className="num">{mmss(clock.nextOpenSecs)}</b>
+                  </>}
                 </>}
           </div>
         )}

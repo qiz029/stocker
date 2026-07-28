@@ -13,7 +13,8 @@ export interface SimClockState {
   dateLabel: string;           // "第3周 · 周四"
   time: string | null;         // 盘中 "14:10",其余 null
   phase: ClockPhase;
-  nextOpenSecs: number | null; // closed/weekend 时距下一开盘秒数
+  nextOpenSecs: number | null; // closed/weekend 时距下一开盘秒数;
+                               // open/ended 阶段及最后一天收盘后均为 null(游戏已结束,不会再开盘)
 }
 
 export const SESSION_FRAC = 0.78;
@@ -102,9 +103,10 @@ export function simClock(
       Math.floor((into / sessionSecs) * times.length));
     return { ...base, time: fmtMin(times[slice]!), phase: "open", nextOpenSecs: null };
   }
+  const isLastDay = day === totalDays - 1;
   return {
     ...base, time: null,
     phase: weekday === 4 ? "weekend" : "closed",
-    nextOpenSecs: Math.round(D - into),
+    nextOpenSecs: isLastDay ? null : Math.max(1, Math.round(D - into)),
   };
 }
