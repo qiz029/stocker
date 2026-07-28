@@ -1,13 +1,15 @@
-import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../api";
 import { fmtCents, fmt$, fmtPct } from "../format";
-import { dayCountdown, useRoomData } from "../roomData";
+import { useRoomData, useSimClock } from "../roomData";
 import { useToast } from "../Toast";
 import { useUser } from "../App";
 import HeroChart from "../components/HeroChart";
 import InstrumentRow from "../components/InstrumentRow";
 import RightRail from "../components/RightRail";
+
+const mmss = (s: number) =>
+  `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
 export default function Room() {
   const { roomId } = useParams<{ roomId: string }>();
@@ -15,16 +17,9 @@ export default function Room() {
   const user = useUser();
   const { toast, node } = useToast();
   const { state, portfolio, series, curve, error, reload } = useRoomData(roomId!);
-  const [countdown, setCountdown] = useState<number | null>(null);
 
   const room = state?.room;
-  useEffect(() => {
-    if (!room?.started_at || room.ended) { setCountdown(null); return; }
-    const update = () => setCountdown(dayCountdown(room.started_at!, room.day_duration_secs));
-    update();
-    const t = setInterval(update, 1000);
-    return () => clearInterval(t);
-  }, [room?.started_at, room?.day_duration_secs, room?.ended]);
+  const clock = useSimClock(room);
 
   if (error) return <div className="wrap err-banner">{error}</div>;
   if (!state || !room) return null;
@@ -47,10 +42,6 @@ export default function Room() {
     toast(`邀请码 ${room!.invite_code} 已复制`);
   }
 
-  const mmss = countdown !== null
-    ? `${String(Math.floor(countdown / 60)).padStart(2, "0")}:${String(countdown % 60).padStart(2, "0")}`
-    : null;
-
   return (
     <div>
       <div className="topbar">
@@ -62,7 +53,16 @@ export default function Room() {
               ? "已结束 · 等待揭晓"
               : <>神秘年代 · 第 <b className="num">{curDay}</b> / {room.days} 个交易日</>}
         </div>
-        {mmss && <div className="countdown">距下一交易日 <b className="num">{mmss}</b></div>}
+        {clock && clock.phase !== "ended" && (
+          <div className="countdown">
+            {clock.phase === "open"
+              ? <>{clock.dateLabel} <b className="num">{clock.time}</b></>
+              : <>
+                  {clock.phase === "weekend" ? "周末休市" : `${clock.dateLabel} · 已收盘`}
+                  {" · 距开盘 "}<b className="num">{mmss(clock.nextOpenSecs!)}</b>
+                </>}
+          </div>
+        )}
         <div className="spacer" />
         {room.ended && (
           <button className="invite" onClick={() => navigate(`/rooms/${roomId}/reveal`)}>查看揭晓</button>
