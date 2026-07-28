@@ -70,7 +70,10 @@ var mediaPersona = map[string]string{
 	"forum":   "股民论坛：口语、传闻腔、表情丰富、可信度存疑",
 }
 
-const systemPrompt = `你是一款股票模拟游戏的新闻引擎。游戏背景是一个类似上世纪末科技股狂热的虚构平行世界。为给定的新闻条目撰写中文标题和正文。
+// systemPromptTmpl's %s is filled with the scenario's EraHint (see
+// systemPromptFor), falling back to a neutral "架空年代" when the scenario
+// doesn't set one (e.g. the synthetic test scenario).
+const systemPromptTmpl = `你是一款股票模拟游戏的新闻引擎。游戏背景是一个%s的虚构平行世界。为给定的新闻条目撰写中文标题和正文。
 
 铁律：
 1. 只使用条目中给出的化名与板块名，绝不出现任何真实公司名、真实人名、具体年份或日期。
@@ -79,6 +82,19 @@ const systemPrompt = `你是一款股票模拟游戏的新闻引擎。游戏背�
 4. 条目给出的只是"报道倾向"（利好/利空 + 强弱），不是事实；标题份量与倾向强弱可以错配。
 5. 角色为"传闻"的条目要留悬念；"追踪"条目要呼应同组事件并给出多方复盘。
 6. 输出严格 JSON 数组，元素形如 {"idx":<原样返回>,"headline":"≤40字","body":"80-160字"}，不要任何多余文本或代码围栏。`
+
+// defaultEraHint is used when a scenario's EraHint is empty.
+const defaultEraHint = "架空年代"
+
+// systemPromptFor formats the system prompt once per FillCopy call with the
+// scenario's era flavor.
+func systemPromptFor(sc *scenario.Scenario) string {
+	hint := sc.EraHint
+	if hint == "" {
+		hint = defaultEraHint
+	}
+	return fmt.Sprintf(systemPromptTmpl, hint)
+}
 
 type promptItem struct {
 	Idx     int          `json:"idx"`
@@ -103,6 +119,7 @@ type copyOut struct {
 // FillCopy generates copy for all events, chunked with cluster members kept
 // together, bounded by cfg.Concurrency in-flight requests. Mutates evs.
 func (g *Generator) FillCopy(ctx context.Context, sc *scenario.Scenario, evs []engine.NewsEvent) {
+	sysPrompt := systemPromptFor(sc)
 	displayName := map[string]string{}
 	for _, f := range sc.Factors {
 		displayName[f.ID] = f.Name
@@ -170,7 +187,7 @@ func (g *Generator) FillCopy(ctx context.Context, sc *scenario.Scenario, evs []e
 		sem <- struct{}{}
 		go func(ch []int) {
 			defer func() { <-sem }()
-			done <- g.fillChunk(ctx, displayName, evs, ch, dayDir)
+			done <- g.fillChunk(ctx, sysPrompt, displayName, evs, ch, dayDir)
 		}(ch)
 	}
 	for range chunks {
@@ -215,7 +232,7 @@ func dayDirections(sc *scenario.Scenario) []string {
 	return dirs
 }
 
-func (g *Generator) fillChunk(ctx context.Context, displayName map[string]string, evs []engine.NewsEvent, idxs []int, dayDir []string) int {
+func (g *Generator) fillChunk(ctx context.Context, sysPrompt string, displayName map[string]string, evs []engine.NewsEvent, idxs []int, dayDir []string) int {
 	items := make([]promptItem, 0, len(idxs))
 	for _, i := range idxs {
 		ev := &evs[i]
@@ -265,7 +282,7 @@ func (g *Generator) fillChunk(ctx context.Context, displayName map[string]string
 	reqBody, err := json.Marshal(map[string]any{
 		"model": g.cfg.Model,
 		"messages": []map[string]string{
-			{"role": "system", "content": systemPrompt},
+			{"role": "system", "content": sysPrompt},
 			{"role": "user", "content": string(userJSON)},
 		},
 		"temperature": 0.9,

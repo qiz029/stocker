@@ -58,7 +58,7 @@ func TestDiagFidelity(t *testing.T) {
 	if os.Getenv("STOCKER_FIDELITY_DIAG") == "" {
 		t.Skip("diagnostic sweep; set STOCKER_FIDELITY_DIAG=1 to run")
 	}
-	sc, err := BuildScenario()
+	sc, err := BuildScenario("dotcom-2000")
 	if err != nil {
 		t.Fatal(err)
 	}

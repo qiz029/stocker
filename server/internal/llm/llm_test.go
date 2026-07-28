@@ -31,7 +31,7 @@ func chatResponse(items string) string {
 }
 
 func TestFillCopyHappyPath(t *testing.T) {
-	var gotAuth, gotModel, gotBodies atomic.Value
+	var gotAuth, gotModel, gotBodies, gotSystem atomic.Value
 	gotBodies.Store([]string{})
 	var mu sync.Mutex
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -42,6 +42,7 @@ func TestFillCopyHappyPath(t *testing.T) {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&req)
 		gotModel.Store(req.Model)
+		gotSystem.Store(req.Messages[0]["content"].(string))
 		// Echo back copy for every idx mentioned in the user message.
 		user := req.Messages[len(req.Messages)-1]["content"].(string)
 		mu.Lock()
@@ -65,6 +66,7 @@ func TestFillCopyHappyPath(t *testing.T) {
 	g := New(Config{BaseURL: srv.URL, APIKey: "sk-test", Model: "deepseek-chat",
 		Concurrency: 2, Timeout: 10 * time.Second})
 	sc := testScenario()
+	sc.EraHint = "类似某个狂热"
 	evs := []engine.NewsEvent{
 		{Day: 3, Track: engine.TrackImpact, MediaID: "wire",
 			ReportShock: map[string]float64{"MKT": -0.03}, Headline: "模板标题"},
@@ -97,6 +99,9 @@ func TestFillCopyHappyPath(t *testing.T) {
 	}
 	if !sawDirection {
 		t.Fatal("historical item's marshaled Kind missing day direction (上涨/下跌)")
+	}
+	if sys := gotSystem.Load().(string); !strings.Contains(sys, "类似某个狂热") {
+		t.Fatalf("system prompt missing era hint: %s", sys)
 	}
 }
 

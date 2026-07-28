@@ -11,6 +11,7 @@ import (
 type Anchor struct {
 	Date  string // "2006-01-02"
 	Price float64
+	Sigma float64 // daily log-noise sigma for the segment ENDING at this anchor; 0 = default reconNoiseSigma
 }
 
 const (
@@ -33,13 +34,17 @@ func Reconstruct(anchors []Anchor, calendar []time.Time, seed uint64) ([]Bar, er
 		idxOf[d.Format("2006-01-02")] = i
 	}
 	type pin struct {
-		idx  int
-		logP float64
+		idx   int
+		logP  float64
+		sigma float64
 	}
 	pins := make([]pin, 0, len(anchors))
 	for _, a := range anchors {
 		if a.Price <= 0 {
 			return nil, fmt.Errorf("anchor %s has non-positive price %v", a.Date, a.Price)
+		}
+		if a.Sigma < 0 {
+			return nil, fmt.Errorf("anchor %s has negative sigma %v", a.Date, a.Sigma)
 		}
 		idx, ok := idxOf[a.Date]
 		if !ok {
@@ -48,7 +53,7 @@ func Reconstruct(anchors []Anchor, calendar []time.Time, seed uint64) ([]Bar, er
 		if len(pins) > 0 && idx <= pins[len(pins)-1].idx {
 			return nil, fmt.Errorf("anchors not strictly ascending at %s", a.Date)
 		}
-		pins = append(pins, pin{idx, math.Log(a.Price)})
+		pins = append(pins, pin{idx, math.Log(a.Price), a.Sigma})
 	}
 	if pins[0].idx != 0 || pins[len(pins)-1].idx != len(calendar)-1 {
 		return nil, fmt.Errorf("anchors must cover the full calendar (first day and last day)")
@@ -59,11 +64,16 @@ func Reconstruct(anchors []Anchor, calendar []time.Time, seed uint64) ([]Bar, er
 	for seg := 0; seg+1 < len(pins); seg++ {
 		a, b := pins[seg], pins[seg+1]
 		n := b.idx - a.idx
+		// Per-segment sigma: use anchor's sigma if set, else default
+		segSigma := b.sigma
+		if segSigma == 0 {
+			segSigma = reconNoiseSigma
+		}
 		// Random walk over the segment, then subtract the linear drift of
 		// its own endpoint so the bridge is exactly zero at both anchors.
 		walk := make([]float64, n+1)
 		for i := 1; i <= n; i++ {
-			walk[i] = walk[i-1] + rng.NormFloat64()*reconNoiseSigma
+			walk[i] = walk[i-1] + rng.NormFloat64()*segSigma
 		}
 		for i := 0; i <= n; i++ {
 			frac := float64(i) / float64(n)

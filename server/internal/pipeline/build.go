@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"time"
 
@@ -13,13 +14,17 @@ type Meta struct {
 	Dossiers         map[string]Dossier
 }
 
-func BuildMeta() Meta {
-	m := Meta{Name: Universe.Name, RealPeriod: Universe.RealPeriod,
+func BuildMeta(id string) (Meta, error) {
+	u, ok := ByID(id)
+	if !ok {
+		return Meta{}, fmt.Errorf("unknown scenario %q", id)
+	}
+	m := Meta{Name: u.Name, RealPeriod: u.RealPeriod,
 		Dossiers: map[string]Dossier{}}
-	for _, spec := range Universe.Instruments {
+	for _, spec := range u.Instruments {
 		m.Dossiers[spec.ID] = spec.Dossier
 	}
-	return m
+	return m, nil
 }
 
 const (
@@ -94,6 +99,17 @@ const (
 	// deterministic — plain arithmetic over the round-2 Monte-Carlo-measured
 	// channel constants above; no sampling at build time.
 	budgetFrac = 0.50
+	// minIdioScaleAfterBudget is the degenerate-budget floor for IdioScale
+	// (see the "bi <= epsVol" branch below): the shape gate's actual
+	// enforced bound (TestAllScenariosShape checks IdioScale ∈ [0.1, 3],
+	// not idioScaleMin's 0.4 — see that test). Only reached when an
+	// instrument's own historical vol is so low that even zero beta/idio
+	// contribution still leaves the engine's fixed per-day noise (epsVol)
+	// above its budget target — doesn't happen for any dotcom-2000/
+	// crash-1987 instrument, only nifty-1972's N15 (real 1972-75 SPX daily
+	// vol 0.0103, below epsVol/budgetFrac; task-5-report.md "N15 vol
+	// budget").
+	minIdioScaleAfterBudget = 0.1
 )
 
 func parseDay(s string) time.Time {
@@ -104,15 +120,29 @@ func parseDay(s string) time.Time {
 	return t
 }
 
-// BuildScenario assembles the dotcom-2000 scenario from embedded raw data.
-// Deterministic and offline.
-func BuildScenario() (*scenario.Scenario, error) {
-	start, end := parseDay(Universe.WindowStart), parseDay(Universe.WindowEnd)
+// BuildScenario assembles the named scenario from embedded raw data.
+// Deterministic and offline. Unknown ids are an error.
+func BuildScenario(id string) (*scenario.Scenario, error) {
+	u, ok := ByID(id)
+	if !ok {
+		return nil, fmt.Errorf("unknown scenario %q", id)
+	}
+	start, end := parseDay(u.WindowStart), parseDay(u.WindowEnd)
 
-	// 1. Trading calendar = SPX trading days inside the window.
-	spxBars, err := RawSeries("spx")
+	// 1. Trading calendar = the market proxy's trading days inside the window.
+	var proxySpec *InstrumentSpec
+	for i := range u.Instruments {
+		if u.Instruments[i].ID == u.MarketProxy {
+			proxySpec = &u.Instruments[i]
+			break
+		}
+	}
+	if proxySpec == nil {
+		return nil, fmt.Errorf("market proxy %q not found among instruments", u.MarketProxy)
+	}
+	spxBars, err := RawSeries(proxySpec.Raw)
 	if err != nil {
-		return nil, fmt.Errorf("spx: %w", err)
+		return nil, fmt.Errorf("%s: %w", proxySpec.Raw, err)
 	}
 	var calendar []time.Time
 	for _, b := range spxBars {
@@ -132,7 +162,7 @@ func BuildScenario() (*scenario.Scenario, error) {
 	// 2. Per-instrument aligned, normalized series.
 	closes := map[string][]float64{} // instrument id -> normalized closes
 	baseline := map[string][]scenario.OHLC{}
-	for _, spec := range Universe.Instruments {
+	for _, spec := range u.Instruments {
 		var bars []Bar
 		if spec.Raw != "" {
 			raw, err := RawSeries(spec.Raw)
@@ -172,11 +202,11 @@ func BuildScenario() (*scenario.Scenario, error) {
 	for id, cl := range closes {
 		rets[id] = logReturns(cl)
 	}
-	mkt := rets["X22"] // SPX proxy
+	mkt := rets[u.MarketProxy]
 	sectorRet := map[string][]float64{}
-	for _, sec := range Universe.Sectors {
+	for _, sec := range u.Sectors {
 		var members [][]float64
-		for _, spec := range Universe.Instruments {
+		for _, spec := range u.Instruments {
 			if spec.Sector == sec.ID {
 				members = append(members, rets[spec.ID])
 			}
@@ -193,9 +223,9 @@ func BuildScenario() (*scenario.Scenario, error) {
 		b := olsBeta(sr, mkt)
 		sectorResid[id] = residual(sr, mkt, b)
 	}
-	instruments := make([]scenario.Instrument, 0, len(Universe.Instruments))
+	instruments := make([]scenario.Instrument, 0, len(u.Instruments))
 	factorIDs := map[string]bool{}
-	for _, spec := range Universe.Instruments {
+	for _, spec := range u.Instruments {
 		r := rets[spec.ID]
 		bMkt := clampF(olsBeta(r, mkt), betaClampLo, betaClampHi)
 		beta := map[string]float64{"MKT": bMkt, "IDIO:" + spec.ID: 1}
@@ -233,20 +263,47 @@ func BuildScenario() (*scenario.Scenario, error) {
 		vi := math.Sqrt(scalable2 + epsVol*epsVol)
 		bi := budgetFrac * sigma
 		if vi > bi && scalable2 > 0 {
-			if bi <= epsVol {
-				// The engine's fixed display noise alone already exceeds this
-				// instrument's budget — unbudgetable without engine changes.
-				return nil, fmt.Errorf("%s: vol budget %.5f below engine noise floor %.5f",
-					spec.ID, bi, epsVol)
-			}
-			gamma := math.Sqrt((bi*bi - epsVol*epsVol) / scalable2)
-			for f := range beta {
-				if f == "IDIO:"+spec.ID {
-					continue // carried by IdioScale below, see budgetFrac doc
+			if bi > epsVol {
+				gamma := math.Sqrt((bi*bi - epsVol*epsVol) / scalable2)
+				for f := range beta {
+					if f == "IDIO:"+spec.ID {
+						continue // carried by IdioScale below, see budgetFrac doc
+					}
+					beta[f] *= gamma
 				}
-				beta[f] *= gamma
+				scale *= gamma
+			} else {
+				// Round-4 amendment (task-5-report.md, nifty-1972's N15):
+				// bi is analytically unreachable via any uniform gamma
+				// (bi²−epsVol² < 0 — the engine's fixed display noise alone
+				// already exceeds this instrument's budget target). Rather
+				// than erroring, or shrinking every channel by the same
+				// factor, zero the beta-routed channels (MKT/sector — these
+				// carry no lower-bound contract) entirely and let IdioScale
+				// settle at the shape gate's enforced floor
+				// (minIdioScaleAfterBudget, not further reducible). Since
+				// mktVolPerBeta/sectorVolPerBeta > idioBaseVol, this
+				// minimizes total perturbation vol — and hence maximizes
+				// the achievable return-correlation — subject to the one
+				// binding constraint (IdioScale ∈ [0.1, 3]) the shape gate
+				// imposes; a uniform gamma wastes headroom shrinking the
+				// already-small idio channel instead of fully eliminating
+				// the larger MKT/sector ones.
+				//
+				// This branch has no other notice mechanism, so a future
+				// scenario tripping it on a NON-index instrument (whose
+				// MKT/sector betas silently going to zero would be a real
+				// modeling bug, not the expected outcome) would otherwise
+				// pass silently. Log it here; TestAllScenariosShape asserts
+				// it only ever fires for a universe's own MarketProxy.
+				log.Printf("pipeline: %s/%s vol budget below engine noise floor — betas zeroed, idio floored (news-inert)",
+					u.ScenarioID, spec.ID)
+				beta["MKT"] = 0
+				if spec.Sector != "" {
+					beta[spec.Sector] = 0
+				}
+				scale = minIdioScaleAfterBudget
 			}
-			scale *= gamma
 		}
 		instruments = append(instruments, scenario.Instrument{
 			ID: spec.ID, Alias: spec.Dossier.Alias, Desc: spec.Dossier.Desc,
@@ -262,13 +319,13 @@ func BuildScenario() (*scenario.Scenario, error) {
 		{ID: "MKT", Name: "大盘", Kind: scenario.KindMarket},
 		{ID: "SENT", Name: "风险情绪", Kind: scenario.KindSentiment},
 	}
-	for _, sec := range Universe.Sectors {
+	for _, sec := range u.Sectors {
 		factors = append(factors, scenario.Factor{ID: sec.ID, Name: sec.Name, Kind: scenario.KindSector})
 	}
-	for _, mac := range Universe.Macros {
+	for _, mac := range u.Macros {
 		factors = append(factors, scenario.Factor{ID: mac.ID, Name: mac.Name, Kind: scenario.KindMacro})
 	}
-	for _, spec := range Universe.Instruments {
+	for _, spec := range u.Instruments {
 		factors = append(factors, scenario.Factor{
 			ID: "IDIO:" + spec.ID, Name: spec.Dossier.Alias, Kind: scenario.KindIdio,
 		})
@@ -276,7 +333,7 @@ func BuildScenario() (*scenario.Scenario, error) {
 
 	// 6. Key windows → day indexes.
 	var windows []scenario.KeyWindow
-	for _, w := range Universe.KeyWindows {
+	for _, w := range u.KeyWindows {
 		si, ok1 := dayIndex[w.Start]
 		ei, ok2 := dayIndex[w.End]
 		if !ok1 || !ok2 {
@@ -299,7 +356,7 @@ func BuildScenario() (*scenario.Scenario, error) {
 	}
 
 	return &scenario.Scenario{
-		ID: Universe.ScenarioID, Days: days,
+		ID: u.ScenarioID, Days: days, EraHint: u.EraHint,
 		Factors: factors, Instruments: instruments,
 		KeyWindows: windows, Baseline: baseline,
 	}, nil

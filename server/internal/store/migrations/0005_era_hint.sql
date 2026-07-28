@@ -1,0 +1,1 @@
+ALTER TABLE scenarios ADD COLUMN era_hint TEXT NOT NULL DEFAULT '';

@@ -41,8 +41,11 @@ func (i *Instrument) IdioScaleOrDefault() float64 {
 }
 
 type Scenario struct {
-	ID          string
-	Days        int
+	ID   string
+	Days int
+	// EraHint feeds the LLM's system prompt with era-appropriate flavor
+	// (see internal/llm); the engine itself ignores it entirely.
+	EraHint     string
 	Factors     []Factor
 	Instruments []Instrument
 	KeyWindows  []KeyWindow
