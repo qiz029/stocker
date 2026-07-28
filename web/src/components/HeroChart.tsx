@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { RANGE_TABS, fmtPct, windowed } from "../format";
+import { dayLabel } from "../simClock";
 
 const cssVar = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const PAD = { l: 6, r: 6, t: 22, b: 26 };
@@ -105,7 +106,7 @@ export default function HeroChart({ label, series, startDay, formatValue }: Prop
           {up ? "▲" : "▼"} {formatValue(Math.abs(diff)).replace("-", "")} ({fmtPct(pct)}) 区间
         </div>
         <div className="scrub-date num">
-          {hover !== null ? `第 ${startDay + winStart + hover} 个交易日` : " "}
+          {hover !== null ? dayLabel(startDay + winStart + hover) : " "}
         </div>
       </div>
       <div className="chart-box">

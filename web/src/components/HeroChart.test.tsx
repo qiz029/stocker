@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { dayLabel } from "../simClock";
 import HeroChart from "./HeroChart";
 
 describe("HeroChart", () => {
@@ -13,5 +14,9 @@ describe("HeroChart", () => {
     render(<HeroChart label="x" series={series} startDay={0} formatValue={v => String(v)} />);
     fireEvent.click(screen.getByRole("button", { name: "7日" }));
     expect(screen.getByRole("button", { name: "7日" })).toHaveClass("on");
+  });
+  it("scrub label uses the fictional calendar", () => {
+    // 单测 dayLabel 集成点:HeroChart 悬停文案 = dayLabel(startDay + winStart + hover)
+    expect(dayLabel(17)).toBe("第4周 · 周三");
   });
 });
