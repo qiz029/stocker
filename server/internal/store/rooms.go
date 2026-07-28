@@ -131,12 +131,6 @@ func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, ho
 		return nil, err
 	}
 
-	if filler != nil {
-		fctx, cancel := context.WithTimeout(ctx, CopyFillBudget)
-		filler.FillCopy(fctx, sc, world.News)
-		cancel()
-	}
-
 	var room *Room
 	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
 		r, err := scanRoom(tx.QueryRow(ctx, `
@@ -179,7 +173,71 @@ func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, ho
 	if err != nil {
 		return nil, err
 	}
+	if filler != nil {
+		news := world.News
+		roomID := room.ID
+		// Copy generation runs after the response returns: providers with
+		// throttled keys can take minutes for 1500+ items, and news is
+		// disclosed day-by-day anyway — bodies upgrade in place long
+		// before players reach them. Template copy remains until then.
+		go func() {
+			fctx, cancel := context.WithTimeout(context.Background(), CopyFillBudget)
+			defer cancel()
+			if err := FillNewsCopy(fctx, db, roomID, sc, filler, news); err != nil {
+				log.Printf("room %d: async news copy fill failed (template copy stays): %v", roomID, err)
+			}
+		}()
+	}
 	return room, nil
+}
+
+// FillNewsCopy runs the copy filler over a room's news and writes the
+// generated headlines/bodies back onto the already-inserted room_news
+// rows. Row order matches the news slice: CopyFrom preserved insertion
+// order and identity ids are monotonic.
+func FillNewsCopy(ctx context.Context, db *pgxpool.Pool, roomID int64, sc *scenario.Scenario, filler NewsCopyFiller, news []engine.NewsEvent) error {
+	filler.FillCopy(ctx, sc, news)
+	rows, err := db.Query(ctx, `SELECT id FROM room_news WHERE room_id = $1 ORDER BY id`, roomID)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	if len(ids) != len(news) {
+		return fmt.Errorf("room %d: %d news rows vs %d events", roomID, len(ids), len(news))
+	}
+	batch := &pgx.Batch{}
+	queued := 0
+	for i := range news {
+		if news[i].Body == "" {
+			continue // template kept — nothing to upgrade
+		}
+		batch.Queue(`UPDATE room_news SET headline = $1, body = $2 WHERE id = $3`,
+			news[i].Headline, news[i].Body, ids[i])
+		queued++
+	}
+	if queued == 0 {
+		return nil
+	}
+	br := db.SendBatch(ctx, batch)
+	defer br.Close()
+	for i := 0; i < queued; i++ {
+		if _, err := br.Exec(); err != nil {
+			return err
+		}
+	}
+	log.Printf("room %d: news copy upgraded on %d/%d items", roomID, queued, len(news))
+	return nil
 }
 
 func GetRoom(ctx context.Context, q Querier, id int64) (*Room, error) {

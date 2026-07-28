@@ -219,17 +219,25 @@ func TestCreateRoomAppliesCopyFiller(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The fill runs asynchronously after CreateRoom returns — poll for it.
+	var headline, body string
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if err := pool.QueryRow(ctx, `
+			SELECT headline, body FROM room_news WHERE room_id = $1 ORDER BY id LIMIT 1`,
+			room.ID).Scan(&headline, &body); err != nil {
+			t.Fatal(err)
+		}
+		if body != "" || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 	if filler.calls != 1 {
 		t.Fatalf("filler calls: %d", filler.calls)
 	}
-	var headline, body string
-	if err := pool.QueryRow(ctx, `
-		SELECT headline, body FROM room_news WHERE room_id = $1 ORDER BY id LIMIT 1`,
-		room.ID).Scan(&headline, &body); err != nil {
-		t.Fatal(err)
-	}
 	if headline != "AI标题" || body != "AI正文。" {
-		t.Fatalf("copy not persisted: %q %q", headline, body)
+		t.Fatalf("async copy not persisted: %q %q", headline, body)
 	}
 	// Clusters persisted (synthetic worlds form clusters — engine Task 2).
 	var clustered int
@@ -284,6 +292,10 @@ func TestCopyFillBudgetIsConfigurable(t *testing.T) {
 	probe := &deadlineProbeFiller{}
 	if _, err := CreateRoom(ctx, pool, sc, host.ID, 3600, probe); err != nil {
 		t.Fatal(err)
+	}
+	deadline := time.Now().Add(10 * time.Second)
+	for probe.remaining == 0 && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
 	}
 	if probe.remaining <= 0 || probe.remaining > 7*time.Second {
 		t.Fatalf("filler ctx deadline %v not within configured 7s budget", probe.remaining)
