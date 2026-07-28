@@ -9,9 +9,10 @@ type Props = {
   lastClose: number;
   portfolio: Portfolio | null;
   onChanged: () => void;
+  afterHours?: boolean;
 };
 
-export default function TradePanel({ roomId, instrumentId, lastClose, portfolio, onChanged }: Props) {
+export default function TradePanel({ roomId, instrumentId, lastClose, portfolio, onChanged, afterHours }: Props) {
   const { toast, node } = useToast();
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [raw, setRaw] = useState("");
@@ -94,6 +95,7 @@ export default function TradePanel({ roomId, instrumentId, lastClose, portfolio,
         </b>
       </div>
       <p className="note">订单将在<b>下一个历史交易日的开盘价</b>成交，成交价此刻未知。下单即冻结，开盘前可撤单。</p>
+      {afterHours && <p className="note">现在已收盘：盘后单照常受理，次日开盘成交。</p>}
       <button className={`submit ${side === "sell" ? "sell" : ""}`}
         disabled={busy || value <= 0 || overLimit} onClick={submit}>
         {side === "buy" ? "下单买入" : "下单卖出"}

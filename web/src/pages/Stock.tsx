@@ -1,7 +1,7 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { MEDIA_NAMES, NewsItem } from "../api";
 import { fmt$, fmtPct, prettifyHeadline } from "../format";
-import { useRoomData } from "../roomData";
+import { useRoomData, useSimClock } from "../roomData";
 import { useIncrementalFeed } from "../useIncrementalFeed";
 import { useState } from "react";
 import HeroChart from "../components/HeroChart";
@@ -11,6 +11,7 @@ export default function Stock() {
   const { roomId, instrumentId } = useParams<{ roomId: string; instrumentId: string }>();
   const navigate = useNavigate();
   const { state, portfolio, series, reload } = useRoomData(roomId!);
+  const clock = useSimClock(state?.room);
   const { items: newsItems } = useIncrementalFeed<NewsItem>(
     after => `/api/rooms/${roomId}/news?after=${after}`, 30_000, roomId!);
   const [openNews, setOpenNews] = useState<number | null>(null);
@@ -84,7 +85,8 @@ export default function Stock() {
         </div>
 
         <TradePanel roomId={roomId!} instrumentId={instrumentId!} lastClose={last}
-          portfolio={portfolio} onChanged={reload} />
+          portfolio={portfolio} onChanged={reload}
+          afterHours={clock?.phase === "closed" || clock?.phase === "weekend"} />
       </div>
     </div>
   );
