@@ -262,3 +262,30 @@ func TestCreateRoomNilFillerKeepsTemplates(t *testing.T) {
 		t.Fatalf("template state wrong: %q %q", headline, body)
 	}
 }
+
+type deadlineProbeFiller struct{ remaining time.Duration }
+
+func (f *deadlineProbeFiller) FillCopy(ctx context.Context, _ *scenario.Scenario, _ []engine.NewsEvent) {
+	if dl, ok := ctx.Deadline(); ok {
+		f.remaining = time.Until(dl)
+	}
+}
+
+func TestCopyFillBudgetIsConfigurable(t *testing.T) {
+	pool := TestDB(t, "store")
+	ctx := context.Background()
+	host := mkUser(t, pool, "host")
+	sc := mkScenario(t, pool)
+
+	old := CopyFillBudget
+	CopyFillBudget = 7 * time.Second
+	defer func() { CopyFillBudget = old }()
+
+	probe := &deadlineProbeFiller{}
+	if _, err := CreateRoom(ctx, pool, sc, host.ID, 3600, probe); err != nil {
+		t.Fatal(err)
+	}
+	if probe.remaining <= 0 || probe.remaining > 7*time.Second {
+		t.Fatalf("filler ctx deadline %v not within configured 7s budget", probe.remaining)
+	}
+}

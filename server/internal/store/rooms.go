@@ -20,6 +20,13 @@ import (
 
 const InitialCashCents int64 = 10_000_000 // $100,000 (spec §2.2)
 
+// CopyFillBudget bounds how long room creation waits for the news copy
+// filler. Providers with tight per-key concurrency limits (observed:
+// DeepSeek queues past ~5 in-flight requests) may need several minutes to
+// fill a 1500+-item world; unfilled items keep template copy either way.
+// cmd/server overrides this from LLM_ROOM_BUDGET_SECS.
+var CopyFillBudget = 120 * time.Second
+
 // NewsCopyFiller rewrites news headlines/bodies before a room's world is
 // persisted (the LLM generator in internal/llm; nil keeps template copy).
 type NewsCopyFiller interface {
@@ -125,7 +132,7 @@ func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, ho
 	}
 
 	if filler != nil {
-		fctx, cancel := context.WithTimeout(ctx, 120*time.Second)
+		fctx, cancel := context.WithTimeout(ctx, CopyFillBudget)
 		filler.FillCopy(fctx, sc, world.News)
 		cancel()
 	}

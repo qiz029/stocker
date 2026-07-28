@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -40,6 +41,9 @@ func main() {
 	api := httpapi.NewServer(pool)
 	if cfg := llm.FromEnv(); cfg != nil {
 		api.CopyFiller = llm.New(*cfg)
+		if v, err := strconv.Atoi(os.Getenv("LLM_ROOM_BUDGET_SECS")); err == nil && v > 0 {
+			store.CopyFillBudget = time.Duration(v) * time.Second
+		}
 		log.Printf("llm news copy enabled: model=%s concurrency=%d", cfg.Model, cfg.Concurrency)
 	} else {
 		log.Printf("llm news copy disabled (LLM_BASE_URL unset) — template copy")
