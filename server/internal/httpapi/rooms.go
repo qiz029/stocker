@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/toddzheng/stocker/server/internal/engine"
 	"github.com/toddzheng/stocker/server/internal/store"
 )
 
@@ -150,9 +151,11 @@ func (s *Server) handleRoomState(w http.ResponseWriter, r *http.Request) {
 	}
 	started := room.StartedAt != nil
 
-	// Blind-box instrument cards: alias + description only.
+	// Blind-box instrument cards: alias + description only. The alias is
+	// resolved per room from the room's seed (candidate set in i.aliases;
+	// NULL there falls back to the plain alias column).
 	instRows, err := s.DB.Query(r.Context(), `
-		SELECT i.id, i.alias, i.descr, i.profile
+		SELECT i.id, i.alias, i.descr, i.profile, i.aliases
 		FROM instruments i JOIN rooms rm ON rm.scenario_id = i.scenario_id
 		WHERE rm.id = $1 ORDER BY i.ord`, room.ID)
 	if err != nil {
@@ -164,10 +167,12 @@ func (s *Server) handleRoomState(w http.ResponseWriter, r *http.Request) {
 	for instRows.Next() {
 		var id, alias, desc string
 		var profile map[string]any // nil when column is NULL
-		if err := instRows.Scan(&id, &alias, &desc, &profile); err != nil {
+		var aliases []string       // nil when column is NULL
+		if err := instRows.Scan(&id, &alias, &desc, &profile, &aliases); err != nil {
 			s.storeErr(w, err)
 			return
 		}
+		alias = engine.ResolveAlias(room.Seed, id, alias, aliases)
 		instruments = append(instruments, map[string]any{
 			"id": id, "alias": alias, "desc": desc, "profile": profile,
 		})
@@ -223,6 +228,8 @@ func (s *Server) handleRoomState(w http.ResponseWriter, r *http.Request) {
 				"total_cents": lr.TotalCents,
 				"return_pct":  float64(lr.TotalCents-store.InitialCashCents) / float64(store.InitialCashCents),
 				"late_join":   lr.JoinedDay > 0,
+				"bankrupt":    lr.Bankrupt,
+				"curve":       lr.Curve,
 			})
 		}
 	}
@@ -285,7 +292,13 @@ func afterParam(r *http.Request) int64 {
 }
 
 // handleNews serves the player-visible feed. Blind box: id, day, media,
-// headline, body — nothing else. Track and shock vectors never leave the server.
+// headline, body, cluster_id, disputed, exposed — nothing else. Track,
+// shock vectors and driven_by_user_id never leave the server; disputed and
+// exposed are public action flags (a debunked or regulator-busted item is
+// public knowledge); cluster_id only groups already-published items
+// (传闻→主事件→追踪). media_accuracy carries per-outlet 应验率 as aggregate
+// counts (see store.MediaAccuracy); the underlying report shocks are never
+// exposed.
 func (s *Server) handleNews(w http.ResponseWriter, r *http.Request) {
 	room, ok := s.roomForMember(w, r)
 	if !ok {
@@ -301,7 +314,65 @@ func (s *Server) handleNews(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := s.DB.Query(r.Context(), `
-		SELECT id, day, media_id, headline, body FROM room_news
+		SELECT id, day, media_id, headline, body, cluster_id, disputed, exposed FROM room_news
+		WHERE room_id = $1 AND day <= $2 AND id > $3
+		ORDER BY id LIMIT $4`, room.ID, curDay, afterParam(r), newsPageLimit)
+	if err != nil {
+		s.storeErr(w, err)
+		return
+	}
+	defer rows.Close()
+	items := []map[string]any{}
+	for rows.Next() {
+		var id, clusterID int64
+		var day int
+		var mediaID, headline, body string
+		var disputed, exposed bool
+		if err := rows.Scan(&id, &day, &mediaID, &headline, &body, &clusterID, &disputed, &exposed); err != nil {
+			s.storeErr(w, err)
+			return
+		}
+		item := map[string]any{
+			"id": id, "day": day, "media_id": mediaID, "headline": headline, "body": body,
+			"disputed": disputed, "exposed": exposed,
+		}
+		if clusterID > 0 {
+			item["cluster_id"] = clusterID
+		} else {
+			item["cluster_id"] = nil
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		s.storeErr(w, err)
+		return
+	}
+	accuracy, err := store.MediaAccuracy(r.Context(), s.DB, room.ID, curDay)
+	if err != nil {
+		s.storeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items, "media_accuracy": accuracy})
+}
+
+// handleForum serves the NPC forum feed. Blind box: id, day, npc_name,
+// body — nothing else (persona hints never leave the server).
+func (s *Server) handleForum(w http.ResponseWriter, r *http.Request) {
+	room, ok := s.roomForMember(w, r)
+	if !ok {
+		return
+	}
+	if room.StartedAt == nil {
+		writeErr(w, http.StatusBadRequest, store.ErrNotStarted.Error())
+		return
+	}
+	curDay, _, err := room.CurrentDay(s.Now())
+	if err != nil {
+		s.storeErr(w, err)
+		return
+	}
+	rows, err := s.DB.Query(r.Context(), `
+		SELECT id, day, npc_name, body FROM room_forum_posts
 		WHERE room_id = $1 AND day <= $2 AND id > $3
 		ORDER BY id LIMIT $4`, room.ID, curDay, afterParam(r), newsPageLimit)
 	if err != nil {
@@ -313,13 +384,13 @@ func (s *Server) handleNews(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var id int64
 		var day int
-		var mediaID, headline, body string
-		if err := rows.Scan(&id, &day, &mediaID, &headline, &body); err != nil {
+		var npcName, body string
+		if err := rows.Scan(&id, &day, &npcName, &body); err != nil {
 			s.storeErr(w, err)
 			return
 		}
 		items = append(items, map[string]any{
-			"id": id, "day": day, "media_id": mediaID, "headline": headline, "body": body,
+			"id": id, "day": day, "npc_name": npcName, "body": body,
 		})
 	}
 	if err := rows.Err(); err != nil {

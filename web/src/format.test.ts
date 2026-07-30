@@ -18,12 +18,12 @@ describe("format helpers", () => {
     expect(windowed(s, 99)).toEqual([[1, 2, 3, 4, 5], 0]);
   });
   it("prettifies engine factor tokens in headlines", () => {
-    const aliasOf = (id: string) => ({ S1: "郊狼网络", S8: "环宇工业" }[id] ?? id);
+    const aliasOf = (id: string) => ({ S1: "Ridgeline Networks", S8: "Amalgamated Industries" }[id] ?? id);
     expect(prettifyHeadline("消息面变化，S8板块获得提振，市场解读不一", aliasOf))
-      .toBe("消息面变化，环宇工业板块获得提振，市场解读不一");
+      .toBe("消息面变化，Amalgamated Industries板块获得提振，市场解读不一");
     expect(prettifyHeadline("消息面变化，market板块承压，市场解读不一", aliasOf))
       .toBe("消息面变化，大盘承压，市场解读不一");
     expect(prettifyHeadline("tech sector板块波动 IDIO:S1", aliasOf))
-      .toBe("科技板块波动 郊狼网络");
+      .toBe("科技板块波动 Ridgeline Networks");
   });
 });

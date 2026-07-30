@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { RANGE_TABS, fmtPct, windowed } from "../format";
+import { useT } from "../i18n";
 import { dayLabel } from "../simClock";
 
 const cssVar = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -14,6 +15,7 @@ type Props = {
 };
 
 export default function HeroChart({ label, series, startDay, formatValue }: Props) {
+  const { lang, t } = useT();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [rangeDays, setRangeDays] = useState<number>(Infinity);
   const [hover, setHover] = useState<number | null>(null);
@@ -103,10 +105,10 @@ export default function HeroChart({ label, series, startDay, formatValue }: Prop
         <div className="label">{label}</div>
         <div className="big num">{formatValue(shown)}</div>
         <div className={`delta num ${up ? "up" : "down"}`}>
-          {up ? "▲" : "▼"} {formatValue(Math.abs(diff)).replace("-", "")} ({fmtPct(pct)}) 区间
+          {up ? "▲" : "▼"} {formatValue(Math.abs(diff)).replace("-", "")} ({fmtPct(pct)}) {t("hero.range")}
         </div>
         <div className="scrub-date num">
-          {hover !== null ? dayLabel(startDay + winStart + hover) : " "}
+          {hover !== null ? dayLabel(startDay + winStart + hover, lang) : " "}
         </div>
       </div>
       <div className="chart-box">
@@ -116,10 +118,10 @@ export default function HeroChart({ label, series, startDay, formatValue }: Prop
         />
       </div>
       <div className="ranges">
-        {RANGE_TABS.map(([tabLabel, days]) => (
-          <button key={tabLabel} className={rangeDays === days ? "on" : ""}
+        {RANGE_TABS.map(([tabKey, days]) => (
+          <button key={tabKey} className={rangeDays === days ? "on" : ""}
             onClick={() => { setRangeDays(days); setHover(null); }}>
-            {tabLabel}
+            {t(`range.${tabKey}`)}
           </button>
         ))}
       </div>

@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { api, ApiError, RevealData } from "../api";
 import { fmt$, fmtCents, fmtPct } from "../format";
+import { LangSwitch, useT } from "../i18n";
 
 export default function Reveal() {
   const { roomId } = useParams<{ roomId: string }>();
+  const { t } = useT();
   const [data, setData] = useState<RevealData | null>(null);
   const [notReady, setNotReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -18,13 +20,18 @@ export default function Reveal() {
       });
   }, [roomId]);
 
+  const langRow = (
+    <div style={{ display: "flex", justifyContent: "flex-end" }}><LangSwitch /></div>
+  );
+
   if (error) return <div className="wrap err-banner">{error}</div>;
   if (notReady) {
     return (
       <div className="wrap lobby">
-        <h1>尚未揭晓</h1>
-        <p className="sub">时间轴还没走完——回到房间继续操作，终点见分晓。</p>
-        <Link className="link-btn" to={`/rooms/${roomId}`}>← 返回房间</Link>
+        {langRow}
+        <h1>{t("reveal.notReadyTitle")}</h1>
+        <p className="sub">{t("reveal.notReadySub")}</p>
+        <Link className="link-btn" to={`/rooms/${roomId}`}>{t("common.backToRoom")}</Link>
       </div>
     );
   }
@@ -35,15 +42,16 @@ export default function Reveal() {
 
   return (
     <div className="wrap lobby">
-      <h1>揭晓时刻</h1>
-      <p className="sub">盲盒打开：这段历史的真身，和每个人的全部操作。</p>
+      {langRow}
+      <h1>{t("reveal.title")}</h1>
+      <p className="sub">{t("reveal.sub")}</p>
 
       <div className="card">
-        <h2>最终排行</h2>
+        <h2>{t("reveal.finalBoard")}</h2>
         {data.leaderboard.map((row, i) => (
           <div key={row.username} className="lb-row">
             <span className="rank num">{i === 0 ? "🏆" : i + 1}</span>
-            <span className="who">{row.username}{row.late_join && <small>晚入场</small>}</span>
+            <span className="who">{row.username}{row.late_join && <small>{t("reveal.lateJoin")}</small>}</span>
             <span className="val num">
               {fmtCents(row.total_cents)}
               <span className={`ret delta ${row.return_pct >= 0 ? "up" : "down"}`}>{fmtPct(row.return_pct)}</span>
@@ -53,15 +61,15 @@ export default function Reveal() {
       </div>
 
       <div className="card">
-        <h2>身份揭晓</h2>
+        <h2>{t("reveal.identities")}</h2>
         {data.real_period && (
-          <p className="rc-meta">真实时期：<b className="num">{data.real_period}</b></p>
+          <p className="rc-meta">{t("reveal.realPeriod")}<b className="num">{data.real_period}</b></p>
         )}
         {!hasRealNames && (
-          <p className="rc-meta">本局使用合成剧本，标的没有真实历史身份；真实剧本（如 2000 年互联网泡沫）会在这里揭晓每只股票的真名与真实日期区间。</p>
+          <p className="rc-meta">{t("reveal.syntheticNote")}</p>
         )}
         <table className="reveal-table">
-          <thead><tr><th>化名</th><th>真实身份</th></tr></thead>
+          <thead><tr><th>{t("reveal.alias")}</th><th>{t("reveal.realName")}</th></tr></thead>
           <tbody>
             {data.instruments.map(inst => (
               <tr key={inst.id}>
@@ -74,22 +82,22 @@ export default function Reveal() {
       </div>
 
       <div className="card">
-        <h2>全场成交回放</h2>
+        <h2>{t("reveal.tradesReplay")}</h2>
         <table className="reveal-table">
           <thead>
-            <tr><th>日</th><th>玩家</th><th>方向</th><th>标的</th>
-              <th className="num">成交价</th><th className="num">股数</th><th className="num">金额</th></tr>
+            <tr><th>{t("reveal.thDay")}</th><th>{t("reveal.thPlayer")}</th><th>{t("reveal.thSide")}</th><th>{t("reveal.thTicker")}</th>
+              <th className="num">{t("reveal.thPrice")}</th><th className="num">{t("reveal.thShares")}</th><th className="num">{t("reveal.thAmount")}</th></tr>
           </thead>
           <tbody>
-            {data.trades.map((t, i) => (
+            {data.trades.map((tr, i) => (
               <tr key={i}>
-                <td className="num">{t.day}</td>
-                <td>{t.username}</td>
-                <td className={`delta ${t.side === "buy" ? "up" : "down"}`}>{t.side === "buy" ? "买入" : "卖出"}</td>
-                <td>{aliasOf(t.instrument_id)}</td>
-                <td className="num">{fmt$(t.price)}</td>
-                <td className="num">{t.shares.toFixed(1)}</td>
-                <td className="num">{fmtCents(t.amount_cents)}</td>
+                <td className="num">{tr.day}</td>
+                <td>{tr.username}</td>
+                <td className={`delta ${tr.side === "buy" ? "up" : "down"}`}>{tr.side === "buy" ? t("side.Buy") : t("side.Sell")}</td>
+                <td>{aliasOf(tr.instrument_id)}</td>
+                <td className="num">{fmt$(tr.price)}</td>
+                <td className="num">{tr.shares.toFixed(1)}</td>
+                <td className="num">{fmtCents(tr.amount_cents)}</td>
               </tr>
             ))}
           </tbody>

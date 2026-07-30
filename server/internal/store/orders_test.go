@@ -163,3 +163,27 @@ func TestPlaceOrderValidation(t *testing.T) {
 		t.Errorf("lobby room: %v, want ErrRoomNotRunning", err)
 	}
 }
+
+func TestBankruptPlayerCannotPlaceOrders(t *testing.T) {
+	pool := TestDB(t, "store")
+	ctx := context.Background()
+	room, guest, t0 := mkRunningRoom(t, pool)
+
+	// Borrow exactly to the cap; the next settle bankrupts the guest.
+	if _, err := Borrow(ctx, pool, room, guest.ID, MaxDebtCents, t0); err != nil {
+		t.Fatalf("borrow: %v", err)
+	}
+	at1 := t0.Add(61 * time.Second)
+	if _, _, err := SettleRoom(ctx, pool, room, at1); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PlaceOrder(ctx, pool, room, guest.ID, at1, OrderReq{
+		InstrumentID: "S1", Side: "buy", AmountCents: 100}); !errors.Is(err, ErrPlayerBankrupt) {
+		t.Fatalf("bankrupt buy: %v", err)
+	}
+	// Solvent players in the same room are unaffected.
+	if _, err := PlaceOrder(ctx, pool, room, room.HostUserID, at1, OrderReq{
+		InstrumentID: "S1", Side: "buy", AmountCents: 100}); err != nil {
+		t.Fatalf("solvent host order: %v", err)
+	}
+}

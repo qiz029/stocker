@@ -1,31 +1,45 @@
 import { useNavigate, useParams } from "react-router-dom";
-import { MEDIA_NAMES, NewsItem } from "../api";
+import { NewsItem, NewsResponse, fetchNews } from "../api";
 import { fmt$, fmtPct, prettifyHeadline } from "../format";
+import { LangSwitch, mediaName, useT } from "../i18n";
 import { useRoomData, useSimClock } from "../roomData";
 import { useIncrementalFeed } from "../useIncrementalFeed";
 import { useState } from "react";
-import HeroChart from "../components/HeroChart";
+import CandleChart from "../components/CandleChart";
+import ActionPanel from "../components/ActionPanel";
+import OptionsChain from "../components/OptionsChain";
+import OptionPositions from "../components/OptionPositions";
 import TradePanel from "../components/TradePanel";
 
 export default function Stock() {
   const { roomId, instrumentId } = useParams<{ roomId: string; instrumentId: string }>();
   const navigate = useNavigate();
-  const { state, portfolio, series, reload } = useRoomData(roomId!);
+  const { t } = useT();
+  const { state, portfolio, series, ohlc, reload } = useRoomData(roomId!);
   const clock = useSimClock(state?.room);
-  const { items: newsItems } = useIncrementalFeed<NewsItem>(
-    after => `/api/rooms/${roomId}/news?after=${after}`, 30_000, roomId!);
+  const { items: newsItems } = useIncrementalFeed<NewsItem, NewsResponse>(
+    after => fetchNews(roomId!, after), 30_000, roomId!);
   const [openNews, setOpenNews] = useState<number | null>(null);
 
   if (!state) return null;
   const inst = state.instruments.find(i => i.id === instrumentId);
   const closes = series[instrumentId!] ?? [];
-  if (!inst) return <div className="wrap err-banner">未知标的</div>;
+  const candles = ohlc[instrumentId!] ?? [];
+  if (!inst) return <div className="wrap err-banner">{t("stock.unknown")}</div>;
 
   const aliasOf = (id: string) => state.instruments.find(i => i.id === id)?.alias ?? id;
   const last = closes[closes.length - 1] ?? 0;
   const prev = closes[closes.length - 2] ?? last;
   const q3m = closes.slice(-63);
   const held = portfolio?.positions.find(p => p.instrument_id === instrumentId)?.shares ?? 0;
+  const optionPositions = (portfolio?.options ?? []).filter(o => o.instrument_id === instrumentId);
+  const optionsLocked = (portfolio?.bankrupt ?? false) || (state.room.ended ?? false);
+  const optionsNote = portfolio?.bankrupt
+    ? t("trade.bankruptNote")
+    : state.room.ended ? t("option.endedNote") : undefined;
+  const actionsNote = portfolio?.bankrupt
+    ? t("actions.bankruptNote")
+    : state.room.ended ? t("actions.endedNote") : undefined;
   const relatedNews = newsItems
     .filter(n => n.headline.includes(instrumentId!) || n.headline.includes(inst.alias))
     .sort((a, b) => b.id - a.id)
@@ -33,50 +47,71 @@ export default function Stock() {
 
   return (
     <div className="wrap">
-      <button className="back-btn" onClick={() => navigate(`/rooms/${roomId}`)}>← 返回房间</button>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <button className="back-btn" onClick={() => navigate(`/rooms/${roomId}`)}>{t("common.backToRoom")}</button>
+        <LangSwitch />
+      </div>
       <div className="stock-grid">
         <div>
-          {closes.length > 1 && (
-            <HeroChart
+          {candles.length > 1 && (
+            <CandleChart
               label={`${inst.alias} · ${inst.desc} · ${inst.id}`}
-              series={closes} startDay={0} formatValue={fmt$}
+              days={candles} formatValue={fmt$}
             />
           )}
           <div className="stat-strip num">
-            <div><span className="k">今日收盘</span>{fmt$(last)}</div>
-            <div><span className="k">昨收</span>{fmt$(prev)}</div>
-            <div><span className="k">3月最高</span>{q3m.length ? fmt$(Math.max(...q3m)) : "—"}</div>
-            <div><span className="k">3月最低</span>{q3m.length ? fmt$(Math.min(...q3m)) : "—"}</div>
-            <div><span className="k">开局至今</span>
+            <div><span className="k">{t("stock.todayClose")}</span>{fmt$(last)}</div>
+            <div><span className="k">{t("stock.prevClose")}</span>{fmt$(prev)}</div>
+            <div><span className="k">{t("stock.high3m")}</span>{q3m.length ? fmt$(Math.max(...q3m)) : "—"}</div>
+            <div><span className="k">{t("stock.low3m")}</span>{q3m.length ? fmt$(Math.min(...q3m)) : "—"}</div>
+            <div><span className="k">{t("stock.sinceStart")}</span>
               <span className={`delta ${last >= (closes[0] ?? last) ? "up" : "down"}`}>
                 {closes[0] ? fmtPct(last / closes[0] - 1) : "—"}
               </span>
             </div>
-            <div><span className="k">我的持仓</span>{held > 0 ? `${held.toFixed(1)} 股` : "—"}</div>
+            <div><span className="k">{t("stock.myHolding")}</span>{held > 0 ? t("unit.shares", { n: held.toFixed(1) }) : "—"}</div>
           </div>
 
+          {optionPositions.length > 0 && (
+            <div className="section">
+              <h2>{t("option.myPositions")}</h2>
+              <OptionPositions roomId={roomId!} positions={optionPositions}
+                currentDay={state.room.current_day ?? 0} aliasOf={aliasOf}
+                onChanged={reload} disabled={optionsLocked} />
+            </div>
+          )}
+
+          <OptionsChain roomId={roomId!} instrumentId={instrumentId!} alias={inst.alias}
+            lastClose={last} currentDay={state.room.current_day ?? 0}
+            portfolio={portfolio} onChanged={reload}
+            disabled={optionsLocked} note={optionsNote} />
+
+          <ActionPanel roomId={roomId!} instrumentId={instrumentId!} alias={inst.alias}
+            portfolio={portfolio} onChanged={reload}
+            disabled={optionsLocked} note={actionsNote} />
+
           <div className="section">
-            <h2>档案</h2>
+            <h2>{t("stock.profile")}</h2>
             <div className="profile-grid">
-              <div className="profile-item"><div className="pk">简介</div><p>{inst.desc || "——"}</p></div>
+              <div className="profile-item"><div className="pk">{t("stock.profileDesc")}</div><p>{inst.desc || "——"}</p></div>
               {inst.profile && (
                 <>
-                  <div className="profile-item"><div className="pk">主营业务</div><p>{inst.profile.business}</p></div>
-                  <div className="profile-item"><div className="pk bull">多头故事</div><p>{inst.profile.bull}</p></div>
-                  <div className="profile-item"><div className="pk bear">风险提示</div><p>{inst.profile.bear}</p></div>
+                  <div className="profile-item"><div className="pk">{t("stock.profileBusiness")}</div><p>{inst.profile.business}</p></div>
+                  <div className="profile-item"><div className="pk bull">{t("stock.profileBull")}</div><p>{inst.profile.bull}</p></div>
+                  <div className="profile-item"><div className="pk bear">{t("stock.profileBear")}</div><p>{inst.profile.bear}</p></div>
                 </>
               )}
             </div>
           </div>
 
           <div className="section">
-            <h2>相关新闻</h2>
-            {relatedNews.length === 0 && <div className="feed-item">暂无相关新闻</div>}
+            <h2>{t("stock.relatedNews")}</h2>
+            {relatedNews.length === 0 && <div className="feed-item">{t("stock.noNews")}</div>}
             {relatedNews.map(n => (
               <div key={n.id}
                 className={`feed-item ${n.body ? "news" : ""} ${openNews === n.id ? "open" : ""}`}
                 onClick={n.body ? () => setOpenNews(openNews === n.id ? null : n.id) : undefined}>
-                <div className="fi-meta">{MEDIA_NAMES[n.media_id] ?? n.media_id} · <span className="num">第 {n.day} 日</span></div>
+                <div className="fi-meta">{mediaName(n.media_id, t)} · <span className="num">{t("common.day", { day: n.day })}</span></div>
                 <div className={n.body ? "fi-title" : ""}>{prettifyHeadline(n.headline, aliasOf)}</div>
                 {n.body && <div className="fi-body">{n.body}</div>}
               </div>
@@ -85,7 +120,7 @@ export default function Stock() {
         </div>
 
         <TradePanel roomId={roomId!} instrumentId={instrumentId!} lastClose={last}
-          portfolio={portfolio} onChanged={reload}
+          portfolio={portfolio} onChanged={reload} disabled={portfolio?.bankrupt ?? false}
           afterHours={clock?.phase === "closed" || clock?.phase === "weekend"} />
       </div>
     </div>

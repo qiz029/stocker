@@ -26,10 +26,10 @@ describe("sessionTimes", () => {
 
 describe("dayLabel", () => {
   it("maps a day index to the fictional calendar", () => {
-    expect(dayLabel(0)).toBe("第1周 · 周一");
-    expect(dayLabel(4)).toBe("第1周 · 周五");
-    expect(dayLabel(5)).toBe("第2周 · 周一");
-    expect(dayLabel(17)).toBe("第4周 · 周三");
+    expect(dayLabel(0, "zh")).toBe("第1周 · 周一");
+    expect(dayLabel(4, "zh")).toBe("第1周 · 周五");
+    expect(dayLabel(5, "zh")).toBe("第2周 · 周一");
+    expect(dayLabel(17, "zh")).toBe("第4周 · 周三");
   });
 });
 
@@ -62,7 +62,7 @@ describe("simClock", () => {
     expect(c.phase).toBe("closed"); // day 0 = 周一
     expect(c.time).toBeNull();
     expect(c.nextOpenSecs).toBe(22);
-    expect(c.dateLabel).toBe("第1周 · 周一");
+    expect(dayLabel(c.day, "zh")).toBe("第1周 · 周一");
   });
 
   it("friday close is a weekend; next day is monday of week 2", () => {
@@ -70,7 +70,7 @@ describe("simClock", () => {
     expect(fri.phase).toBe("weekend");
     const mon = simClock(started, D, 1, 10, t0 + 5 * 100_000);
     expect(mon.phase).toBe("open");
-    expect(mon.dateLabel).toBe("第2周 · 周一");
+    expect(dayLabel(mon.day, "zh")).toBe("第2周 · 周一");
   });
 
   it("is ended once elapsed passes totalDays", () => {

@@ -14,6 +14,10 @@ type FetchSpec struct {
 
 type Dossier struct {
 	Alias, Desc, RealName, Business, Bull, Bear string
+	// Aliases is the full set of candidate display names for the per-room
+	// blind-box pick (Alias itself must be one of the entries). Room
+	// creation resolves one entry deterministically from the room seed.
+	Aliases []string
 }
 
 type SectorSpec struct {

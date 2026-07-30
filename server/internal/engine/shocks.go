@@ -50,6 +50,10 @@ type NewsEvent struct {
 	Headline    string
 	Body        string // LLM copy (plan 4); empty on template fallback
 	ClusterID   int    // 0 = standalone; shared by 传闻/主事件/追踪 triplets
+	// Recap marks the daily market-recap item (historical track, zero
+	// shock): the LLM copy pipeline gives it the objective market-wrap
+	// persona instead of the on-scene report persona. Not persisted.
+	Recap bool
 }
 
 const (

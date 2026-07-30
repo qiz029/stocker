@@ -23,8 +23,8 @@ describe("Chat", () => {
     // own message gets the .me class
     expect(screen.getByText("冲了").closest(".chat-msg")).toHaveClass("me");
 
-    fireEvent.change(screen.getByPlaceholderText("说点什么…"), { target: { value: "科技股什么情况" } });
-    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+    fireEvent.change(screen.getByPlaceholderText("Say something…"), { target: { value: "科技股什么情况" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(posted).toEqual([{ text: "科技股什么情况" }]));
   });
 
@@ -40,8 +40,8 @@ describe("Chat", () => {
     expect(await screen.findByText("唯一的一条")).toBeInTheDocument();
     // Force a second overlapping-style fetch returning the same batch.
     // (fetchNew is internal; trigger via the send path's post-then-fetch)
-    fireEvent.change(screen.getByPlaceholderText("说点什么…"), { target: { value: "x" } });
-    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+    fireEvent.change(screen.getByPlaceholderText("Say something…"), { target: { value: "x" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
     await waitFor(() => expect(calls).toBeGreaterThan(2));
     expect(screen.getAllByText("唯一的一条")).toHaveLength(1);
   });

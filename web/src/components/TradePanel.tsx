@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { api, ApiError, Portfolio } from "../api";
 import { fmtCents, fmt$ } from "../format";
+import { useT } from "../i18n";
 import { useToast } from "../Toast";
 
 type Props = {
@@ -10,9 +11,11 @@ type Props = {
   portfolio: Portfolio | null;
   onChanged: () => void;
   afterHours?: boolean;
+  disabled?: boolean;   // bankrupt: trading locked
 };
 
-export default function TradePanel({ roomId, instrumentId, lastClose, portfolio, onChanged, afterHours }: Props) {
+export default function TradePanel({ roomId, instrumentId, lastClose, portfolio, onChanged, afterHours, disabled }: Props) {
+  const { t } = useT();
   const { toast, node } = useToast();
   const [side, setSide] = useState<"buy" | "sell">("buy");
   const [raw, setRaw] = useState("");
@@ -45,11 +48,11 @@ export default function TradePanel({ roomId, instrumentId, lastClose, portfolio,
         ? { instrument_id: instrumentId, side, amount_cents: Math.round(value * 100) }
         : { instrument_id: instrumentId, side, shares: value };
       await api.post(`/api/rooms/${roomId}/orders`, body);
-      toast("已下单，开盘成交（已冻结）");
+      toast(t("trade.ordered"));
       setRaw("");
       onChanged();
     } catch (e) {
-      toast(e instanceof ApiError ? e.message : "下单失败");
+      toast(e instanceof ApiError ? e.message : t("trade.orderFailed"));
     } finally {
       setBusy(false);
     }
@@ -58,10 +61,10 @@ export default function TradePanel({ roomId, instrumentId, lastClose, portfolio,
   async function cancel(orderID: number) {
     try {
       await api.del(`/api/rooms/${roomId}/orders/${orderID}`);
-      toast("已撤单，资金解冻");
+      toast(t("trade.cancelled"));
       onChanged();
     } catch (e) {
-      toast(e instanceof ApiError ? e.message : "撤单失败");
+      toast(e instanceof ApiError ? e.message : t("trade.cancelFailed"));
     }
   }
 
@@ -69,46 +72,50 @@ export default function TradePanel({ roomId, instrumentId, lastClose, portfolio,
     <div className="card trade">
       <div className="tabs">
         <button className={`buy-tab ${side === "buy" ? "on" : ""}`}
-          onClick={() => { setSide("buy"); setRaw(""); }}>买入</button>
+          onClick={() => { setSide("buy"); setRaw(""); }}>{t("side.Buy")}</button>
         <button className={`sell-tab ${side === "sell" ? "on" : ""}`}
-          onClick={() => { setSide("sell"); setRaw(""); }}>卖出</button>
+          onClick={() => { setSide("sell"); setRaw(""); }}>{t("side.Sell")}</button>
       </div>
-      <div className="field-label">{side === "buy" ? "买入金额" : "卖出股数"}</div>
+      <div className="field-label">{side === "buy" ? t("trade.buyAmount") : t("trade.sellShares")}</div>
       <div className="amt">
         {side === "buy" && <span>$</span>}
-        <input inputMode="decimal" placeholder="0" value={raw}
+        <input inputMode="decimal" placeholder="0" value={raw} disabled={disabled}
           onChange={e => setRaw(e.target.value)} />
       </div>
       <div className="chips">
-        {[["25%", 0.25], ["50%", 0.5], ["75%", 0.75], ["全部", 1]].map(([label, f]) => (
+        {[["25%", 0.25], ["50%", 0.5], ["75%", 0.75], [t("trade.all"), 1]].map(([label, f]) => (
           <button key={label as string} onClick={() => pickFraction(f as number)}>{label as string}</button>
         ))}
       </div>
-      <div className="est"><span>可用</span>
-        <b className="num">{side === "buy" ? fmtCents(cash) : `${heldShares.toFixed(1)} 股`}</b></div>
+      <div className="est"><span>{t("trade.available")}</span>
+        <b className="num">{side === "buy" ? fmtCents(cash) : t("unit.shares", { n: heldShares.toFixed(1) })}</b></div>
       <div className="est">
-        <span>{side === "buy" ? "预估股数（按今日收盘参考）" : "预估金额（按今日收盘参考）"}</span>
+        <span>{side === "buy" ? t("trade.estShares") : t("trade.estAmount")}</span>
         <b className="num">
           {value > 0 && lastClose > 0
-            ? side === "buy" ? `≈ ${(value / lastClose).toFixed(1)} 股` : `≈ ${fmt$(value * lastClose)}`
+            ? side === "buy" ? `≈ ${t("unit.shares", { n: (value / lastClose).toFixed(1) })}` : `≈ ${fmt$(value * lastClose)}`
             : "—"}
         </b>
       </div>
-      <p className="note">订单将在<b>下一个历史交易日的开盘价</b>成交，成交价此刻未知。下单即冻结，开盘前可撤单。</p>
-      {afterHours && <p className="note">现在已收盘：盘后单照常受理，次日开盘成交。</p>}
+      <p className="note">{t("trade.noteA")}<b>{t("trade.noteB")}</b>{t("trade.noteC")}</p>
+      {afterHours && <p className="note">{t("trade.afterHours")}</p>}
+      {disabled && <p className="note">{t("trade.bankruptNote")}</p>}
       <button className={`submit ${side === "sell" ? "sell" : ""}`}
-        disabled={busy || value <= 0 || overLimit} onClick={submit}>
-        {side === "buy" ? "下单买入" : "下单卖出"}
+        disabled={busy || disabled || value <= 0 || overLimit} onClick={submit}>
+        {side === "buy" ? t("trade.placeBuy") : t("trade.placeSell")}
       </button>
       {pending.length > 0 && (
         <div className="pending-list">
-          <div className="field-label">待成交</div>
+          <div className="field-label">{t("trade.pending")}</div>
           {pending.map(o => (
             <div key={o.id} className="pending-item">
               <span className="num">
-                {o.side === "buy" ? `买入 ${fmtCents(o.amount_cents)}` : `卖出 ${o.shares.toFixed(1)} 股`} · 第 {o.exec_day} 日开盘
+                {o.side === "buy"
+                  ? t("trade.pendingBuy", { amount: fmtCents(o.amount_cents) })
+                  : t("trade.pendingSell", { shares: o.shares.toFixed(1) })}
+                {" · "}{t("trade.pendingExec", { day: o.exec_day })}
               </span>
-              <button className="cancel" onClick={() => cancel(o.id)}>撤单</button>
+              <button className="cancel" onClick={() => cancel(o.id)}>{t("trade.cancel")}</button>
             </div>
           ))}
         </div>

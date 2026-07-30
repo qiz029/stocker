@@ -3,6 +3,7 @@ package httpapi
 import (
 	"net/http"
 
+	"github.com/toddzheng/stocker/server/internal/engine"
 	"github.com/toddzheng/stocker/server/internal/store"
 )
 
@@ -29,7 +30,7 @@ func (s *Server) handleReveal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	instRows, err := s.DB.Query(r.Context(), `
-		SELECT i.id, i.alias, i.real_name
+		SELECT i.id, i.alias, i.real_name, i.aliases
 		FROM instruments i JOIN rooms rm ON rm.scenario_id = i.scenario_id
 		WHERE rm.id = $1 ORDER BY i.ord`, room.ID)
 	if err != nil {
@@ -40,10 +41,13 @@ func (s *Server) handleReveal(w http.ResponseWriter, r *http.Request) {
 	instruments := []map[string]any{}
 	for instRows.Next() {
 		var id, alias, realName string
-		if err := instRows.Scan(&id, &alias, &realName); err != nil {
+		var aliases []string // nil when column is NULL
+		if err := instRows.Scan(&id, &alias, &realName, &aliases); err != nil {
 			s.storeErr(w, err)
 			return
 		}
+		// Same per-room name the player saw all game.
+		alias = engine.ResolveAlias(room.Seed, id, alias, aliases)
 		instruments = append(instruments, map[string]any{
 			"id": id, "alias": alias, "real_name": realName,
 		})
@@ -94,6 +98,7 @@ func (s *Server) handleReveal(w http.ResponseWriter, r *http.Request) {
 			"total_cents": lr.TotalCents,
 			"return_pct":  float64(lr.TotalCents-store.InitialCashCents) / float64(store.InitialCashCents),
 			"late_join":   lr.JoinedDay > 0,
+			"bankrupt":    lr.Bankrupt,
 		})
 	}
 

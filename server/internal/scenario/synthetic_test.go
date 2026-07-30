@@ -21,8 +21,8 @@ func TestSyntheticShape(t *testing.T) {
 		if len(prices) != sc.Days {
 			t.Fatalf("%s: %d days", inst.ID, len(prices))
 		}
-		if prices[0].Open != 100 {
-			t.Fatalf("%s: start open %f, want 100", inst.ID, prices[0].Open)
+		if prices[0].Open < 15 || prices[0].Open > 250 {
+			t.Fatalf("%s: start open %f outside the [15, 250] level band", inst.ID, prices[0].Open)
 		}
 		for d, p := range prices {
 			if p.Low > p.Open || p.Low > p.Close || p.High < p.Open || p.High < p.Close || p.Low <= 0 {
@@ -46,8 +46,8 @@ func TestSyntheticHasBoomAndCrash(t *testing.T) {
 	sc := Synthetic()
 	p := sc.Baseline["S1"]
 	peak := p[150].Close
-	if peak < 150 { // 前 150 天泡沫至少 +50%
-		t.Fatalf("boom too weak: peak %f", peak)
+	if peak < p[0].Close*1.5 { // 前 150 天泡沫至少 +50%
+		t.Fatalf("boom too weak: peak %f vs start %f", peak, p[0].Close)
 	}
 	if p[220].Close > peak*0.55 { // 崩盘至少 -45%
 		t.Fatalf("crash too weak: %f vs peak %f", p[220].Close, peak)

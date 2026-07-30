@@ -6,11 +6,12 @@ type Props = {
   price: string;
   pill: string;
   pillUp: boolean;
+  pnl?: { text: string; up: boolean };   // avg cost + unrealized P&L line (held positions)
   sparkSeries?: number[];
   onClick?: () => void;
 };
 
-export default function InstrumentRow({ name, sub, price, pill, pillUp, sparkSeries, onClick }: Props) {
+export default function InstrumentRow({ name, sub, price, pill, pillUp, pnl, sparkSeries, onClick }: Props) {
   return (
     <div className="row" onClick={onClick} style={onClick ? undefined : { cursor: "default" }}>
       <div>
@@ -21,6 +22,7 @@ export default function InstrumentRow({ name, sub, price, pill, pillUp, sparkSer
       <div className="px">
         <div className="p num">{price}</div>
         {pill && <span className={`pill num ${pillUp ? "up" : "down"}`}>{pill}</span>}
+        {pnl && <div className={`pnl delta num ${pnl.up ? "up" : "down"}`}>{pnl.text}</div>}
       </div>
     </div>
   );

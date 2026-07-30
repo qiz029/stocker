@@ -7,8 +7,8 @@ afterEach(() => vi.restoreAllMocks());
 
 const reveal = {
   instruments: [
-    { id: "S1", alias: "郊狼网络", real_name: "Cisco Systems" },
-    { id: "S6", alias: "老树能源", real_name: "" },
+    { id: "S1", alias: "Ridgeline Networks", real_name: "Cisco Systems" },
+    { id: "S6", alias: "Oldfield Energy", real_name: "" },
   ],
   trades: [
     { username: "amy", instrument_id: "S1", side: "buy", day: 20, price: 180.5, shares: 221.6, amount_cents: 4_000_000 },
@@ -33,7 +33,7 @@ describe("Reveal page", () => {
   it("shows identities, trades and final leaderboard", async () => {
     renderAt(() => new Response(JSON.stringify(reveal), { status: 200 }));
     await waitFor(() => expect(screen.getByText("Cisco Systems")).toBeInTheDocument());
-    expect(screen.getAllByText("郊狼网络").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Ridgeline Networks").length).toBeGreaterThan(0);
     expect(screen.getByText("+34.20%")).toBeInTheDocument();
     expect(screen.getAllByText("amy")[0].closest(".lb-row")).toBeTruthy();
     expect(screen.getByText("$40,000.00")).toBeInTheDocument();
@@ -42,6 +42,6 @@ describe("Reveal page", () => {
 
   it("shows a waiting message before the game ends", async () => {
     renderAt(() => new Response(JSON.stringify({ error: "game not finished" }), { status: 409 }));
-    expect(await screen.findByText(/尚未揭晓/)).toBeInTheDocument();
+    expect(await screen.findByText(/Not revealed yet/)).toBeInTheDocument();
   });
 });

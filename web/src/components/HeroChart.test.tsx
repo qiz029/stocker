@@ -12,11 +12,11 @@ describe("HeroChart", () => {
   });
   it("switches range tabs", () => {
     render(<HeroChart label="x" series={series} startDay={0} formatValue={v => String(v)} />);
-    fireEvent.click(screen.getByRole("button", { name: "7日" }));
-    expect(screen.getByRole("button", { name: "7日" })).toHaveClass("on");
+    fireEvent.click(screen.getByRole("button", { name: "7D" }));
+    expect(screen.getByRole("button", { name: "7D" })).toHaveClass("on");
   });
   it("scrub label uses the fictional calendar", () => {
     // 单测 dayLabel 集成点:HeroChart 悬停文案 = dayLabel(startDay + winStart + hover)
-    expect(dayLabel(17)).toBe("第4周 · 周三");
+    expect(dayLabel(17, "zh")).toBe("第4周 · 周三");
   });
 });

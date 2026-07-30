@@ -288,7 +288,7 @@ func importScenarios(args []string) {
 		display := map[string]store.InstrumentDisplay{}
 		for iid, d := range meta.Dossiers {
 			display[iid] = store.InstrumentDisplay{
-				Alias: d.Alias, Desc: d.Desc, RealName: d.RealName,
+				Alias: d.Alias, Desc: d.Desc, RealName: d.RealName, Aliases: d.Aliases,
 				Business: d.Business, Bull: d.Bull, Bear: d.Bear,
 			}
 		}

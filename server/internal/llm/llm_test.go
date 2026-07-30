@@ -18,7 +18,7 @@ import (
 
 func testScenario() *scenario.Scenario {
 	sc := scenario.Synthetic()
-	sc.Instruments[0].Alias = "郊狼网络"
+	sc.Instruments[0].Alias = "Ridgeline Networks"
 	return sc
 }
 
@@ -290,5 +290,117 @@ func TestFromEnvDisableThinking(t *testing.T) {
 	t.Setenv("LLM_DISABLE_THINKING", "")
 	if cfg := FromEnv(); cfg == nil || cfg.DisableThinking {
 		t.Fatalf("unset must default off: %+v", cfg)
+	}
+}
+
+func TestFillForumCopyHappyPath(t *testing.T) {
+	var gotSystem atomic.Value
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Messages []map[string]any `json:"messages"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		gotSystem.Store(req.Messages[0]["content"].(string))
+		user := req.Messages[len(req.Messages)-1]["content"].(string)
+		var out []map[string]any
+		for idx := 0; idx < 100; idx++ {
+			if strings.Contains(user, fmt.Sprintf(`"idx":%d`, idx)) {
+				out = append(out, map[string]any{
+					"idx": idx, "body": fmt.Sprintf("改写帖子%d", idx),
+				})
+			}
+		}
+		b, _ := json.Marshal(out)
+		fmt.Fprint(w, chatResponse(string(b)))
+	}))
+	defer srv.Close()
+
+	g := New(Config{BaseURL: srv.URL, Model: "m", Concurrency: 2, Timeout: 5 * time.Second})
+	sc := testScenario()
+	sc.EraHint = "类似某个狂热"
+	posts := []engine.ForumPost{
+		{Day: 1, NPCName: "满仓踏空王", Persona: "多头", Body: "看到阿尔法的消息我直接加仓"},
+		{Day: 1, NPCName: "空仓观望中", Persona: "阴阳师", Body: "今天又是看戏的一天"},
+	}
+	g.FillForumCopy(context.Background(), sc, posts)
+	if posts[0].Body != "改写帖子0" || posts[1].Body != "改写帖子1" {
+		t.Fatalf("forum posts not polished: %+v", posts)
+	}
+	sys := gotSystem.Load().(string)
+	if !strings.Contains(sys, "股民论坛") || !strings.Contains(sys, "类似某个狂热") {
+		t.Fatalf("forum system prompt wrong: %s", sys)
+	}
+}
+
+func TestFillForumCopyNeverLeaksNumbersOrTruth(t *testing.T) {
+	var captured atomic.Value
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		b, _ := json.Marshal(req)
+		captured.Store(string(b))
+		fmt.Fprint(w, chatResponse("[]"))
+	}))
+	defer srv.Close()
+	g := New(Config{BaseURL: srv.URL, Model: "m", Concurrency: 1, Timeout: 5 * time.Second})
+	posts := []engine.ForumPost{
+		{Day: 1, NPCName: "满仓踏空王", Persona: "多头", Body: "听说阿尔法那边有情况，懂的都懂"},
+	}
+	g.FillForumCopy(context.Background(), testScenario(), posts)
+	req := captured.Load().(string)
+	for _, leak := range []string{"0.03", "TrueShock", "true_shock", "ReportShock", "report_shock"} {
+		if strings.Contains(req, leak) {
+			t.Fatalf("forum prompt leaks %q", leak)
+		}
+	}
+	// The draft facts and persona reach the model; the no-numbers rule is stated.
+	if !strings.Contains(req, "阿尔法") || !strings.Contains(req, "多头") {
+		t.Fatal("forum prompt missing draft or persona")
+	}
+	if !strings.Contains(req, "禁止真实公司名、真实人名与任何数字") {
+		t.Fatal("forum system prompt missing the no-numbers rule")
+	}
+}
+
+func TestFillForumCopyDegradesToTemplate(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, chatResponse("这不是JSON"))
+	}))
+	defer srv.Close()
+	g := New(Config{BaseURL: srv.URL, Model: "m", Concurrency: 1, Timeout: 5 * time.Second})
+	posts := []engine.ForumPost{{Day: 1, NPCName: "n", Persona: "p", Body: "模板帖子"}}
+	g.FillForumCopy(context.Background(), testScenario(), posts)
+	if posts[0].Body != "模板帖子" {
+		t.Fatalf("bad response must leave template intact: %+v", posts[0])
+	}
+}
+
+func TestRecapPromptBranchIsObjectiveAndLeakFree(t *testing.T) {
+	var captured atomic.Value
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&req)
+		b, _ := json.Marshal(req)
+		captured.Store(string(b))
+		fmt.Fprint(w, chatResponse("[]"))
+	}))
+	defer srv.Close()
+	g := New(Config{BaseURL: srv.URL, Model: "m", Concurrency: 1, Timeout: 5 * time.Second})
+	evs := []engine.NewsEvent{{
+		Day: 2, Track: engine.TrackHistorical, MediaID: "wire", Recap: true,
+		Headline: "昨日复盘：阿尔法领涨，贝塔垫底，明星板块最强",
+	}}
+	g.FillCopy(context.Background(), testScenario(), evs)
+	req := captured.Load().(string)
+	if !strings.Contains(req, "每日复盘") || !strings.Contains(req, "市场复盘专栏") {
+		t.Fatal("recap branch missing objective persona/kind")
+	}
+	if !strings.Contains(req, "阿尔法") || !strings.Contains(req, "明星板块") {
+		t.Fatal("recap prompt missing the template facts")
+	}
+	for _, leak := range []string{"0.03", "TrueShock", "true_shock", "ReportShock", "report_shock"} {
+		if strings.Contains(req, leak) {
+			t.Fatalf("recap prompt leaks %q", leak)
+		}
 	}
 }

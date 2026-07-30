@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { api, ApiError, User } from "./api";
+import { I18nProvider } from "./i18n";
 import Login from "./pages/Login";
 import Lobby from "./pages/Lobby";
 import Room from "./pages/Room";
@@ -48,7 +49,9 @@ export function isAuthError(e: unknown): boolean {
 export default function App() {
   return (
     <BrowserRouter>
-      <Shell />
+      <I18nProvider>
+        <Shell />
+      </I18nProvider>
     </BrowserRouter>
   );
 }

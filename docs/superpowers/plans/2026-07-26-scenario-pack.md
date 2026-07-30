@@ -161,30 +161,30 @@ Macros:  GOLD 黄金 / OIL 原油 / RATE 利率   (curated betas only — same a
 KeyWindows: 1987-01-02..1987-08-25 direction +1 (疯牛期，压制逆势冷水)
             1987-10-14..1987-10-30 direction -1 (崩盘周)
 Instruments (id / raw / sector / alias / desc / RealName):
- Y01 ibm  TECH 蓝色巨人   百年计算公司                     IBM
- Y02 hpq  TECH 车库仪器   老牌硅谷仪器厂                   Hewlett-Packard
- Y03 ko   CONS 快乐水业   全球装瓶的饮料霸主               Coca-Cola
- Y04 pg   CONS 日用大王   百年日化帝国                     Procter & Gamble
- Y05 mcd  CONS 金拱门快餐 全球连锁快餐之王                 McDonald's
- Y06 dis  CONS 梦幻影业   动画起家的娱乐帝国               Disney
- Y07 mrk  PHRM 济世制药   研发驱动的大药厂                 Merck
- Y08 jnj  PHRM 康婴健护   从婴儿爽身粉到手术缝线           Johnson & Johnson
- Y09 mmm  IND  百宝胶业   什么都能粘的材料公司             3M
- Y10 ba   IND  云际客机   民航客机双雄之一                 Boeing
- Y11 cat  IND  黄铁重工   推土机与矿山机械之王             Caterpillar
- Y12 ge   IND  万象电气   什么都造的工业帝国               General Electric
- Y13 axp  FIN  绿卡金融   高端签账卡与旅行支票             American Express
- Y14 xom  ENGY 磐石石油   全球油气巨轮                     Exxon
- Y15 wmt  RETL 平价百货   乡镇起家的零售之王               Walmart
- Y16 dji  ""   三十巨头   三十家工业巨头的价格加权指数     道琼斯工业指数 (sector "", index)
- Y17 spx  ""   大盘五百   五百家大公司的市值加权指数       S&P 500 指数
+ Y01 ibm  TECH Atlas Computing Corp.   百年计算公司                     IBM
+ Y02 hpq  TECH Camberwell Instruments   老牌硅谷仪器厂                   Hewlett-Packard
+ Y03 ko   CONS Harborline Beverages   全球装瓶的饮料霸主               Coca-Cola
+ Y04 pg   CONS Willowbrook Consumer Goods   百年日化帝国                     Procter & Gamble
+ Y05 mcd  CONS Roadside Restaurant Group 全球连锁快餐之王                 McDonald's
+ Y06 dis  CONS Silverglade Entertainment   动画起家的娱乐帝国               Disney
+ Y07 mrk  PHRM Vireo Therapeutics   研发驱动的大药厂                 Merck
+ Y08 jnj  PHRM Wellmark Health Group   从婴儿爽身粉到手术缝线           Johnson & Johnson
+ Y09 mmm  IND  Stratford Materials   什么都能粘的材料公司             3M
+ Y10 ba   IND  Continental Aerospace   民航客机双雄之一                 Boeing
+ Y11 cat  IND  Ironfield Heavy Industries   推土机与矿山机械之王             Caterpillar
+ Y12 ge   IND  Concord Industrial Group   什么都造的工业帝国               General Electric
+ Y13 axp  FIN  Marquis Financial Services   高端签账卡与旅行支票             American Express
+ Y14 xom  ENGY Bastion Petroleum   全球油气巨轮                     Exxon
+ Y15 wmt  RETL Plainfield Stores   乡镇起家的零售之王               Walmart
+ Y16 dji  ""   Legacy Bluechip Index   三十家工业巨头的价格加权指数     道琼斯工业指数 (sector "", index)
+ Y17 spx  ""   Premier 500 Index   五百家大公司的市值加权指数       S&P 500 指数
 ExtraBeta guidance: SENT 0.2-0.5 (higher for CONS growth names & indices), RATE -0.2..-0.5
   (1987's crash trigger was rate fear — give FIN/IND the stronger negative RATE), OIL 0.6 for Y14, GOLD 0.1 for Y14.
 ```
 
 Two dossier examples to match (transcribe as Y03 and Y13's dossiers, author the rest):
-- Y03 快乐水业 — Business: "一瓶糖水卖遍全球的品牌机器，装瓶网络深入每个国家的毛细血管。" Bull: "品牌就是复利：只要人还口渴，提价权与全球化就是双引擎，牛市里机构最安心的核心持仓。" Bear: "所有人都安心的持仓，估值早已不便宜；当组合保险开始机械抛售时，最拥挤的地方跌得最快。"
-- Y13 绿卡金融 — Business: "高端客群的签账卡与旅行支票生意，赚的是商户回佣与浮存金。" Bull: "消费升级的年代，绿色卡片是身份的通行证，会员费提了又提照样排队。" Bear: "利率一抬头，浮存金优势缩水；金融股在恐慌里从没当过避风港。"
+- Y03 Harborline Beverages — Business: "一瓶糖水卖遍全球的品牌机器，装瓶网络深入每个国家的毛细血管。" Bull: "品牌就是复利：只要人还口渴，提价权与全球化就是双引擎，牛市里机构最安心的核心持仓。" Bear: "所有人都安心的持仓，估值早已不便宜；当组合保险开始机械抛售时，最拥挤的地方跌得最快。"
+- Y13 Marquis Financial Services — Business: "高端客群的签账卡与旅行支票生意，赚的是商户回佣与浮存金。" Bull: "消费升级的年代，绿色卡片是身份的通行证，会员费提了又提照样排队。" Bear: "利率一抬头，浮存金优势缩水；金融股在恐慌里从没当过避风港。"
 
 **Scenario-specific test** (append to registry_test.go): `TestCrash1987SingleDayDrop` — build crash-1987, find the baseline day where the SPX-proxy instrument (Y17) has its worst single-day log return; assert that return ≤ −0.18 (the −20%+ crash day survives alignment/normalization) and that day falls inside the second key window.
 
@@ -207,21 +207,21 @@ Macros:  GOLD 黄金 / OIL 原油 / RATE 利率
 KeyWindows: 1973-11-01..1974-01-04 direction -1 (禁运恐慌)
             1974-08-01..1974-10-04 direction -1 (投降底)
 Instruments:
- N01 ko   NIFT 快乐水业   全球装瓶的饮料霸主           Coca-Cola
- N02 mcd  NIFT 金拱门快餐 高速展店的快餐新贵           McDonald's
- N03 dis  NIFT 梦幻影业   刚开完新乐园的娱乐帝国       Disney
- N04 jnj  NIFT 康婴健护   永远增长的健康帝国           Johnson & Johnson
- N05 pg   NIFT 日用大王   百年日化帝国                 Procter & Gamble
- N06 ibm  OFFC 蓝色巨人   大型计算机的代名词           IBM
- N07 xrx  OFFC 复印王     办公室复印机的代名词         Xerox        (fetch; fallback anchors below)
- N08 ek   NIFT 胶卷黄     感光胶卷与相机霸主           Eastman Kodak (fetch; fallback anchors below)
- N09 prd  NIFT 即影即有   即时成像相机的发明者         Polaroid（重建）(always reconstructed)
- N10 avp  NIFT 铃响美妆   上门直销的化妆品帝国         Avon         (fetch; fallback anchors below)
- N11 mmm  IND  百宝胶业   什么都能粘的材料公司         3M
- N12 cat  IND  黄铁重工   推土机与矿山机械之王         Caterpillar
- N13 xom  ENGY 磐石石油   全球油气巨轮                 Exxon
- N14 dji  ""   三十巨头   三十家工业巨头指数           道琼斯工业指数
- N15 spx  ""   大盘五百   五百家大公司指数             S&P 500 指数
+ N01 ko   NIFT Suncrest Beverages   全球装瓶的饮料霸主           Coca-Cola
+ N02 mcd  NIFT Crossroads Restaurants 高速展店的快餐新贵           McDonald's
+ N03 dis  NIFT Carousel Entertainment   刚开完新乐园的娱乐帝国       Disney
+ N04 jnj  NIFT Cloverleaf Health   永远增长的健康帝国           Johnson & Johnson
+ N05 pg   NIFT Kirkwood Household Brands   百年日化帝国                 Procter & Gamble
+ N06 ibm  OFFC Sterling Computing   大型计算机的代名词           IBM
+ N07 xrx  OFFC Paperflow Systems     办公室复印机的代名词         Xerox        (fetch; fallback anchors below)
+ N08 ek   NIFT Silvergrain Photographics     感光胶卷与相机霸主           Eastman Kodak (fetch; fallback anchors below)
+ N09 prd  NIFT Lumina Optics   即时成像相机的发明者         Polaroid（重建）(always reconstructed)
+ N10 avp  NIFT Homeway Cosmetics   上门直销的化妆品帝国         Avon         (fetch; fallback anchors below)
+ N11 mmm  IND  Versatek Materials   什么都能粘的材料公司         3M
+ N12 cat  IND  Quarryline Heavy Industries   推土机与矿山机械之王         Caterpillar
+ N13 xom  ENGY Ironshore Petroleum   全球油气巨轮                 Exxon
+ N14 dji  ""   Founders Bluechip Index   三十家工业巨头指数           道琼斯工业指数
+ N15 spx  ""   Bluechip 500 Index   五百家大公司指数             S&P 500 指数
 ExtraBeta guidance: SENT 0.5-0.8 for NIFT (信仰股情绪), OIL +0.7 for N13 and −0.2 for NIFT
   (油危机反噬消费), RATE −0.4 for NIFT (贴现率杀估值), GOLD 0.15 for N13.
 Anchors (used when Yahoo lacks pre-window data; prices are split-adjusted-era approximations,
@@ -234,8 +234,8 @@ documented as such; Sigma 0 = default):
 ```
 
 Dossier examples (transcribe as N09 and N07, author the rest):
-- N09 即影即有 — Business: "按下快门一分钟后照片就在手里——即时成像的独家专利帝国，毛利像奢侈品。" Bull: "一次性决策股：这种公司买了就永远不用卖，付五十倍市盈率是为未来三十年付的。" Bear: "为'永远'付的价格，只要增长慢一个季度就会塌方；专利到期与新技术是永远悬着的剑。"
-- N07 复印王 — Business: "每台复印机都是印钞机——设备租赁加按张计费，办公室离不开它。" Bear: "当核心专利保护伞收起、模仿者涌入时，按张计费的暴利模式首当其冲。" Bull: "无纸化还是科幻小说，纸张洪流只增不减，装机量就是年金。"
+- N09 Lumina Optics — Business: "按下快门一分钟后照片就在手里——即时成像的独家专利帝国，毛利像奢侈品。" Bull: "一次性决策股：这种公司买了就永远不用卖，付五十倍市盈率是为未来三十年付的。" Bear: "为'永远'付的价格，只要增长慢一个季度就会塌方；专利到期与新技术是永远悬着的剑。"
+- N07 Paperflow Systems — Business: "每台复印机都是印钞机——设备租赁加按张计费，办公室离不开它。" Bear: "当核心专利保护伞收起、模仿者涌入时，按张计费的暴利模式首当其冲。" Bull: "无纸化还是科幻小说，纸张洪流只增不减，装机量就是年金。"
 
 **Scenario-specific test:** `TestNifty1972BearMarketDepth` — build; assert the SPX proxy's max drawdown from its window peak exceeds 40% in the baseline (log peak-to-trough ≤ −0.5), and at least 4 NIFT-sector instruments have baseline drawdowns ≥ 60% — the "最优质的公司也跌八成" texture is the scenario's whole point; if the real data disagrees, the window/universe needs a second look (BLOCKED with numbers, not silent acceptance).
 
@@ -259,24 +259,24 @@ KeyWindows: 2008-03-10..2008-03-20 direction -1 (贝尔斯登周)
             2008-09-08..2008-10-10 direction -1 (雷曼连锁崩塌)
             2009-03-02..2009-03-31 direction +1 (绝望底反转)
 Instruments:
- G01 gs   IBNK 金顶投行   投行之王，自营交易机器           Goldman Sachs
- G02 ms   IBNK 晨星证券   老牌白鞋投行                     Morgan Stanley
- G03 ""   IBNK 百年债券行 债券起家的百年投行               Lehman Brothers（重建）
- G04 ""   IBNK 老熊证券   按揭证券化的先锋                 Bear Stearns（重建·后段为对价模拟）
- G05 jpm  BANK 摩天银行   大而稳的全能银行                 JPMorgan Chase
- G06 bac  BANK 大陆银行   零售网点最多的巨无霸             Bank of America
- G07 c    BANK 寰宇银行   全球扩张最激进的银行             Citigroup
- G08 wfc  BANK 马车银行   西部起家的房贷大行               Wells Fargo
- G09 aig  INSR 环宇保险   保险帝国与它神秘的衍生品部门     AIG
- G10 len  HOME 阳光房产   全国性住宅建商                   Lennar
- G11 wmt  DEFC 平价百货   乡镇起家的零售之王               Walmart
- G12 mcd  DEFC 金拱门快餐 全球连锁快餐之王                 McDonald's
- G13 aapl TECH 果核电脑   刚发布革命性手机的电脑厂         Apple
- G14 xom  ENGY 磐石石油   全球油气巨轮                     ExxonMobil
- G15 cvx  ENGY 双星石油   全产业链油气巨头                 Chevron
- G16 gld  ""   金砖基金   黄金现货支持的基金               SPDR Gold（sector ""）
- G17 spx  ""   大盘五百   五百家大公司指数                 S&P 500 指数
- G18 dji  ""   三十巨头   三十家巨头指数                   道琼斯工业指数
+ G01 gs   IBNK Sovereign Capital Partners   投行之王，自营交易机器           Goldman Sachs
+ G02 ms   IBNK Whitfield Securities   老牌白鞋投行                     Morgan Stanley
+ G03 ""   IBNK Hartwell Investment Bank 债券起家的百年投行               Lehman Brothers（重建）
+ G04 ""   IBNK Stonebridge Securities   按揭证券化的先锋                 Bear Stearns（重建·后段为对价模拟）
+ G05 jpm  BANK Metropolitan Bank Corp   大而稳的全能银行                 JPMorgan Chase
+ G06 bac  BANK Heartland National Bank   零售网点最多的巨无霸             Bank of America
+ G07 c    BANK Panorama Financial Group   全球扩张最激进的银行             Citigroup
+ G08 wfc  BANK Homestead Bank & Trust   西部起家的房贷大行               Wells Fargo
+ G09 aig  INSR Worldspan Insurance Group   保险帝国与它神秘的衍生品部门     AIG
+ G10 len  HOME Sunhaven Homes   全国性住宅建商                   Lennar
+ G11 wmt  DEFC Ledgemont Retail Group   乡镇起家的零售之王               Walmart
+ G12 mcd  DEFC Quickbite Restaurants 全球连锁快餐之王                 McDonald's
+ G13 aapl TECH Copperleaf Technologies   刚发布革命性手机的电脑厂         Apple
+ G14 xom  ENGY Vanguard Petroleum   全球油气巨轮                     ExxonMobil
+ G15 cvx  ENGY Blueridge Energy   全产业链油气巨头                 Chevron
+ G16 gld  ""   HardAsset Trust   黄金现货支持的基金               SPDR Gold（sector ""）
+ G17 spx  ""   National 500 Index   五百家大公司指数                 S&P 500 指数
+ G18 dji  ""   Heritage Bluechip Index   三十家巨头指数                   道琼斯工业指数
 ExtraBeta: SENT 0.6-0.9 for IBNK/BANK/INSR/HOME, 0.0-0.2 for DEFC; RATE −0.5 for financials;
  GOLD: G16 gets GOLD 0.9 (it IS the gold instrument), others 0-0.1; OIL 0.7 for ENGY.
 Anchors (approximate, documented; Sigma marked where non-default):
@@ -293,8 +293,8 @@ Anchors (approximate, documented; Sigma marked where non-default):
 ```
 
 Dossier examples (transcribe as G03 and G09, author the rest):
-- G03 百年债券行 — Business: "债券承销起家的百年投行，这些年最赚钱的部门是把千千万万笔房贷打包成证券再卖出去。" Bull: "熬过一个半世纪所有危机的公司还会怕这一次？杠杆是利润的放大器，管理层说流动性充足。" Bear: "三十倍杠杆意味着资产跌百分之三就资不抵债；当抵押品是别人不想再要的东西，'充足'两个字撑不过一个周末。"
-- G09 环宇保险 — Business: "全球最大的保险帝国，但利润引擎藏在一个几百人的衍生品部门——他们为天量的债券违约风险卖了保险。" Bull: "百年一遇的违约潮才能伤到它，而它的精算师说那是不可能事件。" Bear: "卖的是'不可能事件'的保险，收的是确定的小钱，赌上的是整个集团；不可能事件只需要发生一次。"
+- G03 Hartwell Investment Bank — Business: "债券承销起家的百年投行，这些年最赚钱的部门是把千千万万笔房贷打包成证券再卖出去。" Bull: "熬过一个半世纪所有危机的公司还会怕这一次？杠杆是利润的放大器，管理层说流动性充足。" Bear: "三十倍杠杆意味着资产跌百分之三就资不抵债；当抵押品是别人不想再要的东西，'充足'两个字撑不过一个周末。"
+- G09 Worldspan Insurance Group — Business: "全球最大的保险帝国，但利润引擎藏在一个几百人的衍生品部门——他们为天量的债券违约风险卖了保险。" Bull: "百年一遇的违约潮才能伤到它，而它的精算师说那是不可能事件。" Bear: "卖的是'不可能事件'的保险，收的是确定的小钱，赌上的是整个集团；不可能事件只需要发生一次。"
 
 **Scenario-specific test:** `TestGfc2008CrisisShape` — build; assert G03's baseline net log return ≤ −5 (雷曼归零), G09 drawdown ≥ 90%, the DEFC instruments' 2008 drawdowns < 40% (防御股确实防御), and the +1 key window's start day sits within 10 days of the SPX proxy's global baseline trough (2009-03-09 must be the bottom).
 

@@ -1,8 +1,12 @@
 /**
  * 模拟市场时钟:把墙钟在每个交易日区间内的进度映射为虚构日历
- * ("第W周 · 周X")和盘中 2-4 小时一跳的时钟(9:30→16:00),之后是
- * 收盘/周末时段。纯展示层,服务器的线性 day 映射不受影响。
+ * (周/星期索引,展示文案由 dayLabel + i18n 生成)和盘中 2-4 小时一跳的
+ * 时钟(9:30→16:00),之后是收盘/周末时段。纯展示层,服务器的线性
+ * day 映射不受影响。
  */
+
+import type { Lang, MsgKey } from "./i18n";
+import { tFor } from "./i18n";
 
 export type ClockPhase = "open" | "closed" | "weekend" | "ended";
 
@@ -10,7 +14,6 @@ export interface SimClockState {
   day: number;
   week: number;                // 1 起始
   weekday: number;             // 0..4 → 周一..周五
-  dateLabel: string;           // "第3周 · 周四"
   time: string | null;         // 盘中 "14:10",其余 null
   phase: ClockPhase;
   nextOpenSecs: number | null; // closed/weekend 时距下一开盘秒数;
@@ -24,8 +27,6 @@ const CLOSE_MIN = 16 * 60;               // 960
 const TOTAL_MIN = CLOSE_MIN - OPEN_MIN;  // 390
 const MIN_GAP = 120;
 const MAX_GAP = 240;
-const WEEKDAYS = ["一", "二", "三", "四", "五"];
-
 // mulberry32:小型确定性 PRNG,返回 [0,1)
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -67,8 +68,10 @@ export function sessionTimes(roomId: number, day: number): number[] {
   return times;
 }
 
-export function dayLabel(day: number): string {
-  return `第${Math.floor(day / 5) + 1}周 · 周${WEEKDAYS[day % 5]}`;
+/** Fictional-calendar label for a day index, in the given UI language. */
+export function dayLabel(day: number, lang: Lang = "en"): string {
+  const t = tFor(lang);
+  return t("cal.label", { week: Math.floor(day / 5) + 1, wd: t(`cal.wd.${day % 5}` as MsgKey) });
 }
 
 function fmtMin(mins: number): string {
@@ -91,7 +94,6 @@ export function simClock(
   const base = {
     day, weekday,
     week: Math.floor(day / 5) + 1,
-    dateLabel: dayLabel(day),
   };
   if (ended) return { ...base, time: null, phase: "ended", nextOpenSecs: null };
 

@@ -33,6 +33,11 @@ func SettleRoom(ctx context.Context, db *pgxpool.Pool, room *Room, now time.Time
 // READ COMMITTED a blocked competitor re-evaluates the WHERE clause after
 // the lock is released, so orders another transaction just filled drop
 // out of its result set — settlement is idempotent.
+//
+// After fills it accrues loan interest day-by-day (bankrupting anyone
+// whose debt crosses MaxDebtCents), refunds still-pending orders once the
+// game has ended, and finally upserts the per-player daily net-asset
+// snapshot feeding the leaderboard curve.
 func SettleTx(ctx context.Context, tx pgx.Tx, room *Room, curDay int, ended bool) error {
 	type due struct {
 		id           int64
@@ -129,29 +134,176 @@ func SettleTx(ctx context.Context, tx pgx.Tx, room *Room, curDay int, ended bool
 		}
 	}
 
-	if !ended {
-		return nil
+	if err := accrueInterestTx(ctx, tx, room, curDay); err != nil {
+		return err
 	}
-	// Game over: whatever is still pending can never execute — refund it.
-	rows, err = tx.Query(ctx, `
-		SELECT id, user_id, instrument_id, side, amount_cents, shares, exec_day
-		FROM orders
-		WHERE room_id = $1 AND status = 'pending'
-		ORDER BY id
+
+	// Options: keep the rolling chain listed for the current day, then
+	// cash-settle every expired position — both before the daily snapshot
+	// so snapshots reflect the payoffs.
+	if err := listOptionsTx(ctx, tx, room, curDay); err != nil {
+		return err
+	}
+	if err := settleExpiredOptionsTx(ctx, tx, room, curDay); err != nil {
+		return err
+	}
+
+	if ended {
+		// Game over: whatever is still pending can never execute — refund it.
+		if err := cancelPendingOrdersTx(ctx, tx, room.ID, nil); err != nil {
+			return err
+		}
+	}
+
+	return snapshotDailyTotalsTx(ctx, tx, room, curDay)
+}
+
+// accrueInterestTx compounds every active borrower's debt once per sim
+// day, from interest_through_day+1 through curDay, at that day's
+// market-linked rate (利滚利). Idempotent via interest_through_day.
+// Debt crossing MaxDebtCents bankrupts the player at the crossing day.
+func accrueInterestTx(ctx context.Context, tx pgx.Tx, room *Room, curDay int) error {
+	type borrower struct {
+		userID  int64
+		debt    int64
+		through int
+	}
+	rows, err := tx.Query(ctx, `
+		SELECT user_id, debt_cents, interest_through_day FROM room_players
+		WHERE room_id = $1 AND debt_cents > 0 AND bankrupt_day IS NULL
+		ORDER BY user_id
 		FOR UPDATE`, room.ID)
 	if err != nil {
 		return err
 	}
-	leftovers, err := collect(rows)
+	var borrowers []borrower
+	for rows.Next() {
+		var b borrower
+		if err := rows.Scan(&b.userID, &b.debt, &b.through); err != nil {
+			rows.Close()
+			return err
+		}
+		borrowers = append(borrowers, b)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	// The rate depends only on (room, day): compute it once per day.
+	rateCache := map[int]float64{}
+	rateFor := func(day int) (float64, error) {
+		r, ok := rateCache[day]
+		if !ok {
+			var err error
+			r, err = annualRateAt(ctx, tx, room.ID, day)
+			if err != nil {
+				return 0, err
+			}
+			rateCache[day] = r
+		}
+		return r, nil
+	}
+
+	for _, b := range borrowers {
+		debt := b.debt
+		through := curDay
+		bankruptAt := -1
+		for d := b.through + 1; d <= curDay; d++ {
+			r, err := rateFor(d)
+			if err != nil {
+				return err
+			}
+			debt = int64(math.Round(float64(debt) * (1 + r/tradingDays)))
+			if debt > MaxDebtCents {
+				bankruptAt = d
+				through = d
+				break
+			}
+		}
+		if bankruptAt < 0 {
+			if _, err := tx.Exec(ctx, `
+				UPDATE room_players SET debt_cents = $3, interest_through_day = $4
+				WHERE room_id = $1 AND user_id = $2`,
+				room.ID, b.userID, debt, through); err != nil {
+				return err
+			}
+			continue
+		}
+		// Bankruptcy: freeze the debt at the crossing day, refund the
+		// player's pending orders (same semantics as the end-of-game
+		// refund), and announce it. Positions are untouched.
+		if _, err := tx.Exec(ctx, `
+			UPDATE room_players SET debt_cents = $3, interest_through_day = $4, bankrupt_day = $4
+			WHERE room_id = $1 AND user_id = $2`,
+			room.ID, b.userID, debt, bankruptAt); err != nil {
+			return err
+		}
+		if err := cancelPendingOrdersTx(ctx, tx, room.ID, &b.userID); err != nil {
+			return err
+		}
+		var username string
+		if err := tx.QueryRow(ctx,
+			`SELECT username FROM users WHERE id = $1`, b.userID).Scan(&username); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO room_events (room_id, day, kind, payload)
+			VALUES ($1, $2, 'bankrupt', jsonb_build_object('day', $3::int, 'username', $4::text))`,
+			room.ID, bankruptAt, bankruptAt, username); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// cancelPendingOrdersTx cancels pending orders and refunds the frozen
+// side (cash for buys, shares for sells). userID nil cancels the whole
+// room's leftovers at game end; otherwise just one player's (bankruptcy).
+func cancelPendingOrdersTx(ctx context.Context, tx pgx.Tx, roomID int64, userID *int64) error {
+	query := `
+		SELECT id, user_id, instrument_id, side, amount_cents, shares
+		FROM orders
+		WHERE room_id = $1 AND status = 'pending'`
+	args := []any{roomID}
+	if userID != nil {
+		query += ` AND user_id = $2`
+		args = append(args, *userID)
+	}
+	query += ` ORDER BY id FOR UPDATE`
+	rows, err := tx.Query(ctx, query, args...)
 	if err != nil {
 		return err
 	}
-	for _, o := range leftovers {
+	type pending struct {
+		id           int64
+		userID       int64
+		instrumentID string
+		side         string
+		amountCents  int64
+		shares       float64
+	}
+	var orders []pending
+	for rows.Next() {
+		var o pending
+		if err := rows.Scan(&o.id, &o.userID, &o.instrumentID, &o.side,
+			&o.amountCents, &o.shares); err != nil {
+			rows.Close()
+			return err
+		}
+		orders = append(orders, o)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for _, o := range orders {
 		if o.side == "buy" {
 			if _, err := tx.Exec(ctx, `
 				UPDATE room_players SET cash_cents = cash_cents + $1
 				WHERE room_id = $2 AND user_id = $3`,
-				o.amountCents, room.ID, o.userID); err != nil {
+				o.amountCents, roomID, o.userID); err != nil {
 				return err
 			}
 		} else {
@@ -160,7 +312,7 @@ func SettleTx(ctx context.Context, tx pgx.Tx, room *Room, curDay int, ended bool
 				VALUES ($1, $2, $3, $4)
 				ON CONFLICT (room_id, user_id, instrument_id)
 				DO UPDATE SET shares = positions.shares + EXCLUDED.shares`,
-				room.ID, o.userID, o.instrumentID, o.shares); err != nil {
+				roomID, o.userID, o.instrumentID, o.shares); err != nil {
 				return err
 			}
 		}
@@ -171,20 +323,59 @@ func SettleTx(ctx context.Context, tx pgx.Tx, room *Room, curDay int, ended bool
 	return nil
 }
 
+// snapshotDailyTotalsTx upserts every player's net-asset total for curDay
+// into room_player_daily (the leaderboard equity curve). Idempotent.
+func snapshotDailyTotalsTx(ctx context.Context, tx pgx.Tx, room *Room, curDay int) error {
+	rows, err := tx.Query(ctx,
+		`SELECT user_id FROM room_players WHERE room_id = $1 ORDER BY user_id`, room.ID)
+	if err != nil {
+		return err
+	}
+	var userIDs []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		userIDs = append(userIDs, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, userID := range userIDs {
+		total, err := assetsCents(ctx, tx, room.ID, userID, curDay, "close")
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO room_player_daily (room_id, user_id, day, total_cents)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (room_id, user_id, day)
+			DO UPDATE SET total_cents = EXCLUDED.total_cents`,
+			room.ID, userID, curDay, total); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // priceCols whitelists the interpolated column name in assetsCents.
 var priceCols = map[string]bool{"open": true, "close": true}
 
-// assetsCents values a player's total assets at the given day: cash +
-// positions + frozen buy cash + frozen sell shares, using the day's open
-// or close. Frozen amounts count — freezing must not dent the leaderboard.
+// assetsCents values a player's NET total assets at the given day: cash +
+// positions + frozen buy cash + frozen sell shares + option marks − debt,
+// using the day's open or close. Frozen amounts count — freezing must not
+// dent the leaderboard. Debt-free players are unaffected by the subtraction.
 func assetsCents(ctx context.Context, q Querier, roomID, userID int64, day int, priceCol string) (int64, error) {
 	if !priceCols[priceCol] {
 		return 0, fmt.Errorf("assetsCents: bad price column %q", priceCol)
 	}
-	var cash int64
+	var cash, debt int64
 	if err := q.QueryRow(ctx,
-		`SELECT cash_cents FROM room_players WHERE room_id = $1 AND user_id = $2`,
-		roomID, userID).Scan(&cash); err != nil {
+		`SELECT cash_cents, debt_cents FROM room_players WHERE room_id = $1 AND user_id = $2`,
+		roomID, userID).Scan(&cash, &debt); err != nil {
 		return 0, err
 	}
 	var posVal float64
@@ -214,5 +405,10 @@ func assetsCents(ctx context.Context, q Querier, roomID, userID int64, day int, 
 		roomID, userID, day).Scan(&frozenSellVal); err != nil {
 		return 0, err
 	}
-	return cash + frozenBuy + int64(math.Round((posVal+frozenSellVal)*100)), nil
+	// Open option positions count at that day's Black-Scholes mark.
+	optVal, err := optionValueAt(ctx, q, roomID, userID, day)
+	if err != nil {
+		return 0, err
+	}
+	return cash + frozenBuy + int64(math.Round((posVal+frozenSellVal+optVal)*100)) - debt, nil
 }

@@ -1,5 +1,6 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { api } from "./api";
 import { useIncrementalFeed } from "./useIncrementalFeed";
 
 type Item = { id: number };
@@ -15,7 +16,7 @@ describe("useIncrementalFeed", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
       new Response(JSON.stringify({ items: [{ id: 1 }, { id: 2 }] }), { status: 200 }));
 
-    const { result } = renderHook(() => useIncrementalFeed<Item>(after => `/api/x?after=${after}`, 30_000, "room-1"));
+    const { result } = renderHook(() => useIncrementalFeed<Item, { items: Item[] }>(after => api.get<{ items: Item[] }>(`/api/x?after=${after}`), 30_000, "room-1"));
 
     await waitFor(() => expect(result.current.items).toEqual([{ id: 1 }, { id: 2 }]));
   });
@@ -33,7 +34,7 @@ describe("useIncrementalFeed", () => {
     });
 
     // Short interval so the second tick fires within the test's wait window.
-    const { result } = renderHook(() => useIncrementalFeed<Item>(after => `/api/x?after=${after}`, 10, "room-1"));
+    const { result } = renderHook(() => useIncrementalFeed<Item, { items: Item[] }>(after => api.get<{ items: Item[] }>(`/api/x?after=${after}`), 10, "room-1"));
 
     await waitFor(() => expect(result.current.items).toEqual([{ id: 1 }, { id: 2 }, { id: 3 }]));
     // First call used the initial cursor (0); a later call used the advanced one (2).
@@ -48,7 +49,7 @@ describe("useIncrementalFeed", () => {
     // Even though a well-behaved server wouldn't re-return already-seen ids,
     // the hook must still de-dup defensively (same guard as Chat.tsx),
     // so repeated ticks returning the same fixture must not grow the list.
-    const { result } = renderHook(() => useIncrementalFeed<Item>(after => `/api/x?after=${after}`, 10, "room-2"));
+    const { result } = renderHook(() => useIncrementalFeed<Item, { items: Item[] }>(after => api.get<{ items: Item[] }>(`/api/x?after=${after}`), 10, "room-2"));
 
     await waitFor(() => expect(result.current.items).toEqual([{ id: 1 }, { id: 2 }]));
     await new Promise(r => setTimeout(r, 50));

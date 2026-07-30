@@ -29,8 +29,8 @@ func SaveScenario(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario) 
 			return err
 		}
 		if _, err := tx.Exec(ctx,
-			`INSERT INTO scenarios (id, days, factors, key_windows, era_hint) VALUES ($1, $2, $3, $4, $5)`,
-			sc.ID, sc.Days, string(factors), string(keyWindows), sc.EraHint); err != nil {
+			`INSERT INTO scenarios (id, days, factors, key_windows, era_hint, market_proxy) VALUES ($1, $2, $3, $4, $5, $6)`,
+			sc.ID, sc.Days, string(factors), string(keyWindows), sc.EraHint, sc.MarketProxy); err != nil {
 			return err
 		}
 		for ord, inst := range sc.Instruments {
@@ -63,8 +63,8 @@ func LoadScenario(ctx context.Context, q Querier, id string) (*scenario.Scenario
 	sc := &scenario.Scenario{ID: id, Baseline: map[string][]scenario.OHLC{}}
 	var factors, keyWindows []byte
 	err := q.QueryRow(ctx,
-		`SELECT days, factors, key_windows, era_hint FROM scenarios WHERE id = $1`, id).
-		Scan(&sc.Days, &factors, &keyWindows, &sc.EraHint)
+		`SELECT days, factors, key_windows, era_hint, market_proxy FROM scenarios WHERE id = $1`, id).
+		Scan(&sc.Days, &factors, &keyWindows, &sc.EraHint, &sc.MarketProxy)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -79,7 +79,7 @@ func LoadScenario(ctx context.Context, q Querier, id string) (*scenario.Scenario
 	}
 
 	instRows, err := q.Query(ctx, `
-		SELECT id, alias, descr, beta, idio_scale, reconstructed FROM instruments
+		SELECT id, alias, descr, beta, idio_scale, reconstructed, aliases FROM instruments
 		WHERE scenario_id = $1 ORDER BY ord`, id)
 	if err != nil {
 		return nil, err
@@ -89,7 +89,7 @@ func LoadScenario(ctx context.Context, q Querier, id string) (*scenario.Scenario
 		var inst scenario.Instrument
 		var beta []byte
 		if err := instRows.Scan(&inst.ID, &inst.Alias, &inst.Desc, &beta,
-			&inst.IdioScale, &inst.Reconstructed); err != nil {
+			&inst.IdioScale, &inst.Reconstructed, &inst.Aliases); err != nil {
 			return nil, err
 		}
 		if err := json.Unmarshal(beta, &inst.Beta); err != nil {
@@ -127,14 +127,18 @@ type InstrumentDisplay struct {
 	Alias    string `json:"-"`
 	Desc     string `json:"-"`
 	RealName string `json:"-"`
-	Business string `json:"business"`
-	Bull     string `json:"bull"`
-	Bear     string `json:"bear"`
+	// Aliases is the candidate set for the per-room alias pick; empty
+	// leaves the aliases column NULL (readers fall back to Alias).
+	Aliases  []string `json:"-"`
+	Business string   `json:"business"`
+	Bull     string   `json:"bull"`
+	Bear     string   `json:"bear"`
 }
 
 // SetInstrumentDisplay overwrites display-only columns (alias, descr,
-// profile) for existing instruments. World generation never reads these,
-// so applying them after SaveScenario cannot affect determinism.
+// profile, real_name, aliases) for existing instruments. World generation
+// never reads these, so applying them after SaveScenario cannot affect
+// determinism.
 func SetInstrumentDisplay(ctx context.Context, db *pgxpool.Pool, scenarioID string, display map[string]InstrumentDisplay) error {
 	return pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
 		for id, d := range display {
@@ -142,10 +146,18 @@ func SetInstrumentDisplay(ctx context.Context, db *pgxpool.Pool, scenarioID stri
 			if err != nil {
 				return err
 			}
+			var aliases any // nil → NULL column: no candidates recorded
+			if len(d.Aliases) > 0 {
+				b, err := json.Marshal(d.Aliases)
+				if err != nil {
+					return err
+				}
+				aliases = string(b)
+			}
 			tag, err := tx.Exec(ctx, `
-				UPDATE instruments SET alias = $3, descr = $4, profile = $5, real_name = $6
+				UPDATE instruments SET alias = $3, descr = $4, profile = $5, real_name = $6, aliases = $7
 				WHERE scenario_id = $1 AND id = $2`,
-				scenarioID, id, d.Alias, d.Desc, string(profile), d.RealName)
+				scenarioID, id, d.Alias, d.Desc, string(profile), d.RealName, aliases)
 			if err != nil {
 				return err
 			}

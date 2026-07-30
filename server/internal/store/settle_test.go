@@ -177,3 +177,129 @@ func TestPlaceOrderSettlesFirst(t *testing.T) {
 		t.Fatalf("sell after due buy: %v (PlaceOrder must run SettleTx first)", err)
 	}
 }
+
+func TestSettleAccrualIdempotentAndSnapshots(t *testing.T) {
+	pool := TestDB(t, "store")
+	ctx := context.Background()
+	room, guest, t0 := mkRunningRoom(t, pool)
+
+	// The borrow itself settles day 0: a snapshot exists for both players.
+	if _, err := Borrow(ctx, pool, room, guest.ID, 1_000_000, t0); err != nil {
+		t.Fatalf("borrow: %v", err)
+	}
+	at3 := t0.Add(3*61*time.Second + time.Second) // day 3
+	if _, _, err := SettleRoom(ctx, pool, room, at3); err != nil {
+		t.Fatal(err)
+	}
+	debt1, _, _ := debtOf(t, pool, room.ID, guest.ID)
+	if debt1 <= 1_000_000 {
+		t.Fatalf("debt did not accrue: %d", debt1)
+	}
+
+	// Re-settling the same day is a no-op for debt and snapshots.
+	if _, _, err := SettleRoom(ctx, pool, room, at3); err != nil {
+		t.Fatal(err)
+	}
+	debt2, _, _ := debtOf(t, pool, room.ID, guest.ID)
+	if debt2 != debt1 {
+		t.Fatalf("accrual not idempotent: %d → %d", debt1, debt2)
+	}
+
+	// Snapshots: days 0 and 3 for each of the 2 players — 4 rows total,
+	// exactly one row per (player, day), values stable across re-settle.
+	var n int
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM room_player_daily WHERE room_id = $1`, room.ID).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 4 {
+		t.Fatalf("snapshot rows = %d, want 4", n)
+	}
+	var hostDay3 int64
+	if err := pool.QueryRow(ctx, `
+		SELECT total_cents FROM room_player_daily
+		WHERE room_id = $1 AND user_id = $2 AND day = 3`,
+		room.ID, room.HostUserID).Scan(&hostDay3); err != nil {
+		t.Fatal(err)
+	}
+	if hostDay3 != InitialCashCents {
+		t.Fatalf("host day-3 snapshot = %d, want %d", hostDay3, InitialCashCents)
+	}
+	var guestDay3 int64
+	if err := pool.QueryRow(ctx, `
+		SELECT total_cents FROM room_player_daily
+		WHERE room_id = $1 AND user_id = $2 AND day = 3`,
+		room.ID, guest.ID).Scan(&guestDay3); err != nil {
+		t.Fatal(err)
+	}
+	// Net of debt: 10M initial + 1M borrowed cash − accrued debt.
+	if want := InitialCashCents + 1_000_000 - debt1; guestDay3 != want {
+		t.Fatalf("guest day-3 snapshot = %d, want %d", guestDay3, want)
+	}
+
+	// The never-borrowed host accrued nothing and has no interest clock.
+	hostDebt, hostThrough, _ := debtOf(t, pool, room.ID, room.HostUserID)
+	if hostDebt != 0 || hostThrough != nil {
+		t.Fatalf("host: debt=%d through=%v, want 0/nil", hostDebt, hostThrough)
+	}
+}
+
+func TestSettleTxExpiresOptionsAndSnapshots(t *testing.T) {
+	pool := TestDB(t, "store")
+	ctx := context.Background()
+	room, guest, t0 := mkRunningRoom(t, pool)
+
+	// A deep-ITM call expiring day 5; the payoff must land via plain
+	// SettleRoom — no options-specific call — and show up in the snapshot.
+	close5 := closeAt(t, pool, room.ID, "S1", 5)
+	strike := math.Round(close5*50) / 100
+	callID := insertOption(t, pool, room.ID, "S1", "call", strike, 5)
+	fill, err := BuyOption(ctx, pool, room, guest.ID, callID, 1, t0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	at5 := t0.Add(5*61*time.Second + time.Second)
+	if _, _, err := SettleRoom(ctx, pool, room, at5); err != nil {
+		t.Fatal(err)
+	}
+	payoffCents := int64(math.Round((close5 - strike) * 100))
+	wantTotal := InitialCashCents - fill.AmountCents + payoffCents
+	var snap int64
+	if err := pool.QueryRow(ctx, `
+		SELECT total_cents FROM room_player_daily
+		WHERE room_id = $1 AND user_id = $2 AND day = 5`,
+		room.ID, guest.ID).Scan(&snap); err != nil {
+		t.Fatal(err)
+	}
+	if snap != wantTotal {
+		t.Fatalf("day-5 snapshot = %d, want %d (cash − premium + payoff)", snap, wantTotal)
+	}
+	if cash := cashOf(t, pool, room.ID, guest.ID); cash != wantTotal {
+		t.Fatalf("cash = %d, want %d", cash, wantTotal)
+	}
+
+	// Idempotent: re-settling keeps cash, snapshot, and expiry rows stable.
+	if _, _, err := SettleRoom(ctx, pool, room, at5); err != nil {
+		t.Fatal(err)
+	}
+	var snap2 int64
+	if err := pool.QueryRow(ctx, `
+		SELECT total_cents FROM room_player_daily
+		WHERE room_id = $1 AND user_id = $2 AND day = 5`,
+		room.ID, guest.ID).Scan(&snap2); err != nil {
+		t.Fatal(err)
+	}
+	if snap2 != wantTotal || cashOf(t, pool, room.ID, guest.ID) != wantTotal {
+		t.Fatalf("re-settle changed state: snap=%d cash=%d", snap2, cashOf(t, pool, room.ID, guest.ID))
+	}
+	var nExpiry int
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*) FROM option_trades WHERE room_id = $1 AND action = 'expiry'`,
+		room.ID).Scan(&nExpiry); err != nil {
+		t.Fatal(err)
+	}
+	if nExpiry != 1 {
+		t.Fatalf("expiry rows = %d, want 1", nExpiry)
+	}
+}

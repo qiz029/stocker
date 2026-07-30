@@ -35,8 +35,8 @@ describe("Lobby", () => {
     );
     // day counter is split across nodes (第 <b>150</b> / 300) — assert the bold number
     await waitFor(() => expect(screen.getByText("150")).toBeInTheDocument());
-    expect(screen.getByText("已结束")).toBeInTheDocument();
-    expect(screen.getByText("等待开局")).toBeInTheDocument();
+    expect(screen.getByText("Ended")).toBeInTheDocument();
+    expect(screen.getByText("Waiting to start")).toBeInTheDocument();
   });
 
   it("joins a room by invite code", async () => {
@@ -57,8 +57,8 @@ describe("Lobby", () => {
         </UserCtxForTest.Provider>
       </MemoryRouter>
     );
-    fireEvent.change(await screen.findByPlaceholderText("输入邀请码"), { target: { value: "ABC" } });
-    fireEvent.click(screen.getByRole("button", { name: "加入" }));
+    fireEvent.change(await screen.findByPlaceholderText("Enter invite code"), { target: { value: "ABC" } });
+    fireEvent.click(screen.getByRole("button", { name: "Join" }));
     await waitFor(() => expect(calls).toContain("POST /api/rooms/join"));
   });
 
@@ -76,11 +76,11 @@ describe("Lobby", () => {
       return { rooms: [] };
     });
     render(<MemoryRouter><UserCtxForTest.Provider value={{ id: 1, username: "me" }}><Lobby /></UserCtxForTest.Provider></MemoryRouter>);
-    fireEvent.click(await screen.findByRole("button", { name: "＋ 创建新房间" }));
+    fireEvent.click(await screen.findByRole("button", { name: "＋ Create new room" }));
     // scenario defaults to the first entry; pick the 2-week duration
     const selects = screen.getAllByRole("combobox");
     fireEvent.change(selects[1], { target: { value: String(Math.round(2 * 604800 / 750)) } });
-    fireEvent.click(screen.getByRole("button", { name: "创建" }));
+    fireEvent.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(bodies).toEqual([
       { scenario_id: "dotcom-2000", day_duration_secs: Math.round(2 * 604800 / 750) }]));
   });

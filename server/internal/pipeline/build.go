@@ -159,8 +159,9 @@ func BuildScenario(id string) (*scenario.Scenario, error) {
 		dayIndex[d.Format("2006-01-02")] = i
 	}
 
-	// 2. Per-instrument aligned, normalized series.
-	closes := map[string][]float64{} // instrument id -> normalized closes
+	// 2. Per-instrument aligned series, level-scaled into a plausible
+	// trading band (see levelScale).
+	closes := map[string][]float64{} // instrument id -> scaled closes
 	baseline := map[string][]scenario.OHLC{}
 	for _, spec := range u.Instruments {
 		var bars []Bar
@@ -183,13 +184,13 @@ func BuildScenario(id string) (*scenario.Scenario, error) {
 				return nil, fmt.Errorf("%s: %w", spec.ID, err)
 			}
 		}
-		norm := 100 / bars[0].Close
+		scale := levelScale(bars[0].Close)
 		series := make([]scenario.OHLC, days)
 		cl := make([]float64, days)
 		for i, b := range bars {
 			series[i] = scenario.OHLC{
-				Open: b.Open * norm, High: b.High * norm,
-				Low: b.Low * norm, Close: b.Close * norm,
+				Open: b.Open * scale, High: b.High * scale,
+				Low: b.Low * scale, Close: b.Close * scale,
 			}
 			cl[i] = series[i].Close
 		}
@@ -307,7 +308,8 @@ func BuildScenario(id string) (*scenario.Scenario, error) {
 		}
 		instruments = append(instruments, scenario.Instrument{
 			ID: spec.ID, Alias: spec.Dossier.Alias, Desc: spec.Dossier.Desc,
-			Beta: beta, IdioScale: scale, Reconstructed: spec.Raw == "",
+			Aliases: spec.Dossier.Aliases,
+			Beta:    beta, IdioScale: scale, Reconstructed: spec.Raw == "",
 		})
 		for f := range beta {
 			factorIDs[f] = true
@@ -357,9 +359,39 @@ func BuildScenario(id string) (*scenario.Scenario, error) {
 
 	return &scenario.Scenario{
 		ID: u.ScenarioID, Days: days, EraHint: u.EraHint,
-		Factors: factors, Instruments: instruments,
+		MarketProxy: u.MarketProxy,
+		Factors:     factors, Instruments: instruments,
 		KeyWindows: windows, Baseline: baseline,
 	}, nil
+}
+
+// levelScale picks the whole-series scale factor for an instrument's
+// baseline so the day-0 close sits at a plausible trading level, replacing
+// the old "every stock opens at exactly 100" normalization:
+//
+//   - raw day-0 close inside [2, 500] → factor 1: keep the real level as-is.
+//   - below 2 (penny stock)           → scale up so the day-0 close lands
+//     in [2, 10): target = 2 + 8*frac.
+//   - above 500 (e.g. a split-less index or Berkshire-style price) → scale
+//     down into [100, 500): target = 100 + 400*frac.
+//
+// frac is the raw close's fractional part (close - floor(close)) — a pure
+// function of the input, so the result is deterministic with no rng.
+// Reconstructed (anchor-based) series pass through the same clamp, keeping
+// whatever level their anchors produce when it is already inside the band.
+// This is a pure level change: every downstream consumer of the baseline
+// (log returns, betas, vol, news thresholds, fidelity gates) is
+// ratio-based and unaffected.
+func levelScale(close float64) float64 {
+	const lo, hi = 2.0, 500.0
+	if close >= lo && close <= hi {
+		return 1
+	}
+	frac := close - math.Floor(close)
+	if close < lo {
+		return (lo + 8*frac) / close
+	}
+	return (100 + 400*frac) / close
 }
 
 func alignToCalendar(bars []Bar, calendar []time.Time) ([]Bar, error) {

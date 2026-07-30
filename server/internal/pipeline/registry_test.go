@@ -124,8 +124,8 @@ func TestAllScenariosShape(t *testing.T) {
 					t.Errorf("%s: instrument %s baseline length %d != Days %d",
 						id, inst.ID, len(base), sc.Days)
 				}
-				if len(base) == 0 || math.Abs(base[0].Close-100) > 1e-9 {
-					t.Errorf("%s: instrument %s not normalized to 100", id, inst.ID)
+				if len(base) == 0 || base[0].Close < 2 || base[0].Close > 500 {
+					t.Errorf("%s: instrument %s day-0 close outside the [2, 500] level band", id, inst.ID)
 				}
 				for f := range inst.Beta {
 					if !declared[f] {
@@ -163,6 +163,42 @@ func TestAllScenariosShape(t *testing.T) {
 						t.Errorf("%s: instrument %s dossier field %s %q leaks a real name",
 							id, instID, field.name, field.val)
 					}
+				}
+			}
+
+			// Candidate aliases for the per-room blind-box name pick: every
+			// dossier carries a non-empty candidate set that contains its
+			// primary Alias, no candidate leaks a real name, and within the
+			// scenario every candidate (primaries included) is pairwise
+			// distinct so a room never shows two identical names.
+			seenNames := map[string]string{}
+			for instID, d := range meta.Dossiers {
+				if len(d.Aliases) == 0 {
+					t.Errorf("%s: instrument %s has no candidate aliases", id, instID)
+					continue
+				}
+				hasPrimary := false
+				for _, a := range d.Aliases {
+					if a == "" {
+						t.Errorf("%s: instrument %s has an empty candidate alias", id, instID)
+						continue
+					}
+					if a == d.Alias {
+						hasPrimary = true
+					}
+					if realNamePattern.MatchString(a) {
+						t.Errorf("%s: instrument %s candidate alias %q leaks a real name",
+							id, instID, a)
+					}
+					if prev, dup := seenNames[a]; dup {
+						t.Errorf("%s: candidate alias %q shared by %s and %s — a room could show two identical names",
+							id, a, prev, instID)
+					}
+					seenNames[a] = instID
+				}
+				if !hasPrimary {
+					t.Errorf("%s: instrument %s primary alias %q missing from Aliases",
+						id, instID, d.Alias)
 				}
 			}
 

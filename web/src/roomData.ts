@@ -1,14 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api, Portfolio, Room, RoomState, Trade } from "./api";
+import { api, OHLC, Portfolio, Room, RoomState, Trade } from "./api";
 import { assetCurve } from "./assetCurve";
 import { usePoll } from "./usePoll";
 import { SimClockState, simClock } from "./simClock";
 
-export type PriceResponse = { days: { open: number; high: number; low: number; close: number }[] };
+export type PriceResponse = { days: OHLC[] };
 
 export function buildSeriesMap(entries: [string, PriceResponse][]): Record<string, number[]> {
   const out: Record<string, number[]> = {};
   for (const [id, res] of entries) out[id] = res.days.map(d => d.close);
+  return out;
+}
+
+export function buildOhlcMap(entries: [string, PriceResponse][]): Record<string, OHLC[]> {
+  const out: Record<string, OHLC[]> = {};
+  for (const [id, res] of entries) out[id] = res.days;
   return out;
 }
 
@@ -21,6 +27,7 @@ export function useRoomData(roomId: string) {
     () => api.get<{ items: Trade[] }>(`/api/rooms/${roomId}/trades`), 30_000, [roomId]);
 
   const [series, setSeries] = useState<Record<string, number[]>>({});
+  const [ohlc, setOhlc] = useState<Record<string, OHLC[]>>({});
   const fetchedDay = useRef(-1);
   const curDay = state?.room.current_day ?? -1;
   const instrumentIds = useMemo(
@@ -32,7 +39,10 @@ export function useRoomData(roomId: string) {
     void Promise.all(
       instrumentIds.split(",").map(async id =>
         [id, await api.get<PriceResponse>(`/api/rooms/${roomId}/prices/${id}`)] as [string, PriceResponse]),
-    ).then(entries => setSeries(buildSeriesMap(entries)));
+    ).then(entries => {
+      setSeries(buildSeriesMap(entries));
+      setOhlc(buildOhlcMap(entries));
+    });
   }, [roomId, curDay, instrumentIds]);
 
   const trades = tradesRes?.items ?? [];
@@ -41,7 +51,7 @@ export function useRoomData(roomId: string) {
     [trades, series, curDay]);
 
   return {
-    state, portfolio, trades, series, curve, error,
+    state, portfolio, trades, series, ohlc, curve, error,
     reload: () => { void reloadState(); void reloadPortfolio(); void reloadTrades(); },
   };
 }

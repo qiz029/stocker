@@ -95,14 +95,71 @@ const systemPromptTmpl = `你是一款股票模拟游戏的新闻引擎。游戏
 // defaultEraHint is used when a scenario's EraHint is empty.
 const defaultEraHint = "架空年代"
 
+// eraHintOf resolves the scenario's era flavor for prompt formatting.
+func eraHintOf(sc *scenario.Scenario) string {
+	if sc.EraHint != "" {
+		return sc.EraHint
+	}
+	return defaultEraHint
+}
+
 // systemPromptFor formats the system prompt once per FillCopy call with the
 // scenario's era flavor.
 func systemPromptFor(sc *scenario.Scenario) string {
-	hint := sc.EraHint
-	if hint == "" {
-		hint = defaultEraHint
+	return fmt.Sprintf(systemPromptTmpl, eraHintOf(sc))
+}
+
+// chat posts one chat-completions request and returns the (code-fence
+// stripped) message content; false on any failure — callers degrade to
+// template copy.
+func (g *Generator) chat(ctx context.Context, sysPrompt, userJSON string) (string, bool) {
+	body := map[string]any{
+		"model": g.cfg.Model,
+		"messages": []map[string]string{
+			{"role": "system", "content": sysPrompt},
+			{"role": "user", "content": userJSON},
+		},
+		"temperature": 0.9,
 	}
-	return fmt.Sprintf(systemPromptTmpl, hint)
+	if g.cfg.DisableThinking {
+		body["thinking"] = map[string]string{"type": "disabled"}
+	}
+	reqBody, err := json.Marshal(body)
+	if err != nil {
+		return "", false
+	}
+	req, err := http.NewRequestWithContext(ctx, "POST",
+		g.cfg.BaseURL+"/chat/completions", bytes.NewReader(reqBody))
+	if err != nil {
+		return "", false
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if g.cfg.APIKey != "" {
+		req.Header.Set("Authorization", "Bearer "+g.cfg.APIKey)
+	}
+	resp, err := g.httpc.Do(req)
+	if err != nil {
+		return "", false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return "", false
+	}
+	var cr struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&cr); err != nil || len(cr.Choices) == 0 {
+		return "", false
+	}
+	content := strings.TrimSpace(cr.Choices[0].Message.Content)
+	content = strings.TrimPrefix(content, "```json")
+	content = strings.TrimPrefix(content, "```")
+	content = strings.TrimSuffix(content, "```")
+	return strings.TrimSpace(content), true
 }
 
 type promptItem struct {
@@ -111,6 +168,9 @@ type promptItem struct {
 	Persona string       `json:"媒体人设"`
 	Role    string       `json:"角色,omitempty"`
 	Tilt    []promptTilt `json:"报道倾向,omitempty"`
+	// Note carries the recap item's template facts (alias/sector names
+	// only, no numbers) so the model expands rather than invents them.
+	Note string `json:"要点,omitempty"`
 }
 
 type promptTilt struct {
@@ -248,9 +308,18 @@ func (g *Generator) fillChunk(ctx context.Context, sysPrompt string, displayName
 		it := promptItem{Idx: i, Persona: mediaPersona[ev.MediaID]}
 		switch ev.Track {
 		case engine.TrackHistorical:
-			it.Kind = "行情解读：当日市场出现剧烈波动，为其撰写现场报道"
-			if ev.Day > 0 && ev.Day < len(dayDir) && dayDir[ev.Day] != "" {
-				it.Kind = fmt.Sprintf("行情解读：当日市场剧烈波动（整体%s），为其撰写现场报道", dayDir[ev.Day])
+			if ev.Recap {
+				// Daily market recap: objective market-wrap persona, and
+				// the template headline carries the facts (biggest
+				// gainer/loser aliases, strongest sector) to expand on.
+				it.Persona = "市场复盘专栏：客观克制的收盘综述，只陈述公开行情"
+				it.Kind = "每日复盘：依据要点扩写客观的市场回顾，不添加观点与预测"
+				it.Note = ev.Headline
+			} else {
+				it.Kind = "行情解读：当日市场出现剧烈波动，为其撰写现场报道"
+				if ev.Day > 0 && ev.Day < len(dayDir) && dayDir[ev.Day] != "" {
+					it.Kind = fmt.Sprintf("行情解读：当日市场剧烈波动（整体%s），为其撰写现场报道", dayDir[ev.Day])
+				}
 			}
 		case engine.TrackNoise:
 			it.Kind = "花边闲谈：与行情无直接关系的市场八卦"
@@ -288,54 +357,12 @@ func (g *Generator) fillChunk(ctx context.Context, sysPrompt string, displayName
 	if err != nil {
 		return 0
 	}
-	body := map[string]any{
-		"model": g.cfg.Model,
-		"messages": []map[string]string{
-			{"role": "system", "content": sysPrompt},
-			{"role": "user", "content": string(userJSON)},
-		},
-		"temperature": 0.9,
-	}
-	if g.cfg.DisableThinking {
-		body["thinking"] = map[string]string{"type": "disabled"}
-	}
-	reqBody, err := json.Marshal(body)
-	if err != nil {
+	content, ok := g.chat(ctx, sysPrompt, string(userJSON))
+	if !ok {
 		return 0
 	}
-	req, err := http.NewRequestWithContext(ctx, "POST",
-		g.cfg.BaseURL+"/chat/completions", bytes.NewReader(reqBody))
-	if err != nil {
-		return 0
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if g.cfg.APIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+g.cfg.APIKey)
-	}
-	resp, err := g.httpc.Do(req)
-	if err != nil {
-		return 0
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return 0
-	}
-	var cr struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&cr); err != nil || len(cr.Choices) == 0 {
-		return 0
-	}
-	content := strings.TrimSpace(cr.Choices[0].Message.Content)
-	content = strings.TrimPrefix(content, "```json")
-	content = strings.TrimPrefix(content, "```")
-	content = strings.TrimSuffix(content, "```")
 	var outs []copyOut
-	if err := json.Unmarshal([]byte(strings.TrimSpace(content)), &outs); err != nil {
+	if err := json.Unmarshal([]byte(content), &outs); err != nil {
 		return 0
 	}
 	valid := map[int]bool{}
@@ -351,6 +378,90 @@ func (g *Generator) fillChunk(ctx context.Context, sysPrompt string, displayName
 		}
 		evs[o.Idx].Headline = h
 		evs[o.Idx].Body = b
+		n++
+	}
+	return n
+}
+
+// forumSystemPromptTmpl's %s is the scenario era hint, same convention as
+// systemPromptTmpl. The forum pass rewrites template drafts into NPC-voice
+// replies; drafts carry the only facts (aliases, sector names) allowed.
+const forumSystemPromptTmpl = `你是一款股票模拟游戏的股民论坛写手。游戏背景是一个%s的虚构平行世界。把每条论坛草稿改写成自然的中文回帖。
+
+铁律：
+1. 股民论坛回帖语气，20-80字，可阴阳怪气。
+2. 禁止真实公司名、真实人名与任何数字。
+3. 保留草稿中提到的化名与板块名，不要新增事实、行情判断或具体标的。
+4. 按每条的 NPC 人设写作，口吻与人设一致。
+5. 输出严格 JSON 数组，元素形如 {"idx":<原样返回>,"body":"20-80字"}，不要任何多余文本或代码围栏。`
+
+type forumPromptItem struct {
+	Idx     int    `json:"idx"`
+	NPC     string `json:"昵称"`
+	Persona string `json:"人设"`
+	Draft   string `json:"草稿"`
+}
+
+type forumCopyOut struct {
+	Idx  int    `json:"idx"`
+	Body string `json:"body"`
+}
+
+// FillForumCopy polishes NPC forum-post bodies in place, chunked like
+// FillCopy with the same concurrency bound and degrade-to-template
+// behavior: any failure leaves the template body untouched.
+func (g *Generator) FillForumCopy(ctx context.Context, sc *scenario.Scenario, posts []engine.ForumPost) {
+	sysPrompt := fmt.Sprintf(forumSystemPromptTmpl, eraHintOf(sc))
+	var chunks [][]int
+	for i := 0; i < len(posts); i += chunkSize {
+		end := i + chunkSize
+		if end > len(posts) {
+			end = len(posts)
+		}
+		chunks = append(chunks, []int{i, end})
+	}
+	sem := make(chan struct{}, g.cfg.Concurrency)
+	done := make(chan int, len(chunks))
+	filled := 0
+	for _, ch := range chunks {
+		sem <- struct{}{}
+		go func(lo, hi int) {
+			defer func() { <-sem }()
+			done <- g.fillForumChunk(ctx, sysPrompt, posts, lo, hi)
+		}(ch[0], ch[1])
+	}
+	for range chunks {
+		filled += <-done
+	}
+	log.Printf("llm: polished %d/%d forum posts", filled, len(posts))
+}
+
+func (g *Generator) fillForumChunk(ctx context.Context, sysPrompt string, posts []engine.ForumPost, lo, hi int) int {
+	items := make([]forumPromptItem, 0, hi-lo)
+	for i := lo; i < hi; i++ {
+		items = append(items, forumPromptItem{
+			Idx: i, NPC: posts[i].NPCName, Persona: posts[i].Persona, Draft: posts[i].Body,
+		})
+	}
+	userJSON, err := json.Marshal(items)
+	if err != nil {
+		return 0
+	}
+	content, ok := g.chat(ctx, sysPrompt, string(userJSON))
+	if !ok {
+		return 0
+	}
+	var outs []forumCopyOut
+	if err := json.Unmarshal([]byte(content), &outs); err != nil {
+		return 0
+	}
+	n := 0
+	for _, o := range outs {
+		b := strings.TrimSpace(o.Body)
+		if o.Idx < lo || o.Idx >= hi || b == "" || len([]rune(b)) > 120 {
+			continue
+		}
+		posts[o.Idx].Body = b
 		n++
 	}
 	return n

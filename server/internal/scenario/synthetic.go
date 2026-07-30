@@ -35,10 +35,11 @@ func Synthetic() *Scenario {
 		{ID: "OLD", Name: "old economy", Kind: KindSector},
 	}
 	sc := &Scenario{
-		ID:         "synthetic-v1",
-		Days:       days,
-		KeyWindows: []KeyWindow{{StartDay: 150, EndDay: 220, Direction: -1}},
-		Baseline:   map[string][]OHLC{},
+		ID:          "synthetic-v1",
+		Days:        days,
+		MarketProxy: "S1",
+		KeyWindows:  []KeyWindow{{StartDay: 150, EndDay: 220, Direction: -1}},
+		Baseline:    map[string][]OHLC{},
 	}
 	// Fixed PCG constant (determinism only requires *some* fixed constant —
 	// this pair was picked for giving every instrument's pinned
@@ -109,8 +110,12 @@ func Synthetic() *Scenario {
 			lo := math.Min(open, cls) * (1 - rng.Float64()*0.01)
 			prices[d] = OHLC{Open: open, High: hi, Low: lo, Close: cls}
 		}
-		// 归一化：起始 Open 精确为 100
-		k := 100 / prices[0].Open
+		// 起始价位：从同一条确定性 rng 流为每只标的抽一个 [$15, $250] 的
+		// 目标首日开盘价（draw 放在日循环之后，不影响上面已生成的价格形
+		// 状），整条序列按 target/prices[0].Open 缩放 —— 纯水平平移，日收益
+		// 不变。替代旧的"全部归一到 100"。
+		target := 15 + rng.Float64()*(250-15)
+		k := target / prices[0].Open
 		for d := range prices {
 			prices[d].Open *= k
 			prices[d].High *= k

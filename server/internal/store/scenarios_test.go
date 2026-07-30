@@ -124,7 +124,7 @@ func TestIdioScaleAndRealNameRoundTrip(t *testing.T) {
 		t.Fatalf("round-trip lost calibration fields: %+v", loaded.Instruments[0])
 	}
 	if err := SetInstrumentDisplay(ctx, pool, sc.ID, map[string]InstrumentDisplay{
-		"S1": {Alias: "郊狼网络", Desc: "d", RealName: "Cisco Systems", Business: "b", Bull: "u", Bear: "r"},
+		"S1": {Alias: "Ridgeline Networks", Desc: "d", RealName: "Cisco Systems", Business: "b", Bull: "u", Bear: "r"},
 	}); err != nil {
 		t.Fatal(err)
 	}

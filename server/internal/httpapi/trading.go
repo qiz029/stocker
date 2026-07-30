@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"math"
 	"net/http"
 	"strconv"
 
@@ -65,7 +66,9 @@ func (s *Server) handlePortfolio(w http.ResponseWriter, r *http.Request) {
 	if room.StartedAt == nil {
 		writeJSON(w, http.StatusOK, map[string]any{
 			"cash_cents": store.InitialCashCents, "total_cents": store.InitialCashCents,
-			"positions": []any{}, "pending": []any{},
+			"debt_cents": 0, "max_debt_cents": store.MaxDebtCents,
+			"interest_rate_annual_bp": 300, "bankrupt": false,
+			"positions": []any{}, "options": []any{}, "pending": []any{},
 		})
 		return
 	}
@@ -79,11 +82,17 @@ func (s *Server) handlePortfolio(w http.ResponseWriter, r *http.Request) {
 		s.storeErr(w, err)
 		return
 	}
+	rate, err := store.CurrentAnnualRate(r.Context(), s.DB, room.ID, curDay)
+	if err != nil {
+		s.storeErr(w, err)
+		return
+	}
 	positions := []map[string]any{}
 	for _, pos := range p.Positions {
 		positions = append(positions, map[string]any{
 			"instrument_id": pos.InstrumentID, "shares": pos.Shares,
 			"close": pos.Close, "value_cents": pos.ValueCents,
+			"avg_cost": pos.AvgCost, "pnl_cents": pos.PnLCents, "pnl_pct": pos.PnLPct,
 		})
 	}
 	pending := []map[string]any{}
@@ -93,9 +102,22 @@ func (s *Server) handlePortfolio(w http.ResponseWriter, r *http.Request) {
 			"amount_cents": o.AmountCents, "shares": o.Shares, "exec_day": o.ExecDay,
 		})
 	}
+	options := []map[string]any{}
+	for _, o := range p.Options {
+		options = append(options, map[string]any{
+			"option_id": o.OptionID, "instrument_id": o.InstrumentID,
+			"kind": o.Kind, "strike": o.Strike, "expiry_day": o.ExpiryDay,
+			"contracts": o.Contracts, "price": o.Price,
+			"value_cents": o.ValueCents, "avg_cost": o.AvgCost,
+			"pnl_cents": o.PnLCents, "pnl_pct": o.PnLPct,
+		})
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"cash_cents": p.CashCents, "total_cents": p.TotalCents,
-		"positions": positions, "pending": pending,
+		"debt_cents": p.DebtCents, "max_debt_cents": store.MaxDebtCents,
+		"interest_rate_annual_bp": int(math.Round(rate * 10000)),
+		"bankrupt":  p.Bankrupt,
+		"positions": positions, "options": options, "pending": pending,
 	})
 }
 

@@ -132,7 +132,7 @@ func TestNewsIsBlindBoxSafe(t *testing.T) {
 		t.Fatalf("news: %d %s", resp.StatusCode, body)
 	}
 	raw := string(body)
-	for _, leak := range []string{`"track"`, `"true_shock"`, `"report_shock"`, `"real_name"`} {
+	for _, leak := range []string{`"track"`, `"true_shock"`, `"report_shock"`, `"real_name"`, `"driven_by_user_id"`} {
 		if strings.Contains(raw, leak) {
 			t.Fatalf("news response leaks %s: %s", leak, raw[:min(400, len(raw))])
 		}
@@ -152,7 +152,37 @@ func TestNewsIsBlindBoxSafe(t *testing.T) {
 		if m["headline"].(string) == "" || m["media_id"].(string) == "" {
 			t.Fatalf("bad news item: %v", m)
 		}
+		// cluster_id is exposed (nullable): it only groups already-published
+		// items; track/shock vectors and the planting user remain forbidden
+		// (checked above). disputed/exposed are public action flags.
+		if _, ok := m["cluster_id"]; !ok {
+			t.Fatalf("news item missing cluster_id: %v", m)
+		}
+		if _, ok := m["disputed"]; !ok {
+			t.Fatalf("news item missing disputed: %v", m)
+		}
+		if _, ok := m["exposed"]; !ok {
+			t.Fatalf("news item missing exposed: %v", m)
+		}
 		maxID = max(maxID, m["id"].(float64))
+	}
+
+	// media_accuracy carries aggregate counts only.
+	acc, ok := news["media_accuracy"].(map[string]any)
+	if !ok {
+		t.Fatalf("media_accuracy missing or wrong shape: %v", news["media_accuracy"])
+	}
+	for media, v := range acc {
+		entry := v.(map[string]any)
+		if len(entry) != 2 {
+			t.Fatalf("media_accuracy[%s] carries extra fields: %v", media, entry)
+		}
+		if _, ok := entry["reports"]; !ok {
+			t.Fatalf("media_accuracy[%s] missing reports: %v", media, entry)
+		}
+		if _, ok := entry["hits"]; !ok {
+			t.Fatalf("media_accuracy[%s] missing hits: %v", media, entry)
+		}
 	}
 
 	// Incremental fetch returns nothing new.
@@ -196,5 +226,62 @@ func TestScenarioListAndIsHost(t *testing.T) {
 	state := guest.mustJSON("GET", fmt.Sprintf("/api/rooms/%d", roomID), nil, http.StatusOK)
 	if state["room"].(map[string]any)["is_host"] != false {
 		t.Fatalf("state is_host wrong for guest")
+	}
+}
+
+func TestForumEndpoint(t *testing.T) {
+	s := newServer(t)
+	seedScenario(t, s)
+	t0 := time.Date(2026, 7, 26, 12, 0, 0, 0, time.UTC)
+	advance := fakeClock(s, t0)
+
+	host := registerClient(t, s, "host")
+	created := host.mustJSON("POST", "/api/rooms",
+		map[string]any{"scenario_id": "synthetic-v1", "day_duration_secs": 60}, http.StatusOK)
+	roomID := int64(created["id"].(float64))
+
+	// Lobby: not started yet.
+	resp, _ := host.do("GET", fmt.Sprintf("/api/rooms/%d/forum?after=0", roomID), nil)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("lobby forum: %d", resp.StatusCode)
+	}
+
+	host.mustJSON("POST", fmt.Sprintf("/api/rooms/%d/start", roomID), nil, http.StatusOK)
+	advance(5*60*time.Second + time.Second) // day 5
+
+	resp, body := host.do("GET", fmt.Sprintf("/api/rooms/%d/forum?after=0", roomID), nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("forum: %d %s", resp.StatusCode, body)
+	}
+	// Blind box: the persona hint never leaves the server.
+	if strings.Contains(string(body), "persona") {
+		t.Fatalf("forum response leaks persona: %s", body[:min(400, len(body))])
+	}
+
+	forum := host.mustJSON("GET", fmt.Sprintf("/api/rooms/%d/forum?after=0", roomID), nil, http.StatusOK)
+	items := forum["items"].([]any)
+	if len(items) == 0 {
+		t.Fatal("no forum posts by day 5")
+	}
+	maxID := 0.0
+	for _, it := range items {
+		m := it.(map[string]any)
+		if len(m) != 4 {
+			t.Fatalf("forum item carries extra fields: %v", m)
+		}
+		if d := m["day"].(float64); d > 5 {
+			t.Fatalf("future forum post leaked: day %v", d)
+		}
+		if m["npc_name"].(string) == "" || m["body"].(string) == "" {
+			t.Fatalf("bad forum item: %v", m)
+		}
+		maxID = max(maxID, m["id"].(float64))
+	}
+
+	// Cursor pagination: incremental fetch returns nothing new.
+	again := host.mustJSON("GET",
+		fmt.Sprintf("/api/rooms/%d/forum?after=%d", roomID, int(maxID)), nil, http.StatusOK)
+	if n := len(again["items"].([]any)); n != 0 {
+		t.Fatalf("incremental fetch returned %d items, want 0", n)
 	}
 }

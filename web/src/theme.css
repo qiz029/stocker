@@ -54,6 +54,17 @@ button { font-family: inherit; cursor: pointer; }
   font-size: 0.75rem; font-weight: 700; color: #04140a;
 }
 
+/* language switcher */
+.lang-switch {
+  display: inline-flex; gap: 2px; padding: 2px;
+  border: 1px solid var(--line); border-radius: 999px;
+}
+.lang-switch button {
+  border: none; background: transparent; color: var(--ink3);
+  font-size: 0.72rem; padding: 3px 10px; border-radius: 999px;
+}
+.lang-switch button.on { background: var(--up-soft); color: var(--up); }
+
 .wrap { max-width: 1120px; margin: 0 auto; padding: 22px 20px; }
 
 /* auth */
@@ -158,6 +169,24 @@ canvas.chart { width: 100%; height: auto; display: block; touch-action: none; }
 }
 .pill.up { color: var(--up); background: var(--up-soft); }
 .pill.down { color: var(--down); background: var(--down-soft); }
+.row .pnl { font-size: 0.74rem; margin-top: 3px; }
+
+/* asset breakdown card */
+.assets .asset-bar {
+  display: flex; height: 10px; border-radius: 6px; overflow: hidden;
+  background: var(--card-2); margin: 8px 0 12px;
+}
+.asset-bar .seg.cash { background: var(--up); }
+.asset-bar .seg.inv { background: #4a5468; }
+.asset-bar .seg.debt { background: var(--down); }
+.bankrupt-banner {
+  border: 1px solid var(--down); border-radius: 12px;
+  background: var(--down-soft); padding: 12px 16px; margin-bottom: 16px;
+  font-size: 0.88rem; font-weight: 600;
+}
+
+/* candle chart OHLC readout */
+.hero .ohlc { color: var(--ink2); font-size: 0.8rem; margin-top: 2px; }
 
 /* right rail */
 .card {
@@ -171,6 +200,12 @@ canvas.chart { width: 100%; height: auto; display: block; touch-action: none; }
 .lb-row .val { text-align: right; font-size: 0.86rem; font-weight: 600; }
 .lb-row .ret { display: block; font-size: 0.74rem; font-weight: 500; }
 .lb-row.me .who { color: var(--up); }
+.lb-row canvas { width: 64px; height: 22px; }
+.lb-row.bankrupt { opacity: 0.45; }
+.lb-badge {
+  color: var(--ink2); background: var(--card-2);
+  border-radius: 6px; padding: 1px 7px; font-size: 0.7rem;
+}
 
 .feed-item { padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 0.84rem; }
 .feed-item:last-child { border-bottom: none; }
@@ -196,6 +231,30 @@ canvas.chart { width: 100%; height: auto; display: block; touch-action: none; }
   font-size: 0.8rem; padding: 8px 0 0;
 }
 .feed-more:hover { color: var(--up); }
+
+/* news story chains (cluster_id groups) */
+.news-chain { border-bottom: 1px solid var(--line); padding: 3px 0; }
+.news-chain .feed-item {
+  border-bottom: none; padding: 7px 0 7px 12px;
+  border-left: 2px solid var(--line); margin-left: 2px;
+}
+.chain-role {
+  font-size: 0.66rem; font-weight: 700; letter-spacing: 0.03em;
+  margin-right: 6px; padding: 1px 6px; border-radius: 999px;
+}
+.chain-role.rumor { color: var(--down); background: var(--down-soft); }
+.chain-role.report { color: var(--up); background: var(--up-soft); }
+.chain-role.followup { color: var(--ink2); background: var(--card-2); }
+.feed-item .acc { color: var(--ink3); }
+
+/* news / forum segmented toggle */
+.seg { display: flex; gap: 4px; background: var(--card-2); border-radius: 8px; padding: 3px; margin-bottom: 10px; }
+.seg button {
+  flex: 1; background: none; border: none; color: var(--ink2);
+  font-size: 0.8rem; padding: 5px 0; border-radius: 6px;
+}
+.seg button.on { background: var(--card); color: var(--ink); font-weight: 600; }
+.forum-npc { color: var(--up); font-weight: 600; }
 
 /* chat */
 .chat-list { max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-bottom: 4px; }
@@ -274,11 +333,104 @@ canvas.chart { width: 100%; height: auto; display: block; touch-action: none; }
 .pending-item .cancel { background: none; border: none; color: var(--ink3); font-size: 0.76rem; }
 .pending-item .cancel:hover { color: var(--down); }
 
+/* loan panel (reuses .trade idioms, but not sticky) */
+.card.loan { position: static; }
+.card.loan h2 { margin-bottom: 10px; }
+.progress.cap { margin: 8px 0 2px; }
+.progress.cap i { background: var(--down); }
+.cap-warn { color: var(--down); }
+
 /* reveal */
 .reveal-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
 .reveal-table th, .reveal-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .reveal-table th { color: var(--ink2); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; }
 .reveal-table .num { text-align: right; }
+
+/* options chain */
+.expiry-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.expiry-pills button {
+  background: var(--card-2); border: 1px solid var(--line); border-radius: 999px;
+  color: var(--ink2); font-size: 0.78rem; padding: 4px 12px;
+}
+.expiry-pills button.on { color: #04140a; background: var(--up); border-color: var(--up); }
+.chain-table { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+.chain-table th {
+  color: var(--ink2); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em;
+  padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: center;
+}
+.chain-table td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: center; }
+.chain-table .strike { color: var(--ink2); font-weight: 600; }
+.chain-px {
+  min-width: 88px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--card-2); color: var(--ink);
+  font-size: 0.84rem; font-weight: 600; padding: 5px 10px;
+  font-variant-numeric: tabular-nums;
+}
+.chain-px:hover:not(:disabled) { border-color: var(--up); }
+.chain-px.call.itm { background: var(--up-soft); color: var(--up); border-color: transparent; }
+.chain-px.put.itm { background: var(--down-soft); color: var(--down); border-color: transparent; }
+.chain-px.on { outline: 2px solid var(--up); }
+.chain-px:disabled { opacity: 0.4; cursor: default; }
+.chain-empty { color: var(--ink3); font-size: 0.84rem; padding: 8px 0; }
+.opt-buy { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 14px; }
+
+/* player actions (hype / intel) */
+.actions .tier-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 10px 0 4px; }
+.tier-row button {
+  background: var(--card-2); border: 1px solid var(--line); border-radius: 10px;
+  color: var(--ink3); font-size: 0.7rem; line-height: 1.5; padding: 8px 6px;
+}
+.tier-row button b { display: block; color: var(--ink2); font-size: 0.8rem; }
+.tier-row button.on { border-color: var(--up); color: var(--ink2); }
+.tier-row button.on b { color: var(--up); }
+.tier-row button:disabled { opacity: 0.4; cursor: default; }
+.caught-banner {
+  border: 1px solid var(--down); border-radius: 12px;
+  background: var(--down-soft); padding: 10px 14px; margin: 12px 0;
+  font-size: 0.88rem; font-weight: 600;
+}
+.caught-banner .cb-sub { font-weight: 400; color: var(--ink2); font-size: 0.78rem; margin-top: 2px; }
+.actions .intel-block { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 14px; }
+.tip-panel {
+  background: var(--card-2); border-radius: 10px;
+  padding: 10px 14px 2px; margin: 8px 0 12px;
+}
+.tip-outlook { font-size: 0.94rem; font-weight: 650; }
+.tip-outlook .tip-strength { color: var(--ink3); font-weight: 400; font-size: 0.78rem; }
+
+/* news investigation + public badges */
+.fi-badge {
+  font-size: 0.66rem; font-weight: 700; letter-spacing: 0.03em;
+  margin-left: 6px; padding: 1px 6px; border-radius: 999px;
+}
+.fi-badge.disputed { color: var(--ink2); background: var(--card-2); }
+.fi-badge.exposed { color: var(--down); background: var(--down-soft); }
+.fi-actions { margin-top: 6px; display: flex; align-items: center; gap: 8px; min-height: 4px; }
+.fi-act {
+  background: none; border: 1px solid var(--line); border-radius: 999px;
+  color: var(--ink3); font-size: 0.72rem; padding: 2px 10px;
+}
+.fi-act:hover { color: var(--up); border-color: var(--up); }
+.fi-verdict { font-size: 0.78rem; font-weight: 600; }
+.fi-verdict small { color: var(--ink3); font-weight: 400; margin-left: 6px; }
+.feed-item.bust { border-left: 3px solid var(--down); padding-left: 10px; margin-left: -10px; }
+
+/* option position rows */
+.opt-row { padding: 11px 2px; border-bottom: 1px solid var(--line); font-size: 0.86rem; }
+.opt-row .op-name { font-weight: 600; font-size: 0.92rem; }
+.opt-row .op-sub { color: var(--ink3); font-size: 0.76rem; margin-top: 2px; }
+.opt-row .op-sub.delta { font-weight: 600; }
+.opt-row .op-sell { display: flex; gap: 6px; margin-top: 8px; }
+.opt-row .op-sell input {
+  width: 76px; background: var(--card-2); border: 1px solid var(--line); border-radius: 8px;
+  color: var(--ink); padding: 5px 8px; font: inherit; font-size: 0.82rem; outline: none;
+  font-variant-numeric: tabular-nums;
+}
+.opt-row .op-sell button {
+  background: var(--down-soft); color: var(--down); border: none; border-radius: 999px;
+  padding: 4px 14px; font-size: 0.78rem; font-weight: 600;
+}
+.opt-row .op-sell button:disabled { opacity: 0.4; cursor: default; }
 
 /* toast */
 .toast {

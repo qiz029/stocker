@@ -22,7 +22,11 @@ type KeyWindow struct{ StartDay, EndDay, Direction int }
 
 type Instrument struct {
 	ID, Alias, Desc string
-	Beta            map[string]float64
+	// Aliases is the candidate set for the per-room display-name pick
+	// (engine.ResolveAlias); empty means "use Alias". Display-only, like
+	// Alias itself — world generation never reads either.
+	Aliases []string
+	Beta    map[string]float64
 	// IdioScale multiplies this instrument's idiosyncratic shock
 	// magnitudes (per-stock calibration, spec §4.2). Zero means 1.0 so
 	// pre-existing data keeps its behavior.
@@ -45,7 +49,12 @@ type Scenario struct {
 	Days int
 	// EraHint feeds the LLM's system prompt with era-appropriate flavor
 	// (see internal/llm); the engine itself ignores it entirely.
-	EraHint     string
+	EraHint string
+	// MarketProxy names the instrument (by ID) whose returns stand in for
+	// "the market" for the loan interest rate (store/loans.go). Empty
+	// falls back to an equal-weighted basket of all instruments. The
+	// engine never reads this.
+	MarketProxy string
 	Factors     []Factor
 	Instruments []Instrument
 	KeyWindows  []KeyWindow

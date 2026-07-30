@@ -87,7 +87,7 @@ func TestRoomStateCarriesProfileAndNewsBody(t *testing.T) {
 	state := host.mustJSON("GET", fmt.Sprintf("/api/rooms/%d", roomID), nil, http.StatusOK)
 	instruments := state["instruments"].([]any)
 	s1 := instruments[0].(map[string]any)
-	if s1["alias"] != "郊狼网络" {
+	if s1["alias"] != "Ridgeline Networks" {
 		t.Fatalf("alias not applied: %v", s1)
 	}
 	profile, ok := s1["profile"].(map[string]any)

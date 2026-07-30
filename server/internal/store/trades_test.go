@@ -49,20 +49,39 @@ func TestSetInstrumentDisplay(t *testing.T) {
 	sc := mkScenario(t, pool)
 
 	err := SetInstrumentDisplay(ctx, pool, sc.ID, map[string]InstrumentDisplay{
-		"S1": {Alias: "郊狼网络", Desc: "网络设备巨头", Business: "路由器", Bull: "卖铲人", Bear: "客户烧钱"},
+		"S1": {Alias: "Ridgeline Networks", Desc: "网络设备巨头",
+			Aliases:  []string{"Ridgeline Networks", "Vantor Networks"},
+			Business: "路由器", Bull: "卖铲人", Bear: "客户烧钱"},
 	})
 	if err != nil {
 		t.Fatalf("SetInstrumentDisplay: %v", err)
 	}
 	var alias, descr string
 	var profile []byte
+	var aliases []string
 	if err := pool.QueryRow(ctx, `
-		SELECT alias, descr, profile FROM instruments WHERE scenario_id=$1 AND id='S1'`,
-		sc.ID).Scan(&alias, &descr, &profile); err != nil {
+		SELECT alias, descr, profile, aliases FROM instruments WHERE scenario_id=$1 AND id='S1'`,
+		sc.ID).Scan(&alias, &descr, &profile, &aliases); err != nil {
 		t.Fatal(err)
 	}
-	if alias != "郊狼网络" || descr != "网络设备巨头" || len(profile) == 0 {
+	if alias != "Ridgeline Networks" || descr != "网络设备巨头" || len(profile) == 0 {
 		t.Fatalf("display not applied: %s %s %s", alias, descr, profile)
+	}
+	if len(aliases) != 2 || aliases[0] != "Ridgeline Networks" || aliases[1] != "Vantor Networks" {
+		t.Fatalf("aliases not applied: %v", aliases)
+	}
+
+	// LoadScenario round-trips the candidate set (CreateRoom resolves the
+	// per-room alias from it) and leaves it nil where none was recorded.
+	loaded, err := LoadScenario(ctx, pool, sc.ID)
+	if err != nil {
+		t.Fatalf("LoadScenario: %v", err)
+	}
+	if len(loaded.Instruments[0].Aliases) != 2 {
+		t.Fatalf("LoadScenario aliases: %+v", loaded.Instruments[0].Aliases)
+	}
+	if loaded.Instruments[1].Aliases != nil {
+		t.Fatalf("aliases should be nil when unset: %+v", loaded.Instruments[1].Aliases)
 	}
 
 	// Unknown instrument id errors instead of silently no-oping.

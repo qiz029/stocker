@@ -192,7 +192,7 @@ func TestSetInstrumentDisplay(t *testing.T) {
 	sc := mkScenario(t, pool)
 
 	err := SetInstrumentDisplay(ctx, pool, sc.ID, map[string]InstrumentDisplay{
-		"S1": {Alias: "郊狼网络", Desc: "网络设备巨头", Business: "路由器", Bull: "卖铲人", Bear: "客户烧钱"},
+		"S1": {Alias: "Ridgeline Networks", Desc: "网络设备巨头", Business: "路由器", Bull: "卖铲人", Bear: "客户烧钱"},
 	})
 	if err != nil {
 		t.Fatalf("SetInstrumentDisplay: %v", err)
@@ -204,7 +204,7 @@ func TestSetInstrumentDisplay(t *testing.T) {
 		sc.ID).Scan(&alias, &descr, &profile); err != nil {
 		t.Fatal(err)
 	}
-	if alias != "郊狼网络" || descr != "网络设备巨头" || len(profile) == 0 {
+	if alias != "Ridgeline Networks" || descr != "网络设备巨头" || len(profile) == 0 {
 		t.Fatalf("display not applied: %s %s %s", alias, descr, profile)
 	}
 
@@ -421,7 +421,7 @@ git commit -m "feat(store): room chat, own-trades query, instrument display prof
   - `GET /api/rooms/{roomID}/trades` → `{"items":[{instrument_id,side,day,price,shares,amount_cents}]}` — settles first; own trades only
   - Room state `instruments[]` now each carry `profile: {business,bull,bear} | null`
   - News items now each carry `body` (empty string until plan 4)
-  - `seedscenario` seeds the 8 approved display profiles (aliases 郊狼网络/门户之星/网购乐/芯速半导/码力软件/老树能源/稳健零售/环宇工业)
+  - `seedscenario` seeds the 8 approved display profiles (aliases Ridgeline Networks/Crossway Media/Summit Commerce Group/Swiftcore Semiconductor/Keystone Software/Oldfield Energy/Holloway Department Stores/Amalgamated Industries)
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -517,7 +517,7 @@ func TestRoomStateCarriesProfileAndNewsBody(t *testing.T) {
 	state := host.mustJSON("GET", fmt.Sprintf("/api/rooms/%d", roomID), nil, http.StatusOK)
 	instruments := state["instruments"].([]any)
 	s1 := instruments[0].(map[string]any)
-	if s1["alias"] != "郊狼网络" {
+	if s1["alias"] != "Ridgeline Networks" {
 		t.Fatalf("alias not applied: %v", s1)
 	}
 	profile, ok := s1["profile"].(map[string]any)
@@ -547,7 +547,7 @@ Add this helper to `server/internal/httpapi/testutil_test.go`:
 ```go
 func storeSetDisplayForTest(s *Server, scenarioID string) error {
 	return store.SetInstrumentDisplay(context.Background(), s.DB, scenarioID, map[string]store.InstrumentDisplay{
-		"S1": {Alias: "郊狼网络", Desc: "网络设备巨头", Business: "路由器", Bull: "卖铲人", Bear: "客户烧钱"},
+		"S1": {Alias: "Ridgeline Networks", Desc: "网络设备巨头", Business: "路由器", Bull: "卖铲人", Bear: "客户烧钱"},
 	})
 }
 ```
@@ -752,35 +752,35 @@ In `cmd/seedscenario/main.go`, after `store.SaveScenario` succeeds, apply the ap
 
 ```go
 	display := map[string]store.InstrumentDisplay{
-		"S1": {Alias: "郊狼网络", Desc: "网络设备巨头，泡沫叙事的旗手",
+		"S1": {Alias: "Ridgeline Networks", Desc: "网络设备巨头，泡沫叙事的旗手",
 			Business: "路由器与交换机占营收七成，其余来自企业网络服务合约。客户遍布电信运营商、门户网站与新兴的宽带服务商——换句话说，它的客户就是整个新经济。",
 			Bull:     "只要还有人往网上搬业务，它的订单就不会停。多头把它类比成淘金潮里卖铲子的人：不管哪家网站赢，铲子都得从它这买。",
 			Bear:     "客户集中在烧钱的互联网公司——如果融资环境收紧，下游资本开支会先于一切崩塌。此外，估值已把未来十年的增长全部计入。"},
-		"S2": {Alias: "门户之星", Desc: "流量入口，人人都从这里上网",
+		"S2": {Alias: "Crossway Media", Desc: "流量入口，人人都从这里上网",
 			Business: "门户页面广告位销售为主，附带邮箱、搜索与社区服务。用户时长是它对广告主报价的全部底气。",
 			Bull:     "互联网人口每季度都在膨胀，而入口只有几个。眼球即货币，它是铸币厂。",
 			Bear:     "广告主大多也是互联网创业公司——泡沫内循环。用户忠诚度存疑：换个主页只需要三秒钟。"},
-		"S3": {Alias: "网购乐", Desc: "烧钱换增长的电商先驱",
+		"S3": {Alias: "Summit Commerce Group", Desc: "烧钱换增长的电商先驱",
 			Business: "线上零售平台，从图书起家扩张到全品类。自建仓储物流，每单都亏钱，但每季度单量都创新高。",
 			Bull:     "零售的未来在线上，先烧钱圈地者赢者通吃。今天的亏损是明天垄断的门票。",
 			Bear:     "现金消耗率惊人，命脉握在资本市场手里。一旦融资窗口关闭，增长故事会在一个季度内变成清算故事。"},
-		"S4": {Alias: "芯速半导", Desc: "为新经济供货的芯片厂",
+		"S4": {Alias: "Swiftcore Semiconductor", Desc: "为新经济供货的芯片厂",
 			Business: "网络处理器与通信芯片设计制造。下游是服务器、路由器与个人电脑厂商。",
 			Bull:     "半导体是数字时代的石油。产能供不应求，涨价函比财报先到。",
 			Bear:     "半导体从来是周期行业——库存周期一旦掉头，'订单排到明年'会变成'砍单砍到明年'。"},
-		"S5": {Alias: "码力软件", Desc: "企业上网潮的军火商",
+		"S5": {Alias: "Keystone Software", Desc: "企业上网潮的军火商",
 			Business: "企业级数据库与电商中间件授权，配套实施顾问服务。签单模式：一次性授权费 + 年度维护费。",
 			Bull:     "'触网'是所有 CEO 的年度关键词，预算无上限。它的销售漏斗就是整个财富五百强名单。",
 			Bear:     "授权收入一次性确认，增长依赖不断找到新客户。当'该上网的都上完了'，增长引擎会突然熄火。"},
-		"S6": {Alias: "老树能源", Desc: "现金流稳健的传统油气",
+		"S6": {Alias: "Oldfield Energy", Desc: "现金流稳健的传统油气",
 			Business: "上游油气开采与管道运输，长期供销合约锁定大部分产量。资本开支保守，分红率常年行业前列。",
 			Bull:     "无论线上线下，人总要开车取暖。市场恐慌时，现金流就是最硬的叙事。",
 			Bear:     "增长天花板肉眼可见，油价下行周期里分红也难保。在狂热年代，它的股价可能长期跑输大盘。"},
-		"S7": {Alias: "稳健零售", Desc: "全国连锁的百货集团",
+		"S7": {Alias: "Holloway Department Stores", Desc: "全国连锁的百货集团",
 			Business: "全国数百家门店的连锁百货，自有品牌占比逐年提升，会员体系贡献一半复购。",
 			Bull:     "电商吵得再凶，九成五的零售额仍发生在线下。它便宜、赚钱、还在回购股票。",
 			Bear:     "同店增速逐年放缓，年轻客群流失。它是电商故事里被指名道姓的'被颠覆者'。"},
-		"S8": {Alias: "环宇工业", Desc: "多元化经营的工业集团",
+		"S8": {Alias: "Amalgamated Industries", Desc: "多元化经营的工业集团",
 			Business: "发电设备、航空部件、医疗器械加一个不小的金融部门。业务横跨周期，东方不亮西方亮。",
 			Bull:     "分散即防御。当单一赛道的故事破灭时，资金会回流到这种什么都做一点的巨轮上。",
 			Bear:     "多元化也意味着哪个业务都不性感，管理层被批'什么都做，什么都不精'。金融部门的杠杆是报表深处的暗礁。"},
@@ -1597,13 +1597,13 @@ describe("format helpers", () => {
     expect(windowed(s, 99)).toEqual([[1, 2, 3, 4, 5], 0]);
   });
   it("prettifies engine factor tokens in headlines", () => {
-    const aliasOf = (id: string) => ({ S1: "郊狼网络", S8: "环宇工业" }[id] ?? id);
+    const aliasOf = (id: string) => ({ S1: "Ridgeline Networks", S8: "Amalgamated Industries" }[id] ?? id);
     expect(prettifyHeadline("消息面变化，S8板块获得提振，市场解读不一", aliasOf))
-      .toBe("消息面变化，环宇工业板块获得提振，市场解读不一");
+      .toBe("消息面变化，Amalgamated Industries板块获得提振，市场解读不一");
     expect(prettifyHeadline("消息面变化，market板块承压，市场解读不一", aliasOf))
       .toBe("消息面变化，大盘承压，市场解读不一");
     expect(prettifyHeadline("tech sector板块波动 IDIO:S1", aliasOf))
-      .toBe("科技板块波动 郊狼网络");
+      .toBe("科技板块波动 Ridgeline Networks");
   });
 });
 ```
@@ -2252,8 +2252,8 @@ const state = {
   room: { id: 1, invite_code: "ABC", scenario_id: "synthetic-v1", days: 300, status: "running",
     day_duration_secs: 60, started_at: "2026-07-26T12:00:00Z", current_day: 2, ended: false },
   instruments: [
-    { id: "S1", alias: "郊狼网络", desc: "网络设备巨头", profile: null },
-    { id: "S6", alias: "老树能源", desc: "传统油气", profile: null },
+    { id: "S1", alias: "Ridgeline Networks", desc: "网络设备巨头", profile: null },
+    { id: "S6", alias: "Oldfield Energy", desc: "传统油气", profile: null },
   ],
   quotes: [
     { instrument_id: "S1", close: 110, prev_close: 100 },
@@ -2294,8 +2294,8 @@ describe("Room page", () => {
       </MemoryRouter>,
     );
     await waitFor(() => expect(screen.getByText("$104,000.00")).toBeInTheDocument());
-    expect(screen.getByText("郊狼网络")).toBeInTheDocument();
-    expect(screen.getByText("老树能源")).toBeInTheDocument();
+    expect(screen.getByText("Ridgeline Networks")).toBeInTheDocument();
+    expect(screen.getByText("Oldfield Energy")).toBeInTheDocument();
     expect(screen.getByText("现金")).toBeInTheDocument();
     // +10.00% appears on both the S1 position pill and the S1 watchlist pill
     expect(screen.getAllByText("+10.00%").length).toBeGreaterThan(0);
@@ -2628,7 +2628,7 @@ import type { RoomState } from "../api";
 const state: RoomState = {
   room: { id: 1, invite_code: "A", scenario_id: "s", days: 300, status: "running",
     day_duration_secs: 60, started_at: "2026-07-26T12:00:00Z", current_day: 5, ended: false },
-  instruments: [{ id: "S1", alias: "郊狼网络", desc: "", profile: null }],
+  instruments: [{ id: "S1", alias: "Ridgeline Networks", desc: "", profile: null }],
   quotes: [],
   leaderboard: [
     { username: "me", total_cents: 12_000_000, return_pct: 0.2, late_join: false },
@@ -2649,7 +2649,7 @@ describe("RightRail", () => {
         { id: 1, day: 5, media_id: "wire", headline: "消息面变化，S1板块承压，市场解读不一", body: "正文内容。" }] };
       return new Response(JSON.stringify(body), { status: 200 });
     });
-    render(<UserProviderForTest username="me"><RightRail roomId="1" state={state} aliasOf={() => "郊狼网络"} /></UserProviderForTest>);
+    render(<UserProviderForTest username="me"><RightRail roomId="1" state={state} aliasOf={() => "Ridgeline Networks"} /></UserProviderForTest>);
 
     // leaderboard: own row highlighted, late-join marked
     expect(await screen.findByText("me")).toBeInTheDocument();
@@ -2658,11 +2658,11 @@ describe("RightRail", () => {
     expect(screen.getByText("+20.00%")).toBeInTheDocument();
 
     // whale
-    expect(await screen.findByText(/大额买入 郊狼网络/)).toBeInTheDocument();
+    expect(await screen.findByText(/大额买入 Ridgeline Networks/)).toBeInTheDocument();
 
     // news headline prettified + body expands on click (jsdom loads no CSS,
     // so assert the state class rather than computed visibility)
-    const headline = await screen.findByText(/郊狼网络板块承压/);
+    const headline = await screen.findByText(/Ridgeline Networks板块承压/);
     const item = headline.closest(".feed-item")!;
     expect(item).not.toHaveClass("open");
     fireEvent.click(headline);
@@ -2965,7 +2965,7 @@ import Stock from "./Stock";
 const state = {
   room: { id: 1, invite_code: "A", scenario_id: "s", days: 300, status: "running",
     day_duration_secs: 60, started_at: "2026-07-26T12:00:00Z", current_day: 2, ended: false },
-  instruments: [{ id: "S1", alias: "郊狼网络", desc: "网络设备巨头",
+  instruments: [{ id: "S1", alias: "Ridgeline Networks", desc: "网络设备巨头",
     profile: { business: "路由器业务", bull: "卖铲人逻辑", bear: "客户都在烧钱" } }],
   quotes: [{ instrument_id: "S1", close: 110, prev_close: 105 }],
   leaderboard: [],
@@ -2994,7 +2994,7 @@ describe("Stock page", () => {
         </UserCtxForTest.Provider>
       </MemoryRouter>,
     );
-    await waitFor(() => expect(screen.getByText(/郊狼网络/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Ridgeline Networks/)).toBeInTheDocument());
     // $110.00 appears in the hero AND the 今日收盘 stat; +10.00% in the hero
     // delta AND 开局至今 — use getAllByText for both.
     expect(screen.getAllByText("$110.00").length).toBeGreaterThan(0);
@@ -3265,8 +3265,8 @@ afterEach(() => vi.restoreAllMocks());
 
 const reveal = {
   instruments: [
-    { id: "S1", alias: "郊狼网络", real_name: "Cisco Systems" },
-    { id: "S6", alias: "老树能源", real_name: "" },
+    { id: "S1", alias: "Ridgeline Networks", real_name: "Cisco Systems" },
+    { id: "S6", alias: "Oldfield Energy", real_name: "" },
   ],
   trades: [
     { username: "amy", instrument_id: "S1", side: "buy", day: 20, price: 180.5, shares: 221.6, amount_cents: 4_000_000 },
@@ -3290,7 +3290,7 @@ describe("Reveal page", () => {
   it("shows identities, trades and final leaderboard", async () => {
     renderAt(() => new Response(JSON.stringify(reveal), { status: 200 }));
     await waitFor(() => expect(screen.getByText("Cisco Systems")).toBeInTheDocument());
-    expect(screen.getAllByText("郊狼网络").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Ridgeline Networks").length).toBeGreaterThan(0);
     expect(screen.getByText("+34.20%")).toBeInTheDocument();
     expect(screen.getByText("amy").closest(".lb-row")).toBeTruthy();
     expect(screen.getByText("$40,000.00")).toBeInTheDocument();

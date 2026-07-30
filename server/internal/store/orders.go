@@ -57,6 +57,16 @@ func PlaceOrder(ctx context.Context, db *pgxpool.Pool, room *Room, userID int64,
 		if err := SettleTx(ctx, tx, room, curDay, false); err != nil {
 			return err
 		}
+		var bankrupt bool
+		if err := tx.QueryRow(ctx, `
+			SELECT bankrupt_day IS NOT NULL FROM room_players
+			WHERE room_id = $1 AND user_id = $2`,
+			room.ID, userID).Scan(&bankrupt); err != nil {
+			return err
+		}
+		if bankrupt {
+			return ErrPlayerBankrupt
+		}
 		var one int
 		err := tx.QueryRow(ctx, `
 			SELECT 1 FROM room_prices

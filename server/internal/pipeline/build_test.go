@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	"math"
 	"reflect"
 	"strings"
 	"testing"
@@ -30,8 +29,8 @@ func TestBuildScenarioShape(t *testing.T) {
 		if len(base) != sc.Days {
 			t.Fatalf("%s: baseline length %d", inst.ID, len(base))
 		}
-		if math.Abs(base[0].Close-100) > 1e-9 {
-			t.Fatalf("%s: not normalized, day0 close %v", inst.ID, base[0].Close)
+		if base[0].Close < 2 || base[0].Close > 500 {
+			t.Fatalf("%s: day0 close %v outside the [2, 500] level band", inst.ID, base[0].Close)
 		}
 		if inst.Beta["IDIO:"+inst.ID] != 1 {
 			t.Fatalf("%s: idio beta missing", inst.ID)

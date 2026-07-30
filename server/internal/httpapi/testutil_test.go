@@ -84,6 +84,6 @@ func registerClient(t *testing.T, s *Server, username string) *client {
 
 func storeSetDisplayForTest(s *Server, scenarioID string) error {
 	return store.SetInstrumentDisplay(context.Background(), s.DB, scenarioID, map[string]store.InstrumentDisplay{
-		"S1": {Alias: "郊狼网络", Desc: "网络设备巨头", Business: "路由器", Bull: "卖铲人", Bear: "客户烧钱"},
+		"S1": {Alias: "Ridgeline Networks", Desc: "网络设备巨头", Business: "路由器", Bull: "卖铲人", Bear: "客户烧钱"},
 	})
 }

@@ -1,9 +1,11 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { api, ApiError, ChatMessage } from "../api";
+import { useT } from "../i18n";
 import { useUser } from "../App";
 
 export default function Chat({ roomId }: { roomId: string }) {
   const user = useUser();
+  const { t } = useT();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -42,34 +44,34 @@ export default function Chat({ roomId }: { roomId: string }) {
 
   async function send(e: FormEvent) {
     e.preventDefault();
-    const t = text.trim();
-    if (!t) return;
+    const body = text.trim();
+    if (!body) return;
     setErr(null);
     try {
-      await api.post(`/api/rooms/${roomId}/chat`, { text: t });
+      await api.post(`/api/rooms/${roomId}/chat`, { text: body });
       setText("");
       await fetchNew();
     } catch (error) {
-      setErr(error instanceof ApiError ? error.message : "发送失败");
+      setErr(error instanceof ApiError ? error.message : t("chat.sendFailed"));
     }
   }
 
   return (
     <div className="card">
-      <h2>聊天室</h2>
+      <h2>{t("chat.title")}</h2>
       <div className="chat-list" ref={listRef}>
         {messages.map(m => (
           <div key={m.id} className={`chat-msg ${m.username === user.username ? "me" : ""}`}>
-            <div className="cm-meta"><b>{m.username}</b> · <span className="num">第 {m.day} 日</span></div>
+            <div className="cm-meta"><b>{m.username}</b> · <span className="num">{t("common.day", { day: m.day })}</span></div>
             <span className="cm-bubble">{m.text}</span>
           </div>
         ))}
       </div>
       {err && <p className="form-error">{err}</p>}
       <form className="chat-input" onSubmit={send}>
-        <input placeholder="说点什么…" value={text} maxLength={500}
+        <input placeholder={t("chat.placeholder")} value={text} maxLength={500}
           onChange={e => setText(e.target.value)} />
-        <button type="submit">发送</button>
+        <button type="submit">{t("chat.send")}</button>
       </form>
     </div>
   );

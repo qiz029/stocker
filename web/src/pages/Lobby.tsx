@@ -1,21 +1,23 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, ApiError, Room, ScenarioInfo } from "../api";
+import { LangSwitch, TFunc, useT } from "../i18n";
 import { usePoll } from "../usePoll";
 import { useToast } from "../Toast";
 import { useUser } from "../App";
 
-function durationOptions(days: number): [string, number][] {
+function durationOptions(days: number, t: TFunc): [string, number][] {
   const opts: [string, number][] = [1, 2, 4].map(weeks => {
     const secs = Math.max(60, Math.round((weeks * 604800) / days));
-    return [`${weeks} 周局（约 ${Math.max(1, Math.round(secs / 60))} 分钟/交易日）`, secs];
+    return [t("lobby.durationWeeks", { weeks, mins: Math.max(1, Math.round(secs / 60)) }), secs];
   });
-  opts.push(["测试局（1 分钟/交易日）", 60]);
+  opts.push([t("lobby.durationTest"), 60]);
   return opts;
 }
 
 export default function Lobby() {
   const user = useUser();
+  const { t } = useT();
   const navigate = useNavigate();
   const { toast, node } = useToast();
   const { data, reload } = usePoll(() => api.get<{ rooms: Room[] }>("/api/rooms"), 30_000, []);
@@ -43,7 +45,7 @@ export default function Lobby() {
       const room = await api.post<Room>("/api/rooms/join", { invite_code: invite.trim() });
       navigate(`/rooms/${room.id}`);
     } catch (err) {
-      toast(err instanceof ApiError ? err.message : "加入失败");
+      toast(err instanceof ApiError ? err.message : t("lobby.joinFailed"));
     }
   }
 
@@ -51,24 +53,24 @@ export default function Lobby() {
     setBusy(true);
     try {
       const currentScenario = scenarios.find(sc => sc.id === scenarioID);
-      const finalDuration = duration || durationOptions(currentScenario?.days ?? 300)[1]![1];
+      const finalDuration = duration || durationOptions(currentScenario?.days ?? 300, t)[1]![1];
       const room = await api.post<Room>("/api/rooms", {
         scenario_id: scenarioID, day_duration_secs: finalDuration,
       });
-      toast("平行世界生成完毕");
+      toast(t("lobby.created"));
       void reload();
       navigate(`/rooms/${room.id}`);
     } catch (err) {
-      toast(err instanceof ApiError ? err.message : "创建失败");
+      toast(err instanceof ApiError ? err.message : t("lobby.createFailed"));
     } finally {
       setBusy(false);
     }
   }
 
   function roomStatus(r: Room): { tag: string; cls: string } {
-    if (r.status === "lobby") return { tag: "等待开局", cls: "done" };
-    if (r.ended) return { tag: "已结束", cls: "done" };
-    return { tag: "进行中", cls: "live" };
+    if (r.status === "lobby") return { tag: t("status.waiting"), cls: "done" };
+    if (r.ended) return { tag: t("status.ended"), cls: "done" };
+    return { tag: t("status.running"), cls: "live" };
   }
 
   return (
@@ -76,23 +78,24 @@ export default function Lobby() {
       <div className="topbar" style={{ margin: "-22px -20px 22px" }}>
         <div className="brand"><em>●</em> Stocker</div>
         <div className="spacer" />
+        <LangSwitch />
         <div className="avatar">{user.username.slice(0, 2)}</div>
       </div>
-      <h1>我的房间</h1>
-      <p className="sub">和朋友回到过去，重新炒一次那段历史。</p>
+      <h1>{t("lobby.title")}</h1>
+      <p className="sub">{t("lobby.sub")}</p>
 
       {(data?.rooms ?? []).map(r => {
         const st = roomStatus(r);
         return (
           <div key={r.id} className="room-card" onClick={() => navigate(`/rooms/${r.id}`)}>
             <div className="rc-top">
-              <h3>神秘年代 #{r.id}</h3>
+              <h3>{t("era.name")} #{r.id}</h3>
               <span className={`tag ${st.cls}`}>{st.tag}</span>
             </div>
             <div className="rc-meta">
               {r.status === "running" && r.current_day !== undefined
-                ? <>第 <b className="num">{r.current_day}</b> / {r.days} 个交易日</>
-                : <>邀请码 <b className="num">{r.invite_code}</b> · 每交易日 {Math.round(r.day_duration_secs / 60)} 分钟</>}
+                ? <>{t("lobby.dayA")} <b className="num">{r.current_day}</b> {t("lobby.dayB", { days: r.days })}</>
+                : <>{t("lobby.inviteA")} <b className="num">{r.invite_code}</b> {t("lobby.inviteB", { mins: Math.round(r.day_duration_secs / 60) })}</>}
             </div>
             {r.status === "running" && r.current_day !== undefined && (
               <div className="progress"><i style={{ width: `${(r.current_day / r.days) * 100}%` }} /></div>
@@ -102,26 +105,26 @@ export default function Lobby() {
       })}
 
       <form className="lobby-form" onSubmit={join}>
-        <input placeholder="输入邀请码" value={invite} onChange={e => setInvite(e.target.value)} />
-        <button className="submit" style={{ width: "auto", padding: "10px 22px" }} disabled={!invite.trim()}>加入</button>
+        <input placeholder={t("lobby.joinPlaceholder")} value={invite} onChange={e => setInvite(e.target.value)} />
+        <button className="submit" style={{ width: "auto", padding: "10px 22px" }} disabled={!invite.trim()}>{t("lobby.join")}</button>
       </form>
 
       {showCreate ? (
         <div className="lobby-form">
           <select value={scenarioID} onChange={e => { setScenarioID(e.target.value); setDuration(0); }}>
-            {scenarios.map(sc => <option key={sc.id} value={sc.id}>{sc.name}（{sc.days} 交易日）</option>)}
+            {scenarios.map(sc => <option key={sc.id} value={sc.id}>{sc.name}{t("lobby.scenarioDays", { days: sc.days })}</option>)}
           </select>
-          <select value={duration || durationOptions(scenarios.find(sc => sc.id === scenarioID)?.days ?? 300)[1]![1]}
+          <select value={duration || durationOptions(scenarios.find(sc => sc.id === scenarioID)?.days ?? 300, t)[1]![1]}
             onChange={e => setDuration(Number(e.target.value))}>
-            {durationOptions(scenarios.find(sc => sc.id === scenarioID)?.days ?? 300).map(([label, secs]) => (
+            {durationOptions(scenarios.find(sc => sc.id === scenarioID)?.days ?? 300, t).map(([label, secs]) => (
               <option key={secs} value={secs}>{label}</option>
             ))}
           </select>
           <button className="submit" style={{ width: "auto", padding: "10px 22px" }}
-            onClick={create} disabled={busy || !scenarioID}>{busy ? "生成平行世界…" : "创建"}</button>
+            onClick={create} disabled={busy || !scenarioID}>{busy ? t("lobby.creating") : t("lobby.create")}</button>
         </div>
       ) : (
-        <button className="ghost-btn" onClick={() => setShowCreate(true)}>＋ 创建新房间</button>
+        <button className="ghost-btn" onClick={() => setShowCreate(true)}>{t("lobby.newRoom")}</button>
       )}
       {node}
     </div>
