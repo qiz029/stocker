@@ -49,7 +49,10 @@ type NewsEvent struct {
 	ReportShock map[string]float64
 	Headline    string
 	Body        string // LLM copy (plan 4); empty on template fallback
-	ClusterID   int    // 0 = standalone; shared by 传闻/主事件/追踪 triplets
+	// English copies (template or LLM); empty falls back to the Chinese field.
+	HeadlineEn string
+	BodyEn     string
+	ClusterID  int // 0 = standalone; shared by 传闻/主事件/追踪 triplets
 	// Recap marks the daily market-recap item (historical track, zero
 	// shock): the LLM copy pipeline gives it the objective market-wrap
 	// persona instead of the on-scene report persona. Not persisted.

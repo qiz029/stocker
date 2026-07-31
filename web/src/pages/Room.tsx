@@ -1,7 +1,7 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiError } from "../api";
 import { fmtCents, fmt$, fmtPct, fmtSignedCents } from "../format";
-import { LangSwitch, useT } from "../i18n";
+import { LangSwitch, pickL, useT } from "../i18n";
 import { useRoomData, useSimClock } from "../roomData";
 import { dayLabel } from "../simClock";
 import { useToast } from "../Toast";
@@ -168,7 +168,7 @@ export default function Room() {
                   const s = series[inst.id] ?? [];
                   return (
                     <InstrumentRow key={inst.id}
-                      name={inst.alias} sub={inst.desc}
+                      name={inst.alias} sub={pickL(lang, inst.desc, inst.desc_en)}
                       price={q ? fmt$(q.close) : "—"}
                       pill={q ? fmtPct(q.close / q.prev_close - 1) : ""}
                       pillUp={q ? q.close >= q.prev_close : true}

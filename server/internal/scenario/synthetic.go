@@ -30,9 +30,9 @@ import (
 func Synthetic() *Scenario {
 	const days = 300
 	factors := []Factor{
-		{ID: "MKT", Name: "market", Kind: KindMarket},
-		{ID: "TECH", Name: "tech sector", Kind: KindSector},
-		{ID: "OLD", Name: "old economy", Kind: KindSector},
+		{ID: "MKT", Name: "market", NameEn: "the market", Kind: KindMarket},
+		{ID: "TECH", Name: "tech sector", NameEn: "tech sector", Kind: KindSector},
+		{ID: "OLD", Name: "old economy", NameEn: "old economy", Kind: KindSector},
 	}
 	sc := &Scenario{
 		ID:          "synthetic-v1",
@@ -67,7 +67,7 @@ func Synthetic() *Scenario {
 			beta["OLD"] = 0.8
 		}
 		sc.Instruments = append(sc.Instruments, Instrument{
-			ID: id, Alias: "Syn " + id, Desc: "synthetic", Beta: beta,
+			ID: id, Alias: "Syn " + id, Desc: "synthetic", DescEn: "synthetic", Beta: beta,
 			IdioScale: 1,
 		})
 		prices := make([]OHLC, days)

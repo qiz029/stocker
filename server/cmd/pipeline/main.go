@@ -282,7 +282,7 @@ func importScenarios(args []string) {
 		if err := store.SaveScenario(ctx, pool, sc); err != nil {
 			log.Fatalf("save %s: %v", id, err)
 		}
-		if err := store.SetScenarioMeta(ctx, pool, sc.ID, meta.Name, meta.RealPeriod); err != nil {
+		if err := store.SetScenarioMeta(ctx, pool, sc.ID, meta.Name, meta.NameEn, meta.RealPeriod); err != nil {
 			log.Fatalf("meta %s: %v", id, err)
 		}
 		display := map[string]store.InstrumentDisplay{}
@@ -290,6 +290,7 @@ func importScenarios(args []string) {
 			display[iid] = store.InstrumentDisplay{
 				Alias: d.Alias, Desc: d.Desc, RealName: d.RealName, Aliases: d.Aliases,
 				Business: d.Business, Bull: d.Bull, Bear: d.Bear,
+				DescEn: d.DescEn, BusinessEn: d.BusinessEn, BullEn: d.BullEn, BearEn: d.BearEn,
 			}
 		}
 		if err := store.SetInstrumentDisplay(ctx, pool, sc.ID, display); err != nil {

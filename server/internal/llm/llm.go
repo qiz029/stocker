@@ -1,7 +1,8 @@
-// Package llm batch-generates news copy at room creation through any
-// OpenAI-compatible chat-completions endpoint (DeepSeek, OpenAI, local
-// proxies). It is the game's only external dependency; every failure mode
-// degrades to the engine's template copy, never to a failed room.
+// Package llm batch-generates bilingual (Chinese + English) news copy at
+// room creation through any OpenAI-compatible chat-completions endpoint
+// (DeepSeek, OpenAI, local proxies). It is the game's only external
+// dependency; every failure mode degrades to the engine's template copy,
+// never to a failed room.
 package llm
 
 import (
@@ -82,7 +83,7 @@ var mediaPersona = map[string]string{
 // systemPromptTmpl's %s is filled with the scenario's EraHint (see
 // systemPromptFor), falling back to a neutral "架空年代" when the scenario
 // doesn't set one (e.g. the synthetic test scenario).
-const systemPromptTmpl = `你是一款股票模拟游戏的新闻引擎。游戏背景是一个%s的虚构平行世界。为给定的新闻条目撰写中文标题和正文。
+const systemPromptTmpl = `你是一款股票模拟游戏的新闻引擎。游戏背景是一个%s的虚构平行世界。为给定的新闻条目同时撰写中文与英文的标题和正文。
 
 铁律：
 1. 只使用条目中给出的化名与板块名，绝不出现任何真实公司名、真实人名、具体年份或日期。
@@ -90,7 +91,9 @@ const systemPromptTmpl = `你是一款股票模拟游戏的新闻引擎。游戏
 3. 措辞含糊、多信源、对冲："据传""接近人士""另有分析师认为"。禁止"应声大涨/大跌"式的看图说话。
 4. 条目给出的只是"报道倾向"（利好/利空 + 强弱），不是事实；标题份量与倾向强弱可以错配。
 5. 角色为"传闻"的条目要留悬念；"追踪"条目要呼应同组事件并给出多方复盘。
-6. 输出严格 JSON 数组，元素形如 {"idx":<原样返回>,"headline":"≤40字","body":"80-160字"}，不要任何多余文本或代码围栏。`
+6. 输出严格 JSON 数组，元素形如 {"idx":<原样返回>,"headline":"≤40字","body":"80-160字","headline_en":"English, ≤120 chars","body_en":"English, 160-320 chars"}，不要任何多余文本或代码围栏。
+
+英文写作指引：headline_en 与 body_en 不是中文的逐字翻译，而是同一事实在同一媒体人设下的自然英文写法——通讯社快讯对应 terse wire copy，财经大报对应 measured broadsheet analysis，财经电视对应 punchy broadcast patter，市场小报对应 sensational tabloid headlines，股民论坛对应 slangy forum chatter。英文部分同样遵守盲盒纪律：只用化名与板块名，不出现真实公司名、真实人名、具体年份或数字。`
 
 // defaultEraHint is used when a scenario's EraHint is empty.
 const defaultEraHint = "架空年代"
@@ -180,9 +183,11 @@ type promptTilt struct {
 }
 
 type copyOut struct {
-	Idx      int    `json:"idx"`
-	Headline string `json:"headline"`
-	Body     string `json:"body"`
+	Idx        int    `json:"idx"`
+	Headline   string `json:"headline"`
+	Body       string `json:"body"`
+	HeadlineEn string `json:"headline_en"`
+	BodyEn     string `json:"body_en"`
 }
 
 // FillCopy generates copy for all events, chunked with cluster members kept
@@ -301,6 +306,12 @@ func dayDirections(sc *scenario.Scenario) []string {
 	return dirs
 }
 
+// fillChunk generates copy for one chunk of events in place. Returns the
+// number of chunk entries that got at least one field updated: the Chinese
+// pair (headline/body) and the English pair (headline_en/body_en) are each
+// validated and written back independently, so an entry counts when either
+// language lands and the other may stay empty for the engine's template
+// fallback.
 func (g *Generator) fillChunk(ctx context.Context, sysPrompt string, displayName map[string]string, evs []engine.NewsEvent, idxs []int, dayDir []string) int {
 	items := make([]promptItem, 0, len(idxs))
 	for _, i := range idxs {
@@ -371,14 +382,27 @@ func (g *Generator) fillChunk(ctx context.Context, sysPrompt string, displayName
 	}
 	n := 0
 	for _, o := range outs {
-		h := strings.TrimSpace(o.Headline)
-		b := strings.TrimSpace(o.Body)
-		if !valid[o.Idx] || h == "" || b == "" || len([]rune(h)) > 60 || len([]rune(b)) > 400 {
+		if !valid[o.Idx] {
 			continue
 		}
-		evs[o.Idx].Headline = h
-		evs[o.Idx].Body = b
-		n++
+		touched := false
+		h := strings.TrimSpace(o.Headline)
+		b := strings.TrimSpace(o.Body)
+		if h != "" && b != "" && len([]rune(h)) <= 60 && len([]rune(b)) <= 400 {
+			evs[o.Idx].Headline = h
+			evs[o.Idx].Body = b
+			touched = true
+		}
+		he := strings.TrimSpace(o.HeadlineEn)
+		be := strings.TrimSpace(o.BodyEn)
+		if he != "" && be != "" && len([]rune(he)) <= 120 && len([]rune(be)) <= 600 {
+			evs[o.Idx].HeadlineEn = he
+			evs[o.Idx].BodyEn = be
+			touched = true
+		}
+		if touched {
+			n++
+		}
 	}
 	return n
 }
@@ -386,14 +410,16 @@ func (g *Generator) fillChunk(ctx context.Context, sysPrompt string, displayName
 // forumSystemPromptTmpl's %s is the scenario era hint, same convention as
 // systemPromptTmpl. The forum pass rewrites template drafts into NPC-voice
 // replies; drafts carry the only facts (aliases, sector names) allowed.
-const forumSystemPromptTmpl = `你是一款股票模拟游戏的股民论坛写手。游戏背景是一个%s的虚构平行世界。把每条论坛草稿改写成自然的中文回帖。
+const forumSystemPromptTmpl = `你是一款股票模拟游戏的股民论坛写手。游戏背景是一个%s的虚构平行世界。把每条论坛草稿改写成自然的中文与英文回帖。
 
 铁律：
 1. 股民论坛回帖语气，20-80字，可阴阳怪气。
 2. 禁止真实公司名、真实人名与任何数字。
 3. 保留草稿中提到的化名与板块名，不要新增事实、行情判断或具体标的。
 4. 按每条的 NPC 人设写作，口吻与人设一致。
-5. 输出严格 JSON 数组，元素形如 {"idx":<原样返回>,"body":"20-80字"}，不要任何多余文本或代码围栏。`
+5. 输出严格 JSON 数组，元素形如 {"idx":<原样返回>,"body":"20-80字","body_en":"English, natural forum voice"}，不要任何多余文本或代码围栏。
+
+英文写作指引：body_en 不是中文的逐字翻译，而是同一意思在自然英文论坛腔下的写法（trading-forum slang、sarcasm 均可），同样禁止真实公司名、真实人名与任何数字。`
 
 type forumPromptItem struct {
 	Idx     int    `json:"idx"`
@@ -403,13 +429,15 @@ type forumPromptItem struct {
 }
 
 type forumCopyOut struct {
-	Idx  int    `json:"idx"`
-	Body string `json:"body"`
+	Idx    int    `json:"idx"`
+	Body   string `json:"body"`
+	BodyEn string `json:"body_en"`
 }
 
-// FillForumCopy polishes NPC forum-post bodies in place, chunked like
-// FillCopy with the same concurrency bound and degrade-to-template
-// behavior: any failure leaves the template body untouched.
+// FillForumCopy polishes NPC forum-post bodies (Chinese and English) in
+// place, chunked like FillCopy with the same concurrency bound and
+// degrade-to-template behavior: any failure leaves the template body
+// untouched.
 func (g *Generator) FillForumCopy(ctx context.Context, sc *scenario.Scenario, posts []engine.ForumPost) {
 	sysPrompt := fmt.Sprintf(forumSystemPromptTmpl, eraHintOf(sc))
 	var chunks [][]int
@@ -436,6 +464,9 @@ func (g *Generator) FillForumCopy(ctx context.Context, sc *scenario.Scenario, po
 	log.Printf("llm: polished %d/%d forum posts", filled, len(posts))
 }
 
+// fillForumChunk polishes posts[lo:hi] in place; like fillChunk it returns
+// the number of posts that got at least one field updated (Chinese body and
+// English body validated and written back independently).
 func (g *Generator) fillForumChunk(ctx context.Context, sysPrompt string, posts []engine.ForumPost, lo, hi int) int {
 	items := make([]forumPromptItem, 0, hi-lo)
 	for i := lo; i < hi; i++ {
@@ -457,12 +488,23 @@ func (g *Generator) fillForumChunk(ctx context.Context, sysPrompt string, posts 
 	}
 	n := 0
 	for _, o := range outs {
-		b := strings.TrimSpace(o.Body)
-		if o.Idx < lo || o.Idx >= hi || b == "" || len([]rune(b)) > 120 {
+		if o.Idx < lo || o.Idx >= hi {
 			continue
 		}
-		posts[o.Idx].Body = b
-		n++
+		touched := false
+		b := strings.TrimSpace(o.Body)
+		if b != "" && len([]rune(b)) <= 120 {
+			posts[o.Idx].Body = b
+			touched = true
+		}
+		be := strings.TrimSpace(o.BodyEn)
+		if be != "" && len([]rune(be)) <= 300 {
+			posts[o.Idx].BodyEn = be
+			touched = true
+		}
+		if touched {
+			n++
+		}
 	}
 	return n
 }

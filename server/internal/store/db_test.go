@@ -31,12 +31,12 @@ func TestMigrateCreatesSchemaAndIsIdempotent(t *testing.T) {
 		}
 	}
 
-	// Exactly ten migrations recorded, exactly once.
+	// Exactly eleven migrations recorded, exactly once.
 	var applied int
 	if err := pool.QueryRow(ctx, "SELECT count(*) FROM schema_migrations").Scan(&applied); err != nil {
 		t.Fatalf("schema_migrations: %v", err)
 	}
-	if applied != 10 {
-		t.Fatalf("applied migrations = %d, want 10", applied)
+	if applied != 11 {
+		t.Fatalf("applied migrations = %d, want 11", applied)
 	}
 }

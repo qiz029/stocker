@@ -152,6 +152,13 @@ func TestNewsIsBlindBoxSafe(t *testing.T) {
 		if m["headline"].(string) == "" || m["media_id"].(string) == "" {
 			t.Fatalf("bad news item: %v", m)
 		}
+		// English copies ride along (empty until the bilingual copy fill
+		// lands); the keys must always be present.
+		for _, k := range []string{"headline_en", "body_en"} {
+			if _, ok := m[k]; !ok {
+				t.Fatalf("news item missing %s: %v", k, m)
+			}
+		}
 		// cluster_id is exposed (nullable): it only groups already-published
 		// items; track/shock vectors and the planting user remain forbidden
 		// (checked above). disputed/exposed are public action flags.
@@ -196,7 +203,7 @@ func TestNewsIsBlindBoxSafe(t *testing.T) {
 func TestScenarioListAndIsHost(t *testing.T) {
 	s := newServer(t)
 	seedScenario(t, s)
-	if err := store.SetScenarioMeta(context.Background(), s.DB, "synthetic-v1", "合成测试剧本", ""); err != nil {
+	if err := store.SetScenarioMeta(context.Background(), s.DB, "synthetic-v1", "合成测试剧本", "Synthetic Test Scenario", ""); err != nil {
 		t.Fatal(err)
 	}
 	host := registerClient(t, s, "host")
@@ -210,6 +217,10 @@ func TestScenarioListAndIsHost(t *testing.T) {
 	first := items[0].(map[string]any)
 	if first["id"] != "synthetic-v1" || first["name"] != "合成测试剧本" || first["days"].(float64) != 300 {
 		t.Fatalf("scenario info: %v", first)
+	}
+	// name_en rides along (empty until an English name is set).
+	if _, ok := first["name_en"]; !ok {
+		t.Fatalf("scenario info missing name_en: %v", first)
 	}
 
 	created := host.mustJSON("POST", "/api/rooms",
@@ -266,7 +277,7 @@ func TestForumEndpoint(t *testing.T) {
 	maxID := 0.0
 	for _, it := range items {
 		m := it.(map[string]any)
-		if len(m) != 4 {
+		if len(m) != 6 { // id, day, npc_name, body + npc_name_en, body_en
 			t.Fatalf("forum item carries extra fields: %v", m)
 		}
 		if d := m["day"].(float64); d > 5 {

@@ -546,6 +546,12 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
 export const useT = () => useContext(I18nCtx);
 
+/** Pick the English variant of a server-provided string in en mode, falling
+    back to the Chinese original when the English field is missing/empty. */
+export function pickL(lang: Lang, zh: string, en?: string | null): string {
+  return lang === "en" && en ? en : zh;
+}
+
 /** Media outlet display name; unknown ids pass through unchanged. */
 export function mediaName(id: string, t: TFunc): string {
   const key = `media.${id}` as MsgKey;

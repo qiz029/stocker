@@ -179,10 +179,10 @@ func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, ho
 		for _, ev := range world.News {
 			news = append(news, []any{room.ID, ev.Day, ev.MediaID, ev.Headline,
 				string(ev.Track), shockJSON(ev.TrueShock), shockJSON(ev.ReportShock),
-				ev.Body, ev.ClusterID})
+				ev.Body, ev.ClusterID, ev.HeadlineEn, ev.BodyEn})
 		}
 		_, err = tx.CopyFrom(ctx, pgx.Identifier{"room_news"},
-			[]string{"room_id", "day", "media_id", "headline", "track", "true_shock", "report_shock", "body", "cluster_id"},
+			[]string{"room_id", "day", "media_id", "headline", "track", "true_shock", "report_shock", "body", "cluster_id", "headline_en", "body_en"},
 			pgx.CopyFromRows(news))
 		if err != nil {
 			return err
@@ -190,10 +190,10 @@ func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, ho
 
 		posts := make([][]any, 0, len(world.Forum))
 		for _, p := range world.Forum {
-			posts = append(posts, []any{room.ID, p.Day, p.NPCName, p.Body})
+			posts = append(posts, []any{room.ID, p.Day, p.NPCName, p.Body, p.NPCNameEn, p.BodyEn})
 		}
 		if _, err := tx.CopyFrom(ctx, pgx.Identifier{"room_forum_posts"},
-			[]string{"room_id", "day", "npc_name", "body"},
+			[]string{"room_id", "day", "npc_name", "body", "npc_name_en", "body_en"},
 			pgx.CopyFromRows(posts)); err != nil {
 			return err
 		}
@@ -256,11 +256,12 @@ func FillNewsCopy(ctx context.Context, db *pgxpool.Pool, roomID int64, sc *scena
 	batch := &pgx.Batch{}
 	queued := 0
 	for i := range news {
-		if news[i].Body == "" {
-			continue // template kept — nothing to upgrade
+		if news[i].Body == "" && news[i].BodyEn == "" {
+			continue // template kept — nothing to upgrade (the LLM may
+			// have produced only one language, so check both)
 		}
-		batch.Queue(`UPDATE room_news SET headline = $1, body = $2 WHERE id = $3`,
-			news[i].Headline, news[i].Body, ids[i])
+		batch.Queue(`UPDATE room_news SET headline = $1, body = $2, headline_en = $3, body_en = $4 WHERE id = $5`,
+			news[i].Headline, news[i].Body, news[i].HeadlineEn, news[i].BodyEn, ids[i])
 		queued++
 	}
 	if queued == 0 {
@@ -283,9 +284,9 @@ func FillNewsCopy(ctx context.Context, db *pgxpool.Pool, roomID int64, sc *scena
 // FillNewsCopy: CopyFrom preserved insertion order and identity ids are
 // monotonic. Only bodies the filler actually changed are updated.
 func FillForumCopy(ctx context.Context, db *pgxpool.Pool, roomID int64, sc *scenario.Scenario, filler ForumCopyFiller, posts []engine.ForumPost) error {
-	orig := make([]string, len(posts))
+	orig := make([][2]string, len(posts)) // {Body, BodyEn} before the fill
 	for i := range posts {
-		orig[i] = posts[i].Body
+		orig[i] = [2]string{posts[i].Body, posts[i].BodyEn}
 	}
 	filler.FillForumCopy(ctx, sc, posts)
 	rows, err := db.Query(ctx, `SELECT id FROM room_forum_posts WHERE room_id = $1 ORDER BY id`, roomID)
@@ -310,11 +311,14 @@ func FillForumCopy(ctx context.Context, db *pgxpool.Pool, roomID int64, sc *scen
 	batch := &pgx.Batch{}
 	queued := 0
 	for i := range posts {
-		if posts[i].Body == "" || posts[i].Body == orig[i] {
-			continue // template kept — nothing to upgrade
+		bothEmpty := posts[i].Body == "" && posts[i].BodyEn == ""
+		unchanged := posts[i].Body == orig[i][0] && posts[i].BodyEn == orig[i][1]
+		if bothEmpty || unchanged {
+			continue // template kept — nothing to upgrade (the LLM may
+			// have changed only one language, so check both)
 		}
-		batch.Queue(`UPDATE room_forum_posts SET body = $1 WHERE id = $2`,
-			posts[i].Body, ids[i])
+		batch.Queue(`UPDATE room_forum_posts SET body = $1, body_en = $2 WHERE id = $3`,
+			posts[i].Body, posts[i].BodyEn, ids[i])
 		queued++
 	}
 	if queued == 0 {

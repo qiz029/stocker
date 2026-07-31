@@ -205,6 +205,8 @@ func (f *fakeFiller) FillCopy(_ context.Context, _ *scenario.Scenario, evs []eng
 	for i := range evs {
 		evs[i].Headline = "AI标题"
 		evs[i].Body = "AI正文。"
+		evs[i].HeadlineEn = "AI headline"
+		evs[i].BodyEn = "AI body."
 	}
 }
 
@@ -220,12 +222,12 @@ func TestCreateRoomAppliesCopyFiller(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The fill runs asynchronously after CreateRoom returns — poll for it.
-	var headline, body string
+	var headline, body, headlineEn, bodyEn string
 	deadline := time.Now().Add(10 * time.Second)
 	for {
 		if err := pool.QueryRow(ctx, `
-			SELECT headline, body FROM room_news WHERE room_id = $1 ORDER BY id LIMIT 1`,
-			room.ID).Scan(&headline, &body); err != nil {
+			SELECT headline, body, headline_en, body_en FROM room_news WHERE room_id = $1 ORDER BY id LIMIT 1`,
+			room.ID).Scan(&headline, &body, &headlineEn, &bodyEn); err != nil {
 			t.Fatal(err)
 		}
 		if body != "" || time.Now().After(deadline) {
@@ -238,6 +240,9 @@ func TestCreateRoomAppliesCopyFiller(t *testing.T) {
 	}
 	if headline != "AI标题" || body != "AI正文。" {
 		t.Fatalf("async copy not persisted: %q %q", headline, body)
+	}
+	if headlineEn != "AI headline" || bodyEn != "AI body." {
+		t.Fatalf("async en copy not persisted: %q %q", headlineEn, bodyEn)
 	}
 	// Clusters persisted (synthetic worlds form clusters — engine Task 2).
 	var clustered int
@@ -299,5 +304,43 @@ func TestCopyFillBudgetIsConfigurable(t *testing.T) {
 	}
 	if probe.remaining <= 0 || probe.remaining > 7*time.Second {
 		t.Fatalf("filler ctx deadline %v not within configured 7s budget", probe.remaining)
+	}
+}
+
+// enOnlyFiller produces only English copy: the row must still be upgraded
+// (the LLM can succeed in one language and fail the other).
+type enOnlyFiller struct{}
+
+func (enOnlyFiller) FillCopy(_ context.Context, _ *scenario.Scenario, evs []engine.NewsEvent) {
+	for i := range evs {
+		evs[i].BodyEn = "EN-only body."
+	}
+}
+
+func TestFillNewsCopyEnOnlyStillUpgrades(t *testing.T) {
+	pool := TestDB(t, "store")
+	ctx := context.Background()
+	host := mkUser(t, pool, "host")
+	sc := mkScenario(t, pool)
+
+	room, err := CreateRoom(ctx, pool, sc, host.ID, 3600, enOnlyFiller{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var body, bodyEn string
+	deadline := time.Now().Add(10 * time.Second)
+	for {
+		if err := pool.QueryRow(ctx, `
+			SELECT body, body_en FROM room_news WHERE room_id = $1 ORDER BY id LIMIT 1`,
+			room.ID).Scan(&body, &bodyEn); err != nil {
+			t.Fatal(err)
+		}
+		if bodyEn == "EN-only body." || time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if body != "" || bodyEn != "EN-only body." {
+		t.Fatalf("en-only fill: body=%q body_en=%q, want zh template kept and en persisted", body, bodyEn)
 	}
 }

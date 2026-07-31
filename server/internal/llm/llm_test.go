@@ -54,7 +54,9 @@ func TestFillCopyHappyPath(t *testing.T) {
 			if strings.Contains(user, fmt.Sprintf(`"idx":%d`, idx)) {
 				out = append(out, map[string]any{
 					"idx": idx, "headline": fmt.Sprintf("生成标题%d", idx),
-					"body": fmt.Sprintf("生成正文%d。", idx),
+					"body":        fmt.Sprintf("生成正文%d。", idx),
+					"headline_en": fmt.Sprintf("Generated headline %d", idx),
+					"body_en":     fmt.Sprintf("Generated body %d.", idx),
 				})
 			}
 		}
@@ -82,7 +84,10 @@ func TestFillCopyHappyPath(t *testing.T) {
 	if evs[0].Headline != "生成标题0" || evs[0].Body != "生成正文0。" {
 		t.Fatalf("item 0 not filled: %+v", evs[0])
 	}
-	if evs[1].Headline != "生成标题1" {
+	if evs[0].HeadlineEn != "Generated headline 0" || evs[0].BodyEn != "Generated body 0." {
+		t.Fatalf("item 0 English copy not filled: %+v", evs[0])
+	}
+	if evs[1].Headline != "生成标题1" || evs[1].HeadlineEn != "Generated headline 1" {
 		t.Fatalf("item 1 not filled: %+v", evs[1])
 	}
 	if gotAuth.Load() != "Bearer sk-test" {
@@ -102,6 +107,43 @@ func TestFillCopyHappyPath(t *testing.T) {
 	}
 	if sys := gotSystem.Load().(string); !strings.Contains(sys, "类似某个狂热") {
 		t.Fatalf("system prompt missing era hint: %s", sys)
+	}
+}
+
+func TestFillCopyPartialBilingualDegradation(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, chatResponse(`[
+			{"idx":0,"headline":"中文标题","body":"中文正文"},
+			{"idx":1,"headline_en":"English headline","body_en":"English body"},
+			{"idx":2}
+		]`))
+	}))
+	defer srv.Close()
+	g := New(Config{BaseURL: srv.URL, Model: "m", Concurrency: 1, Timeout: 5 * time.Second})
+	evs := []engine.NewsEvent{
+		{Day: 1, Track: engine.TrackNoise, MediaID: "forum", Headline: "模板0"},
+		{Day: 1, Track: engine.TrackNoise, MediaID: "forum", Headline: "模板1"},
+		{Day: 1, Track: engine.TrackNoise, MediaID: "forum", Headline: "模板2"},
+	}
+	g.FillCopy(context.Background(), testScenario(), evs)
+
+	// zh only: zh written back, en left empty for the engine fallback.
+	if evs[0].Headline != "中文标题" || evs[0].Body != "中文正文" {
+		t.Fatalf("item 0 zh not filled: %+v", evs[0])
+	}
+	if evs[0].HeadlineEn != "" || evs[0].BodyEn != "" {
+		t.Fatalf("item 0 en must stay empty: %+v", evs[0])
+	}
+	// en only: en written back, zh template retained.
+	if evs[1].HeadlineEn != "English headline" || evs[1].BodyEn != "English body" {
+		t.Fatalf("item 1 en not filled: %+v", evs[1])
+	}
+	if evs[1].Headline != "模板1" {
+		t.Fatalf("item 1 zh template must be retained: %+v", evs[1])
+	}
+	// neither: template retained on both sides.
+	if evs[2].Headline != "模板2" || evs[2].HeadlineEn != "" || evs[2].BodyEn != "" {
+		t.Fatalf("item 2 must be fully untouched: %+v", evs[2])
 	}
 }
 
@@ -307,6 +349,7 @@ func TestFillForumCopyHappyPath(t *testing.T) {
 			if strings.Contains(user, fmt.Sprintf(`"idx":%d`, idx)) {
 				out = append(out, map[string]any{
 					"idx": idx, "body": fmt.Sprintf("改写帖子%d", idx),
+					"body_en": fmt.Sprintf("Rewritten post %d", idx),
 				})
 			}
 		}
@@ -325,6 +368,9 @@ func TestFillForumCopyHappyPath(t *testing.T) {
 	g.FillForumCopy(context.Background(), sc, posts)
 	if posts[0].Body != "改写帖子0" || posts[1].Body != "改写帖子1" {
 		t.Fatalf("forum posts not polished: %+v", posts)
+	}
+	if posts[0].BodyEn != "Rewritten post 0" || posts[1].BodyEn != "Rewritten post 1" {
+		t.Fatalf("forum English bodies not polished: %+v", posts)
 	}
 	sys := gotSystem.Load().(string)
 	if !strings.Contains(sys, "股民论坛") || !strings.Contains(sys, "类似某个狂热") {
@@ -359,6 +405,37 @@ func TestFillForumCopyNeverLeaksNumbersOrTruth(t *testing.T) {
 	}
 	if !strings.Contains(req, "禁止真实公司名、真实人名与任何数字") {
 		t.Fatal("forum system prompt missing the no-numbers rule")
+	}
+}
+
+func TestFillForumCopyPartialBilingualDegradation(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, chatResponse(`[
+			{"idx":0,"body":"中文回帖"},
+			{"idx":1,"body_en":"English reply"},
+			{"idx":2}
+		]`))
+	}))
+	defer srv.Close()
+	g := New(Config{BaseURL: srv.URL, Model: "m", Concurrency: 1, Timeout: 5 * time.Second})
+	posts := []engine.ForumPost{
+		{Day: 1, NPCName: "n", Persona: "p", Body: "模板帖子0"},
+		{Day: 1, NPCName: "n", Persona: "p", Body: "模板帖子1"},
+		{Day: 1, NPCName: "n", Persona: "p", Body: "模板帖子2"},
+	}
+	g.FillForumCopy(context.Background(), testScenario(), posts)
+
+	// zh only: zh written back, en left empty.
+	if posts[0].Body != "中文回帖" || posts[0].BodyEn != "" {
+		t.Fatalf("post 0: %+v", posts[0])
+	}
+	// en only: en written back, zh template retained.
+	if posts[1].BodyEn != "English reply" || posts[1].Body != "模板帖子1" {
+		t.Fatalf("post 1: %+v", posts[1])
+	}
+	// neither: template retained on both sides.
+	if posts[2].Body != "模板帖子2" || posts[2].BodyEn != "" {
+		t.Fatalf("post 2 must be fully untouched: %+v", posts[2])
 	}
 }
 

@@ -155,7 +155,7 @@ func (s *Server) handleRoomState(w http.ResponseWriter, r *http.Request) {
 	// resolved per room from the room's seed (candidate set in i.aliases;
 	// NULL there falls back to the plain alias column).
 	instRows, err := s.DB.Query(r.Context(), `
-		SELECT i.id, i.alias, i.descr, i.profile, i.aliases
+		SELECT i.id, i.alias, i.descr, i.profile, i.aliases, i.descr_en, i.profile_en
 		FROM instruments i JOIN rooms rm ON rm.scenario_id = i.scenario_id
 		WHERE rm.id = $1 ORDER BY i.ord`, room.ID)
 	if err != nil {
@@ -165,16 +165,18 @@ func (s *Server) handleRoomState(w http.ResponseWriter, r *http.Request) {
 	defer instRows.Close()
 	instruments := []map[string]any{}
 	for instRows.Next() {
-		var id, alias, desc string
-		var profile map[string]any // nil when column is NULL
-		var aliases []string       // nil when column is NULL
-		if err := instRows.Scan(&id, &alias, &desc, &profile, &aliases); err != nil {
+		var id, alias, desc, descEn string
+		var profile map[string]any   // nil when column is NULL
+		var profileEn map[string]any // nil when column is NULL
+		var aliases []string         // nil when column is NULL
+		if err := instRows.Scan(&id, &alias, &desc, &profile, &aliases, &descEn, &profileEn); err != nil {
 			s.storeErr(w, err)
 			return
 		}
 		alias = engine.ResolveAlias(room.Seed, id, alias, aliases)
 		instruments = append(instruments, map[string]any{
 			"id": id, "alias": alias, "desc": desc, "profile": profile,
+			"desc_en": descEn, "profile_en": profileEn,
 		})
 	}
 	if err := instRows.Err(); err != nil {
@@ -292,7 +294,8 @@ func afterParam(r *http.Request) int64 {
 }
 
 // handleNews serves the player-visible feed. Blind box: id, day, media,
-// headline, body, cluster_id, disputed, exposed — nothing else. Track,
+// headline, body, headline_en, body_en, cluster_id, disputed, exposed —
+// nothing else. Track,
 // shock vectors and driven_by_user_id never leave the server; disputed and
 // exposed are public action flags (a debunked or regulator-busted item is
 // public knowledge); cluster_id only groups already-published items
@@ -314,7 +317,7 @@ func (s *Server) handleNews(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := s.DB.Query(r.Context(), `
-		SELECT id, day, media_id, headline, body, cluster_id, disputed, exposed FROM room_news
+		SELECT id, day, media_id, headline, body, cluster_id, disputed, exposed, headline_en, body_en FROM room_news
 		WHERE room_id = $1 AND day <= $2 AND id > $3
 		ORDER BY id LIMIT $4`, room.ID, curDay, afterParam(r), newsPageLimit)
 	if err != nil {
@@ -326,14 +329,15 @@ func (s *Server) handleNews(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var id, clusterID int64
 		var day int
-		var mediaID, headline, body string
+		var mediaID, headline, body, headlineEn, bodyEn string
 		var disputed, exposed bool
-		if err := rows.Scan(&id, &day, &mediaID, &headline, &body, &clusterID, &disputed, &exposed); err != nil {
+		if err := rows.Scan(&id, &day, &mediaID, &headline, &body, &clusterID, &disputed, &exposed, &headlineEn, &bodyEn); err != nil {
 			s.storeErr(w, err)
 			return
 		}
 		item := map[string]any{
 			"id": id, "day": day, "media_id": mediaID, "headline": headline, "body": body,
+			"headline_en": headlineEn, "body_en": bodyEn,
 			"disputed": disputed, "exposed": exposed,
 		}
 		if clusterID > 0 {
@@ -356,7 +360,8 @@ func (s *Server) handleNews(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleForum serves the NPC forum feed. Blind box: id, day, npc_name,
-// body — nothing else (persona hints never leave the server).
+// body, npc_name_en, body_en — nothing else (persona hints never leave the
+// server).
 func (s *Server) handleForum(w http.ResponseWriter, r *http.Request) {
 	room, ok := s.roomForMember(w, r)
 	if !ok {
@@ -372,7 +377,7 @@ func (s *Server) handleForum(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := s.DB.Query(r.Context(), `
-		SELECT id, day, npc_name, body FROM room_forum_posts
+		SELECT id, day, npc_name, body, npc_name_en, body_en FROM room_forum_posts
 		WHERE room_id = $1 AND day <= $2 AND id > $3
 		ORDER BY id LIMIT $4`, room.ID, curDay, afterParam(r), newsPageLimit)
 	if err != nil {
@@ -384,13 +389,14 @@ func (s *Server) handleForum(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var id int64
 		var day int
-		var npcName, body string
-		if err := rows.Scan(&id, &day, &npcName, &body); err != nil {
+		var npcName, body, npcNameEn, bodyEn string
+		if err := rows.Scan(&id, &day, &npcName, &body, &npcNameEn, &bodyEn); err != nil {
 			s.storeErr(w, err)
 			return
 		}
 		items = append(items, map[string]any{
 			"id": id, "day": day, "npc_name": npcName, "body": body,
+			"npc_name_en": npcNameEn, "body_en": bodyEn,
 		})
 	}
 	if err := rows.Err(); err != nil {
@@ -449,7 +455,10 @@ func (s *Server) handleScenarios(w http.ResponseWriter, r *http.Request) {
 		if name == "" {
 			name = info.ID
 		}
-		items = append(items, map[string]any{"id": info.ID, "name": name, "days": info.Days})
+		// English display names ride along; empty means "fall back to name".
+		items = append(items, map[string]any{
+			"id": info.ID, "name": name, "name_en": info.NameEn, "days": info.Days,
+		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }

@@ -152,18 +152,21 @@ func TestHypePlantsRealShock(t *testing.T) {
 
 	// The planted story: impact track, tabloid, true shock of exactly the
 	// tier magnitude on IDIO:S1, driven by the host (server-private).
-	var mediaID, track, headline string
+	var mediaID, track, headline, headlineEn, bodyEn string
 	var shock map[string]float64
 	var drivenBy *int64
 	var exposed bool
 	if err := pool.QueryRow(ctx, `
-		SELECT media_id, track, headline, true_shock, driven_by_user_id, exposed
+		SELECT media_id, track, headline, true_shock, driven_by_user_id, exposed, headline_en, body_en
 		FROM room_news WHERE room_id = $1 AND day = $2 AND driven_by_user_id IS NOT NULL`,
-		room.ID, day).Scan(&mediaID, &track, &headline, &shock, &drivenBy, &exposed); err != nil {
+		room.ID, day).Scan(&mediaID, &track, &headline, &shock, &drivenBy, &exposed, &headlineEn, &bodyEn); err != nil {
 		t.Fatalf("planted news row: %v", err)
 	}
 	if mediaID != "tabloid" || track != "impact" {
 		t.Fatalf("media/track = %s/%s", mediaID, track)
+	}
+	if headlineEn == "" || bodyEn == "" {
+		t.Fatalf("planted story missing English copy: headline_en=%q body_en=%q", headlineEn, bodyEn)
 	}
 	if got := shock["IDIO:S1"]; got != HypeTier2Shock {
 		t.Fatalf("true_shock = %v, want %v", got, HypeTier2Shock)

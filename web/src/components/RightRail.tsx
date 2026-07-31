@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ApiError, DebunkVerdict, EventItem, ForumItem, MediaAccuracy, NewsItem, NewsResponse, RoomState, api, fetchForum, fetchNews, postDebunk } from "../api";
 import { fmtCents, fmtPct, prettifyHeadline } from "../format";
-import { MsgKey, TFunc, mediaName, useT } from "../i18n";
+import { MsgKey, TFunc, mediaName, pickL, useT } from "../i18n";
 import { useIncrementalFeed } from "../useIncrementalFeed";
 import { useToast } from "../Toast";
 import { useUser } from "../App";
@@ -57,7 +57,7 @@ const DEBUNK_FEE_CENTS = 200_000;
 
 export default function RightRail({ roomId, state, aliasOf }: Props) {
   const user = useUser();
-  const { t } = useT();
+  const { t, lang } = useT();
   const { toast, node } = useToast();
   const [newsShown, setNewsShown] = useState(8);
   const [openNews, setOpenNews] = useState<number | null>(null);
@@ -88,10 +88,12 @@ export default function RightRail({ roomId, state, aliasOf }: Props) {
   const renderNewsItem = (n: NewsItem, role?: MsgKey) => {
     const acc = accuracyText(accuracy, n.media_id, t);
     const verdict = verdicts[n.id];
+    const headline = pickL(lang, n.headline, n.headline_en);
+    const body = pickL(lang, n.body, n.body_en);
     return (
       <div key={n.id}
-        className={`feed-item ${n.body ? "news" : ""} ${openNews === n.id ? "open" : ""}`}
-        onClick={n.body ? () => setOpenNews(openNews === n.id ? null : n.id) : undefined}>
+        className={`feed-item ${body ? "news" : ""} ${openNews === n.id ? "open" : ""}`}
+        onClick={body ? () => setOpenNews(openNews === n.id ? null : n.id) : undefined}>
         <div className="fi-meta">
           {role && <span className={`chain-role ${role.split(".").pop()}`}>{t(role)}</span>}
           {mediaName(n.media_id, t)}
@@ -100,8 +102,8 @@ export default function RightRail({ roomId, state, aliasOf }: Props) {
           {(n.disputed || verdict) && <span className="fi-badge disputed">{t("news.disputed")}</span>}
           {n.exposed && <span className="fi-badge exposed">{t("news.exposed")}</span>}
         </div>
-        <div className={n.body ? "fi-title" : ""}>{prettifyHeadline(n.headline, aliasOf)}</div>
-        {n.body && <div className="fi-body">{n.body}</div>}
+        <div className={body ? "fi-title" : ""}>{prettifyHeadline(headline, aliasOf)}</div>
+        {body && <div className="fi-body">{body}</div>}
         <div className="fi-actions" onClick={e => e.stopPropagation()}>
           {!n.disputed && !verdict && (
             <button className="fi-act" onClick={() => investigate(n.id)}>
@@ -201,10 +203,10 @@ export default function RightRail({ roomId, state, aliasOf }: Props) {
             {forum.map(p => (
               <div key={p.id} className="feed-item">
                 <div className="fi-meta">
-                  <span className="forum-npc">{p.npc_name}</span>
+                  <span className="forum-npc">{pickL(lang, p.npc_name, p.npc_name_en)}</span>
                   {" · "}<span className="num">{t("common.day", { day: p.day })}</span>
                 </div>
-                <div>{p.body}</div>
+                <div>{pickL(lang, p.body, p.body_en)}</div>
               </div>
             ))}
           </>

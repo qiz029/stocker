@@ -49,6 +49,52 @@ describe("Stock page", () => {
     expect(screen.getByText("Place buy")).toBeInTheDocument();     // trade panel
   });
 
+  it("shows English instrument/news fields in en mode, falling back to zh when missing", async () => {
+    const enState = {
+      ...state,
+      instruments: [{ id: "S1", alias: "Ridgeline Networks", desc: "网络设备巨头",
+        desc_en: "Networking gear giant",
+        profile: { business: "路由器业务", bull: "卖铲人逻辑", bear: "客户都在烧钱" },
+        profile_en: { business: "Router business", bull: "Picks-and-shovels play", bear: "" } }],
+    };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async url => {
+      const u = String(url);
+      let body: unknown = { items: [] };
+      if (u === "/api/rooms/1") body = enState;
+      else if (u.endsWith("/portfolio")) body = { cash_cents: 10_000_000, total_cents: 10_000_000,
+        debt_cents: 0, max_debt_cents: 20_000_000, interest_rate_annual_bp: 300, bankrupt: false,
+        positions: [], pending: [] };
+      else if (u.endsWith("/trades")) body = { items: [] };
+      else if (u.includes("/options")) body = [];
+      else if (u.includes("/news")) body = { items: [
+        { id: 1, day: 2, media_id: "wire", headline: "S1板块承压", body: "中文正文。",
+          headline_en: "S1 sector under pressure", body_en: "English body." },
+        { id: 2, day: 2, media_id: "paper", headline: "S1再创新高", body: "" }] };
+      else if (u.includes("/prices/")) body = { days: [
+        { open: 100, high: 101, low: 99, close: 100 },
+        { open: 100, high: 106, low: 99, close: 105 },
+        { open: 105, high: 111, low: 104, close: 110 }] };
+      return new Response(JSON.stringify(body), { status: 200 });
+    });
+    render(
+      <MemoryRouter initialEntries={["/rooms/1/i/S1"]}>
+        <UserCtxForTest.Provider value={{ id: 1, username: "me" }}>
+          <Routes><Route path="/rooms/:roomId/i/:instrumentId" element={<Stock />} /></Routes>
+        </UserCtxForTest.Provider>
+      </MemoryRouter>,
+    );
+    // en mode: English desc + profile fields (empty bear falls back to zh)
+    await waitFor(() => expect(screen.getByText("Networking gear giant")).toBeInTheDocument());
+    expect(screen.getByText("Router business")).toBeInTheDocument();
+    expect(screen.getByText("Picks-and-shovels play")).toBeInTheDocument();
+    expect(screen.getByText("客户都在烧钱")).toBeInTheDocument();
+    // related news: English headline (S1 prettified to the alias) + body
+    expect(screen.getByText("Ridgeline Networks sector under pressure")).toBeInTheDocument();
+    expect(screen.getByText("English body.")).toBeInTheDocument();
+    // item without English fields shows the Chinese original
+    expect(screen.getByText(/Ridgeline Networks再创新高/)).toBeInTheDocument();
+  });
+
   it("renders option positions with P&L and sells to close", async () => {
     const posted: unknown[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {

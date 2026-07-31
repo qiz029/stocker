@@ -144,6 +144,36 @@ describe("RightRail news enrichment", () => {
     expect(forumCalls.some(u => u.includes("after=1"))).toBe(true);
   });
 
+  it("shows English news/forum fields in en mode, falling back to zh when missing", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async url => {
+      const u = String(url);
+      let body: unknown = { items: [] };
+      if (u.includes("/news")) body = { items: [
+        { id: 1, day: 5, media_id: "wire", headline: "S1板块承压", body: "中文正文。",
+          headline_en: "S1 sector under pressure", body_en: "English body." },
+        { id: 2, day: 5, media_id: "paper", headline: "S1再创新高", body: "" }] };
+      if (u.includes("/forum")) body = { items: [
+        { id: 1, day: 5, npc_name: "老韭菜", body: "这票要涨",
+          npc_name_en: "OldChive", body_en: "This one's going up" },
+        { id: 2, day: 5, npc_name: "量化小王", body: "模型提示风险", npc_name_en: null }] };
+      return new Response(JSON.stringify(body), { status: 200 });
+    });
+    render(<UserProviderForTest username="me"><RightRail roomId="1" state={state} aliasOf={() => "Ridgeline Networks"} /></UserProviderForTest>);
+
+    // news: English headline (S1 prettified to the alias) + body in en mode
+    expect(await screen.findByText("Ridgeline Networks sector under pressure")).toBeInTheDocument();
+    expect(screen.getByText("English body.")).toBeInTheDocument();
+    // missing English fields fall back to the Chinese original
+    expect(screen.getByText(/Ridgeline Networks再创新高/)).toBeInTheDocument();
+
+    // forum: English npc name/body, null falls back to zh
+    fireEvent.click(screen.getByRole("button", { name: "Forum" }));
+    expect(screen.getByText("OldChive")).toBeInTheDocument();
+    expect(screen.getByText("This one's going up")).toBeInTheDocument();
+    expect(screen.getByText("量化小王")).toBeInTheDocument();
+    expect(screen.getByText("模型提示风险")).toBeInTheDocument();
+  });
+
   it("shows the forum empty state when there are no posts", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
       new Response(JSON.stringify({ items: [] }), { status: 200 }));

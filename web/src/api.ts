@@ -31,14 +31,17 @@ export const api = {
 
 /* ---------- API types (mirror the Go handlers exactly) ---------- */
 export type User = { id: number; username: string };
-export type ScenarioInfo = { id: string; name: string; days: number };
+export type ScenarioInfo = { id: string; name: string; days: number; name_en?: string };
 export type Room = {
   id: number; invite_code: string; scenario_id: string; days: number;
   status: "lobby" | "running"; day_duration_secs: number;
   started_at?: string; current_day?: number; ended?: boolean; is_host?: boolean;
 };
 export type InstrumentProfile = { business: string; bull: string; bear: string };
-export type Instrument = { id: string; alias: string; desc: string; profile: InstrumentProfile | null };
+export type Instrument = {
+  id: string; alias: string; desc: string; profile: InstrumentProfile | null;
+  desc_en?: string; profile_en?: InstrumentProfile | null;   // English mirrors of the zh fields
+};
 export type Quote = { instrument_id: string; close: number; prev_close: number };
 export type LeaderboardRow = {
   username: string; total_cents: number; return_pct: number; late_join: boolean;
@@ -48,13 +51,17 @@ export type RoomState = { room: Room; instruments: Instrument[]; quotes: Quote[]
 export type OHLC = { open: number; high: number; low: number; close: number };
 export type NewsItem = {
   id: number; day: number; media_id: string; headline: string; body: string; cluster_id?: number | null;
+  headline_en?: string; body_en?: string;   // English mirrors of the zh fields
   disputed?: boolean;   // public: at least one player investigated this item
   exposed?: boolean;    // public: a manipulation bust was tied to this item
 };
 export type MediaAccuracyStat = { reports: number; hits: number };
 export type MediaAccuracy = Record<string, MediaAccuracyStat>;
 export type NewsResponse = { items: NewsItem[]; media_accuracy?: MediaAccuracy };
-export type ForumItem = { id: number; day: number; npc_name: string; body: string };
+export type ForumItem = {
+  id: number; day: number; npc_name: string; body: string;
+  npc_name_en?: string; body_en?: string;   // English mirrors of the zh fields
+};
 
 /** Incremental news page (cursor = last seen id); carries per-outlet accuracy stats. */
 export function fetchNews(roomID: string, after: number): Promise<NewsResponse> {

@@ -75,17 +75,18 @@ func TestScenarioMetaAndInfos(t *testing.T) {
 	if err := SaveScenario(ctx, pool, sc); err != nil {
 		t.Fatal(err)
 	}
-	if err := SetScenarioMeta(ctx, pool, sc.ID, "合成测试剧本", ""); err != nil {
+	if err := SetScenarioMeta(ctx, pool, sc.ID, "合成测试剧本", "Synthetic Test Scenario", ""); err != nil {
 		t.Fatalf("SetScenarioMeta: %v", err)
 	}
-	if err := SetScenarioMeta(ctx, pool, "nope", "x", ""); !errors.Is(err, ErrNotFound) {
+	if err := SetScenarioMeta(ctx, pool, "nope", "x", "y", ""); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("missing scenario: %v", err)
 	}
 	infos, err := ScenarioInfos(ctx, pool)
 	if err != nil || len(infos) != 1 {
 		t.Fatalf("infos: %+v err=%v", infos, err)
 	}
-	if infos[0].ID != sc.ID || infos[0].Name != "合成测试剧本" || infos[0].Days != sc.Days {
+	if infos[0].ID != sc.ID || infos[0].Name != "合成测试剧本" ||
+		infos[0].NameEn != "Synthetic Test Scenario" || infos[0].Days != sc.Days {
 		t.Fatalf("info: %+v", infos[0])
 	}
 }

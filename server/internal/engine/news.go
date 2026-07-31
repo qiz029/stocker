@@ -64,46 +64,59 @@ func dayLogRet(p []scenario.OHLC, d int) (float64, bool) {
 
 // displayNames maps factor IDs to display names and "IDIO:<instID>" keys to
 // the room's resolved instrument alias — the same naming discipline as the
-// news-copy pipeline (aliases and factor display names only, never IDs).
-func displayNames(sc *scenario.Scenario, seed uint64) map[string]string {
-	name := map[string]string{}
+// news-copy pipeline (aliases and factor display names only, never IDs). It
+// returns parallel zh/en maps; factors without NameEn fall back to Name, and
+// the resolved alias (already English) serves both languages.
+func displayNames(sc *scenario.Scenario, seed uint64) (zh, en map[string]string) {
+	zh = map[string]string{}
+	en = map[string]string{}
 	for _, f := range sc.Factors {
-		name[f.ID] = f.Name
+		zh[f.ID] = f.Name
+		en[f.ID] = f.Name
+		if f.NameEn != "" {
+			en[f.ID] = f.NameEn
+		}
 	}
 	for _, inst := range sc.Instruments {
-		name["IDIO:"+inst.ID] = ResolveAlias(seed, inst.ID, inst.Alias, inst.Aliases)
+		alias := ResolveAlias(seed, inst.ID, inst.Alias, inst.Aliases)
+		zh["IDIO:"+inst.ID] = alias
+		en["IDIO:"+inst.ID] = alias
 	}
-	return name
+	return zh, en
 }
 
-// dayMovers returns the display aliases of day d's biggest gainer and loser
-// from pre-generated prices. Ties break toward the earlier-declared
+// dayMovers returns the zh/en display aliases of day d's biggest gainer and
+// loser from pre-generated prices. Ties break toward the earlier-declared
 // instrument (strict comparisons), keeping the pick deterministic.
-func dayMovers(sc *scenario.Scenario, prices map[string][]scenario.OHLC, d int, name map[string]string) (up, down string, ok bool) {
+func dayMovers(sc *scenario.Scenario, prices map[string][]scenario.OHLC, d int, zh, en map[string]string) (up, down, upEn, downEn string, ok bool) {
 	var best, worst float64
+	var upID, downID string
 	for _, inst := range sc.Instruments {
 		ret, valid := dayLogRet(prices[inst.ID], d)
 		if !valid {
 			continue
 		}
-		alias := name["IDIO:"+inst.ID]
 		if !ok || ret > best {
-			best, up = ret, alias
+			best, upID = ret, inst.ID
 		}
 		if !ok || ret < worst {
-			worst, down = ret, alias
+			worst, downID = ret, inst.ID
 		}
 		ok = true
 	}
-	return up, down, ok
+	if ok {
+		up, down = zh["IDIO:"+upID], zh["IDIO:"+downID]
+		upEn, downEn = en["IDIO:"+upID], en["IDIO:"+downID]
+	}
+	return up, down, upEn, downEn, ok
 }
 
-// strongestSector returns the display name of the sector factor whose
+// strongestSector returns the zh/en display names of the sector factor whose
 // member instruments (beta map carries the sector ID) had the best mean
 // log return on day d. Declaration order breaks ties.
-func strongestSector(sc *scenario.Scenario, prices map[string][]scenario.OHLC, d int) (string, bool) {
+func strongestSector(sc *scenario.Scenario, prices map[string][]scenario.OHLC, d int, zh, en map[string]string) (string, string, bool) {
 	best := math.Inf(-1)
-	bestName := ""
+	bestID := ""
 	found := false
 	for _, f := range sc.Factors {
 		if f.Kind != scenario.KindSector {
@@ -121,10 +134,13 @@ func strongestSector(sc *scenario.Scenario, prices map[string][]scenario.OHLC, d
 			}
 		}
 		if n > 0 && sum/float64(n) > best {
-			best, bestName, found = sum/float64(n), f.Name, true
+			best, bestID, found = sum/float64(n), f.ID, true
 		}
 	}
-	return bestName, found
+	if !found {
+		return "", "", false
+	}
+	return zh[bestID], en[bestID], true
 }
 
 var recapTemplates = []string{
@@ -133,9 +149,22 @@ var recapTemplates = []string{
 	"市场回顾：{up}一枝独秀，{down}明显承压，{sec}板块整体走强",
 }
 
+// English parallels of recapTemplates, same index ↔ same meaning. The
+// "{up}/{down}/{sec}" placeholder keys are shared with the zh templates.
+var recapTemplatesEn = []string{
+	"Daily recap: {up} led the tape, {down} finished last, and {sec} was the strongest group",
+	"Closing wrap: {up} topped the gainers, {down} was the weakest, with money rotating into {sec}",
+	"Market review: {up} stood alone at the top, {down} came under clear pressure, and {sec} firmed across the board",
+}
+
 var recapTemplatesNoSector = []string{
 	"昨日复盘：{up}领涨，{down}垫底",
 	"收盘综述：{up}涨幅居前，{down}走势最弱",
+}
+
+var recapTemplatesNoSectorEn = []string{
+	"Daily recap: {up} led the tape, {down} finished last",
+	"Closing wrap: {up} topped the gainers, {down} was the weakest",
 }
 
 // RecapNews emits the daily market recap: a zero-impact, historical-track
@@ -143,31 +172,37 @@ var recapTemplatesNoSector = []string{
 // the strongest sector, all read from the pre-generated (public) prices.
 func RecapNews(sc *scenario.Scenario, prices map[string][]scenario.OHLC, seed uint64) []NewsEvent {
 	rng := Stream(seed, "recap-news")
-	name := displayNames(sc, seed)
+	zh, en := displayNames(sc, seed)
 	var evs []NewsEvent
 	last, lastNoSec := -1, -1
 	for d := 0; d+1 < sc.Days; d++ {
-		up, down, ok := dayMovers(sc, prices, d, name)
+		up, down, upEn, downEn, ok := dayMovers(sc, prices, d, zh, en)
 		if !ok {
 			continue
 		}
-		var headline string
-		if sec, hasSec := strongestSector(sc, prices, d); hasSec {
+		var headline, headlineEn string
+		if sec, secEn, hasSec := strongestSector(sc, prices, d, zh, en); hasSec {
 			idx := pickNoRepeat(rng, len(recapTemplates), last)
 			last = idx
 			headline = strings.NewReplacer(
 				"{up}", up, "{down}", down, "{sec}", sec,
 			).Replace(recapTemplates[idx])
+			headlineEn = strings.NewReplacer(
+				"{up}", upEn, "{down}", downEn, "{sec}", secEn,
+			).Replace(recapTemplatesEn[idx])
 		} else {
 			idx := pickNoRepeat(rng, len(recapTemplatesNoSector), lastNoSec)
 			lastNoSec = idx
 			headline = strings.NewReplacer(
 				"{up}", up, "{down}", down,
 			).Replace(recapTemplatesNoSector[idx])
+			headlineEn = strings.NewReplacer(
+				"{up}", upEn, "{down}", downEn,
+			).Replace(recapTemplatesNoSectorEn[idx])
 		}
 		evs = append(evs, NewsEvent{
 			Day: d + 1, Track: TrackHistorical, MediaID: "wire",
-			Recap: true, Headline: headline,
+			Recap: true, Headline: headline, HeadlineEn: headlineEn,
 		})
 	}
 	return evs
@@ -206,6 +241,36 @@ var noiseTemplates = []string{
 	"避险情绪升温，资金下一站去向引关注",
 }
 
+// English parallels of noiseTemplates, same index ↔ same meaning.
+var noiseTemplatesEn = []string{
+	// rumor
+	"An unverified takeover rumor is making the rounds on trading desks",
+	"Word is a major institution is quietly reshuffling positions, direction unknown",
+	"People close to the regulators say the new rules are still under study",
+	"Talk of policy tailwinds for an entire industry is everywhere, with no hard evidence yet",
+	"Rumor has it a well-known hot-money player has been lying low for months; targets vary by telling",
+	// sentiment
+	"A prominent analyst warned valuations are stretched, then walked it back to long-term bullish",
+	"TV pundit debates heat up as bulls and bears talk past each other",
+	"Weekend finance column: should ordinary investors panic? Experts are split",
+	"Traders say this tape is costing them sleep",
+	"Brokerage lobbies are filling up again, and veterans are back to sharing wisdom",
+	"Sentiment gauges diverge again; optimists and pessimists refuse to blink",
+	// joke
+	"A hedge fund manager's lavish art purchase has desks gossiping",
+	"A brokerage research note so dense readers dubbed it astrology",
+	"A market-show guest's streak of wrong calls has viewers calling them a contrarian indicator",
+	"A trader posted their statement online with a four-word caption: just here to participate",
+	"A company renamed itself to chase a hot theme; the stock went nowhere but the jokes went viral",
+	// question
+	"Bounce or true reversal? Institutional views are sharply divided",
+	"Whether volume keeps building is the tape's biggest open question",
+	"After this chop at the highs: take profits or keep holding?",
+	"Whether the market's leadership will rotate has everyone arguing",
+	"Is the low-volume drift consolidation or exhaustion? Nobody agrees",
+	"Risk aversion is rising; where money goes next is the focus",
+}
+
 // NoiseNews sprinkles zero-impact tabloid chatter. Consecutive noise items
 // never reuse the same template (pickNoRepeat).
 func NoiseNews(sc *scenario.Scenario, seed uint64) []NewsEvent {
@@ -219,7 +284,7 @@ func NoiseNews(sc *scenario.Scenario, seed uint64) []NewsEvent {
 			last = idx
 			evs = append(evs, NewsEvent{
 				Day: d, Track: TrackNoise, MediaID: m.ID,
-				Headline: noiseTemplates[idx],
+				Headline: noiseTemplates[idx], HeadlineEn: noiseTemplatesEn[idx],
 			})
 		}
 	}
@@ -235,13 +300,29 @@ var impactTemplates = []string{
 	"有消息称%s板块%s，市场反应谨慎",
 }
 
-// FillFallbackCopy gives every headline-less event a Chinese template line.
-// LLM-generated copy (plan 4) overwrites these when available.
+// English parallels of impactTemplates: %s placeholders are the subject's
+// English display name and a direction phrase ("catches a bid" /
+// "comes under pressure"). The zh "板块" suffix is folded into natural
+// English instead of being concatenated.
+var impactTemplatesEn = []string{
+	"Mixed read on %s as it %s",
+	"News out of %s has multiple sources saying it %s, with opinion clearly split",
+	"Talk around %s is heating up; reports suggest it %s",
+	"Reports that %s %s drew a cautious market reaction",
+}
+
+// FillFallbackCopy gives every headline-less event a template line in zh
+// and en. LLM-generated copy (plan 4) overwrites these when available.
 func FillFallbackCopy(sc *scenario.Scenario, evs []NewsEvent, seed uint64) {
 	rng := Stream(seed, "fallback-copy")
-	name := map[string]string{}
+	zhName := map[string]string{}
+	enName := map[string]string{}
 	for _, f := range sc.Factors {
-		name[f.ID] = f.Name
+		zhName[f.ID] = f.Name
+		enName[f.ID] = f.Name
+		if f.NameEn != "" {
+			enName[f.ID] = f.NameEn
+		}
 	}
 	lastImpact, lastNoise := -1, -1
 	for i := range evs {
@@ -251,6 +332,7 @@ func FillFallbackCopy(sc *scenario.Scenario, evs []NewsEvent, seed uint64) {
 		switch evs[i].Track {
 		case TrackHistorical:
 			evs[i].Headline = "市场剧烈波动，交易员情绪紧张"
+			evs[i].HeadlineEn = "Wild swings put traders on edge"
 		case TrackImpact:
 			// 用 ReportShock（而非 TrueShock）措辞, 保持真实/报道解耦
 			var top string
@@ -260,25 +342,29 @@ func FillFallbackCopy(sc *scenario.Scenario, evs []NewsEvent, seed uint64) {
 					top, mag = f, v
 				}
 			}
-			tone := "承压"
+			tone, toneEn := "承压", "comes under pressure"
 			if mag > 0 {
-				tone = "获得提振"
+				tone, toneEn = "获得提振", "catches a bid"
 			}
 			idx := pickNoRepeat(rng, len(impactTemplates), lastImpact)
 			lastImpact = idx
-			headline := fmt.Sprintf(impactTemplates[idx], name[top], tone)
+			headline := fmt.Sprintf(impactTemplates[idx], zhName[top], tone)
+			headlineEn := fmt.Sprintf(impactTemplatesEn[idx], enName[top], toneEn)
 			if evs[i].ClusterID != 0 && evs[i].TrueShock == nil {
-				prefix := "【追踪】"
+				prefix, prefixEn := "【追踪】", "【Follow-up】"
 				if isRumor(evs, i) {
-					prefix = "【传闻】"
+					prefix, prefixEn = "【传闻】", "【Rumor】"
 				}
 				headline = prefix + headline
+				headlineEn = prefixEn + headlineEn
 			}
 			evs[i].Headline = headline
+			evs[i].HeadlineEn = headlineEn
 		default:
 			idx := pickNoRepeat(rng, len(noiseTemplates), lastNoise)
 			lastNoise = idx
 			evs[i].Headline = noiseTemplates[idx]
+			evs[i].HeadlineEn = noiseTemplatesEn[idx]
 		}
 	}
 }

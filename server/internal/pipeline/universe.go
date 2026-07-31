@@ -14,6 +14,9 @@ type FetchSpec struct {
 
 type Dossier struct {
 	Alias, Desc, RealName, Business, Bull, Bear string
+	// English translations of the display copy; empty means "no
+	// translation", readers fall back to the Chinese field.
+	DescEn, BusinessEn, BullEn, BearEn string
 	// Aliases is the full set of candidate display names for the per-room
 	// blind-box pick (Alias itself must be one of the entries). Room
 	// creation resolves one entry deterministically from the room seed.
@@ -22,6 +25,7 @@ type Dossier struct {
 
 type SectorSpec struct {
 	ID, Name string
+	NameEn   string // English display name; empty falls back to Name
 }
 
 type InstrumentSpec struct {
@@ -44,6 +48,9 @@ type DateWindow struct {
 // calling Register from an init() in their own universe_<era>.go file.
 type ScenarioUniverse struct {
 	ScenarioID, Name, RealPeriod string
+	// NameEn is the English scenario name for the lobby picker; empty
+	// falls back to Name.
+	NameEn string
 	// EraHint feeds the LLM's system prompt (see internal/llm); it must obey
 	// the same blind-box rules as instrument aliases/descriptions.
 	EraHint                string

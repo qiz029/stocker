@@ -10,8 +10,8 @@ import (
 )
 
 type Meta struct {
-	Name, RealPeriod string
-	Dossiers         map[string]Dossier
+	Name, NameEn, RealPeriod string
+	Dossiers                 map[string]Dossier
 }
 
 func BuildMeta(id string) (Meta, error) {
@@ -19,7 +19,7 @@ func BuildMeta(id string) (Meta, error) {
 	if !ok {
 		return Meta{}, fmt.Errorf("unknown scenario %q", id)
 	}
-	m := Meta{Name: u.Name, RealPeriod: u.RealPeriod,
+	m := Meta{Name: u.Name, NameEn: u.NameEn, RealPeriod: u.RealPeriod,
 		Dossiers: map[string]Dossier{}}
 	for _, spec := range u.Instruments {
 		m.Dossiers[spec.ID] = spec.Dossier
@@ -308,6 +308,7 @@ func BuildScenario(id string) (*scenario.Scenario, error) {
 		}
 		instruments = append(instruments, scenario.Instrument{
 			ID: spec.ID, Alias: spec.Dossier.Alias, Desc: spec.Dossier.Desc,
+			DescEn:  spec.Dossier.DescEn,
 			Aliases: spec.Dossier.Aliases,
 			Beta:    beta, IdioScale: scale, Reconstructed: spec.Raw == "",
 		})
@@ -318,14 +319,14 @@ func BuildScenario(id string) (*scenario.Scenario, error) {
 
 	// 5. Factor declarations in stable order.
 	factors := []scenario.Factor{
-		{ID: "MKT", Name: "大盘", Kind: scenario.KindMarket},
-		{ID: "SENT", Name: "风险情绪", Kind: scenario.KindSentiment},
+		{ID: "MKT", Name: "大盘", NameEn: "the market", Kind: scenario.KindMarket},
+		{ID: "SENT", Name: "风险情绪", NameEn: "risk sentiment", Kind: scenario.KindSentiment},
 	}
 	for _, sec := range u.Sectors {
-		factors = append(factors, scenario.Factor{ID: sec.ID, Name: sec.Name, Kind: scenario.KindSector})
+		factors = append(factors, scenario.Factor{ID: sec.ID, Name: sec.Name, NameEn: sec.NameEn, Kind: scenario.KindSector})
 	}
 	for _, mac := range u.Macros {
-		factors = append(factors, scenario.Factor{ID: mac.ID, Name: mac.Name, Kind: scenario.KindMacro})
+		factors = append(factors, scenario.Factor{ID: mac.ID, Name: mac.Name, NameEn: mac.NameEn, Kind: scenario.KindMacro})
 	}
 	for _, spec := range u.Instruments {
 		factors = append(factors, scenario.Factor{

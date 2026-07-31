@@ -13,7 +13,10 @@ const (
 type Factor struct {
 	ID   string
 	Name string
-	Kind FactorKind
+	// NameEn is the English display name; empty means "no translation",
+	// readers fall back to Name.
+	NameEn string `json:"name_en,omitempty"`
+	Kind   FactorKind
 }
 
 type OHLC struct{ Open, High, Low, Close float64 }
@@ -22,6 +25,8 @@ type KeyWindow struct{ StartDay, EndDay, Direction int }
 
 type Instrument struct {
 	ID, Alias, Desc string
+	// DescEn is the English one-liner; empty falls back to Desc.
+	DescEn string
 	// Aliases is the candidate set for the per-room display-name pick
 	// (engine.ResolveAlias); empty means "use Alias". Display-only, like
 	// Alias itself — world generation never reads either.

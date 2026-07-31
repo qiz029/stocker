@@ -297,13 +297,13 @@ func Hype(ctx context.Context, db *pgxpool.Pool, room *Room, sc *scenario.Scenar
 				break
 			}
 		}
-		headline, body := hypeCopy(direction, alias)
+		headline, body, headlineEn, bodyEn := hypeCopy(direction, alias)
 		shockMap := map[string]float64{fid: shock}
 		var newsID int64
 		if err := tx.QueryRow(ctx, `
-			INSERT INTO room_news (room_id, day, media_id, headline, track, true_shock, report_shock, body, cluster_id, driven_by_user_id)
-			VALUES ($1, $2, 'tabloid', $3, 'impact', $4, $5, $6, 0, $7) RETURNING id`,
-			room.ID, curDay, headline, shockJSON(shockMap), shockJSON(shockMap), body, userID).Scan(&newsID); err != nil {
+			INSERT INTO room_news (room_id, day, media_id, headline, track, true_shock, report_shock, body, cluster_id, driven_by_user_id, headline_en, body_en)
+			VALUES ($1, $2, 'tabloid', $3, 'impact', $4, $5, $6, 0, $7, $8, $9) RETURNING id`,
+			room.ID, curDay, headline, shockJSON(shockMap), shockJSON(shockMap), body, userID, headlineEn, bodyEn).Scan(&newsID); err != nil {
 			return err
 		}
 
@@ -315,9 +315,9 @@ func Hype(ctx context.Context, db *pgxpool.Pool, room *Room, sc *scenario.Scenar
 		for _, p := range engine.ManipulationFollowUps(room.Seed, curDay, alias,
 			fmt.Sprint(userID), fmt.Sprint(userHypes)) {
 			if _, err := tx.Exec(ctx, `
-				INSERT INTO room_forum_posts (room_id, day, npc_name, body)
-				VALUES ($1, $2, $3, $4)`,
-				room.ID, p.Day, p.NPCName, p.Body); err != nil {
+				INSERT INTO room_forum_posts (room_id, day, npc_name, body, npc_name_en, body_en)
+				VALUES ($1, $2, $3, $4, $5, $6)`,
+				room.ID, p.Day, p.NPCName, p.Body, p.NPCNameEn, p.BodyEn); err != nil {
 				return err
 			}
 		}
@@ -392,15 +392,19 @@ func Hype(ctx context.Context, db *pgxpool.Pool, room *Room, sc *scenario.Scenar
 	return out, nil
 }
 
-// hypeCopy renders the planted headline/body: rumor tone, directional, no
-// numbers, alias only.
-func hypeCopy(direction, alias string) (headline, body string) {
+// hypeCopy renders the planted headline/body in both languages: rumor
+// tone, directional, no numbers, alias only.
+func hypeCopy(direction, alias string) (headline, body, headlineEn, bodyEn string) {
 	if direction == "up" {
 		return fmt.Sprintf("据传%s有重磅利好正在酝酿，资金闻风而动", alias),
-			fmt.Sprintf("市场传闻称，%s近期或有重大利好消息公布。多位市场人士暗示已提前布局，具体细节尚待证实。", alias)
+			fmt.Sprintf("市场传闻称，%s近期或有重大利好消息公布。多位市场人士暗示已提前布局，具体细节尚待证实。", alias),
+			fmt.Sprintf("Word is %s has blockbuster news brewing, and the smart money is already circling", alias),
+			fmt.Sprintf("Market whispers say %s could unveil major good news any day now. Several insiders hint they positioned early; details remain unconfirmed.", alias)
 	}
 	return fmt.Sprintf("据传%s暗藏隐忧，知情人士悄然离场", alias),
-		fmt.Sprintf("市场传闻称，%s近期或面临重大不利变化。有消息称部分资金已提前撤离，具体细节尚待证实。", alias)
+		fmt.Sprintf("市场传闻称，%s近期或面临重大不利变化。有消息称部分资金已提前撤离，具体细节尚待证实。", alias),
+		fmt.Sprintf("Whispers say %s is hiding serious trouble, and those in the know are quietly slipping out", alias),
+		fmt.Sprintf("Market whispers say %s could be facing a major setback. Word is some funds have already pulled out; details remain unconfirmed.", alias)
 }
 
 // Debunk investigates one published news item: the player pays a flat fee

@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, ApiError, Room, ScenarioInfo } from "../api";
-import { LangSwitch, TFunc, useT } from "../i18n";
+import { LangSwitch, TFunc, pickL, useT } from "../i18n";
 import { usePoll } from "../usePoll";
 import { useToast } from "../Toast";
 import { useUser } from "../App";
@@ -17,7 +17,7 @@ function durationOptions(days: number, t: TFunc): [string, number][] {
 
 export default function Lobby() {
   const user = useUser();
-  const { t } = useT();
+  const { t, lang } = useT();
   const navigate = useNavigate();
   const { toast, node } = useToast();
   const { data, reload } = usePoll(() => api.get<{ rooms: Room[] }>("/api/rooms"), 30_000, []);
@@ -112,7 +112,7 @@ export default function Lobby() {
       {showCreate ? (
         <div className="lobby-form">
           <select value={scenarioID} onChange={e => { setScenarioID(e.target.value); setDuration(0); }}>
-            {scenarios.map(sc => <option key={sc.id} value={sc.id}>{sc.name}{t("lobby.scenarioDays", { days: sc.days })}</option>)}
+            {scenarios.map(sc => <option key={sc.id} value={sc.id}>{pickL(lang, sc.name, sc.name_en)}{t("lobby.scenarioDays", { days: sc.days })}</option>)}
           </select>
           <select value={duration || durationOptions(scenarios.find(sc => sc.id === scenarioID)?.days ?? 300, t)[1]![1]}
             onChange={e => setDuration(Number(e.target.value))}>

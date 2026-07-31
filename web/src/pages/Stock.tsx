@@ -1,7 +1,7 @@
 import { useNavigate, useParams } from "react-router-dom";
 import { NewsItem, NewsResponse, fetchNews } from "../api";
 import { fmt$, fmtPct, prettifyHeadline } from "../format";
-import { LangSwitch, mediaName, useT } from "../i18n";
+import { LangSwitch, mediaName, pickL, useT } from "../i18n";
 import { useRoomData, useSimClock } from "../roomData";
 import { useIncrementalFeed } from "../useIncrementalFeed";
 import { useState } from "react";
@@ -14,7 +14,7 @@ import TradePanel from "../components/TradePanel";
 export default function Stock() {
   const { roomId, instrumentId } = useParams<{ roomId: string; instrumentId: string }>();
   const navigate = useNavigate();
-  const { t } = useT();
+  const { t, lang } = useT();
   const { state, portfolio, series, ohlc, reload } = useRoomData(roomId!);
   const clock = useSimClock(state?.room);
   const { items: newsItems } = useIncrementalFeed<NewsItem, NewsResponse>(
@@ -55,7 +55,7 @@ export default function Stock() {
         <div>
           {candles.length > 1 && (
             <CandleChart
-              label={`${inst.alias} · ${inst.desc} · ${inst.id}`}
+              label={`${inst.alias} · ${pickL(lang, inst.desc, inst.desc_en)} · ${inst.id}`}
               days={candles} formatValue={fmt$}
             />
           )}
@@ -93,12 +93,12 @@ export default function Stock() {
           <div className="section">
             <h2>{t("stock.profile")}</h2>
             <div className="profile-grid">
-              <div className="profile-item"><div className="pk">{t("stock.profileDesc")}</div><p>{inst.desc || "——"}</p></div>
+              <div className="profile-item"><div className="pk">{t("stock.profileDesc")}</div><p>{pickL(lang, inst.desc, inst.desc_en) || "——"}</p></div>
               {inst.profile && (
                 <>
-                  <div className="profile-item"><div className="pk">{t("stock.profileBusiness")}</div><p>{inst.profile.business}</p></div>
-                  <div className="profile-item"><div className="pk bull">{t("stock.profileBull")}</div><p>{inst.profile.bull}</p></div>
-                  <div className="profile-item"><div className="pk bear">{t("stock.profileBear")}</div><p>{inst.profile.bear}</p></div>
+                  <div className="profile-item"><div className="pk">{t("stock.profileBusiness")}</div><p>{pickL(lang, inst.profile.business, inst.profile_en?.business)}</p></div>
+                  <div className="profile-item"><div className="pk bull">{t("stock.profileBull")}</div><p>{pickL(lang, inst.profile.bull, inst.profile_en?.bull)}</p></div>
+                  <div className="profile-item"><div className="pk bear">{t("stock.profileBear")}</div><p>{pickL(lang, inst.profile.bear, inst.profile_en?.bear)}</p></div>
                 </>
               )}
             </div>
@@ -107,15 +107,19 @@ export default function Stock() {
           <div className="section">
             <h2>{t("stock.relatedNews")}</h2>
             {relatedNews.length === 0 && <div className="feed-item">{t("stock.noNews")}</div>}
-            {relatedNews.map(n => (
+            {relatedNews.map(n => {
+              const headline = pickL(lang, n.headline, n.headline_en);
+              const body = pickL(lang, n.body, n.body_en);
+              return (
               <div key={n.id}
-                className={`feed-item ${n.body ? "news" : ""} ${openNews === n.id ? "open" : ""}`}
-                onClick={n.body ? () => setOpenNews(openNews === n.id ? null : n.id) : undefined}>
+                className={`feed-item ${body ? "news" : ""} ${openNews === n.id ? "open" : ""}`}
+                onClick={body ? () => setOpenNews(openNews === n.id ? null : n.id) : undefined}>
                 <div className="fi-meta">{mediaName(n.media_id, t)} · <span className="num">{t("common.day", { day: n.day })}</span></div>
-                <div className={n.body ? "fi-title" : ""}>{prettifyHeadline(n.headline, aliasOf)}</div>
-                {n.body && <div className="fi-body">{n.body}</div>}
+                <div className={body ? "fi-title" : ""}>{prettifyHeadline(headline, aliasOf)}</div>
+                {body && <div className="fi-body">{body}</div>}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
