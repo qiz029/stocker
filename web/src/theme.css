@@ -171,18 +171,26 @@ button { font-family: inherit; cursor: pointer; }
   overflow: visible; padding: 0; border: 1px solid rgba(255,255,255,.12); border-radius: 16px;
   background: #171a20; color: var(--ink); text-align: left;
   box-shadow: 0 14px 34px rgba(0,0,0,.3);
-  transition: transform .24s ease, border-color .24s ease, box-shadow .24s ease;
+  transition: border-color .24s ease, box-shadow .24s ease;
 }
-.era-card:hover { transform: translateY(-5px); border-color: color-mix(in srgb, var(--era-accent) 62%, white 10%); box-shadow: 0 21px 42px rgba(0,0,0,.42); }
 .era-card:focus-visible { outline: 2px solid var(--era-accent); outline-offset: 4px; }
 .era-card.selected {
-  transform: translateY(-6px); border-color: var(--era-accent);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--era-accent) 45%, transparent), 0 22px 48px rgba(0,0,0,.48), 0 0 28px color-mix(in srgb, var(--era-accent) 22%, transparent);
+  border-color: color-mix(in srgb, var(--era-accent) 88%, white 12%);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--era-accent) 38%, transparent),
+    inset 0 3px 0 color-mix(in srgb, var(--era-accent) 82%, white 8%),
+    0 18px 42px rgba(0,0,0,.46),
+    0 0 26px color-mix(in srgb, var(--era-accent) 18%, transparent);
 }
 .era-node {
   position: absolute; z-index: 5; top: -18px; left: 50%; width: 9px; height: 9px; border-radius: 50%;
   background: #16191f; border: 2px solid var(--era-accent); transform: translateX(-50%);
   box-shadow: 0 0 0 4px #101217, 0 0 15px color-mix(in srgb, var(--era-accent) 60%, transparent);
+  transition: background-color .2s ease, box-shadow .2s ease;
+}
+.era-card.selected .era-node {
+  background: var(--era-accent);
+  box-shadow: 0 0 0 4px #101217, 0 0 18px color-mix(in srgb, var(--era-accent) 76%, transparent);
 }
 .era-link {
   position: absolute; z-index: 4; top: -14px; left: 50%; width: calc(100% + 12px); height: 1px;
@@ -194,15 +202,17 @@ button { font-family: inherit; cursor: pointer; }
   z-index: -3; width: 100%; height: 100%; object-fit: cover; filter: saturate(.92) contrast(1.04);
   transition: transform .5s ease, filter .3s ease;
 }
-.era-card:hover .era-card-art, .era-card.selected .era-card-art { transform: scale(1.045); filter: saturate(1.1) contrast(1.05); }
+.era-card.selected .era-card-art { transform: scale(1.035); filter: saturate(1.08) contrast(1.06) brightness(1.04); }
 .era-card-shade {
   z-index: -2;
   background: linear-gradient(180deg, rgba(3,5,8,.12) 0%, rgba(3,5,8,.18) 28%, rgba(3,5,8,.9) 73%, rgba(3,5,8,.98) 100%);
 }
 .era-card::after {
-  content: ""; position: absolute; z-index: -1; inset: 0; border-radius: inherit; opacity: .34;
+  content: ""; position: absolute; z-index: -1; inset: 0; border-radius: inherit; opacity: .28;
   background: linear-gradient(140deg, color-mix(in srgb, var(--era-accent) 35%, transparent), transparent 34%);
+  transition: opacity .24s ease;
 }
+.era-card.selected::after { opacity: .48; }
 .era-card-index { position: absolute; top: 15px; right: 16px; color: rgba(255,255,255,.65); font-size: .66rem; letter-spacing: .08em; }
 .era-card-copy { position: absolute; left: 17px; right: 17px; bottom: 42px; display: grid; }
 .era-year { color: white; font-size: clamp(2rem, 4vw, 2.65rem); line-height: .98; letter-spacing: -.055em; text-shadow: 0 2px 18px rgba(0,0,0,.5); }
@@ -214,6 +224,30 @@ button { font-family: inherit; cursor: pointer; }
 }
 .era-card.selected .era-card-state { color: var(--era-accent); }
 .era-card.selected .era-card-state::before { content: "●"; margin-right: 6px; font-size: .55rem; }
+@media (hover: hover) and (pointer: fine) {
+  .era-card:hover {
+    border-color: color-mix(in srgb, var(--era-accent) 72%, white 12%);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--era-accent) 28%, transparent),
+      0 18px 42px rgba(0,0,0,.44),
+      0 0 22px color-mix(in srgb, var(--era-accent) 15%, transparent);
+  }
+  .era-card:hover .era-card-art { transform: scale(1.035); filter: saturate(1.08) contrast(1.06) brightness(1.05); }
+  .era-card:hover::after { opacity: .48; }
+  .era-card:hover .era-node {
+    background: var(--era-accent);
+    box-shadow: 0 0 0 4px #101217, 0 0 18px color-mix(in srgb, var(--era-accent) 72%, transparent);
+  }
+  .era-card:hover .era-card-state { color: var(--era-accent); }
+  .era-card.selected:hover {
+    border-color: color-mix(in srgb, var(--era-accent) 92%, white 8%);
+    box-shadow:
+      inset 0 0 0 1px color-mix(in srgb, var(--era-accent) 42%, transparent),
+      inset 0 3px 0 color-mix(in srgb, var(--era-accent) 88%, white 10%),
+      0 20px 46px rgba(0,0,0,.5),
+      0 0 30px color-mix(in srgb, var(--era-accent) 22%, transparent);
+  }
+}
 .create-room-actions { display: flex; align-items: end; gap: 12px; margin-top: 22px; }
 .duration-field { flex: 1; display: grid; gap: 6px; }
 .duration-field > span { color: var(--ink2); font-size: .7rem; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
@@ -633,5 +667,5 @@ canvas.chart { width: 100%; height: auto; display: block; touch-action: none; }
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 .err-banner { color: var(--down); font-size: 0.82rem; padding: 8px 0; }
 @media (prefers-reduced-motion: reduce) {
-  .toast, .feed-item.news .fi-title::after, .era-card, .era-card-art { transition: none; }
+  .toast, .feed-item.news .fi-title::after, .era-card, .era-card-art, .era-node, .era-card::after { transition: none; }
 }
