@@ -72,7 +72,7 @@ export default function News() {
             {pickL(lang, story.body, story.body_en) || <span className="muted">{t("news.noBody")}</span>}
           </div>
           <div className="fi-actions">
-            {!story.disputed && !verdict && (
+            {room.room.is_member !== false && !story.disputed && !verdict && (
               <button className="fi-act" onClick={investigate}>
                 {t("news.investigate", { fee: fmtCents(DEBUNK_FEE_CENTS) })}
               </button>

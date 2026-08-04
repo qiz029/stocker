@@ -9,8 +9,9 @@ import { useUser } from "../App";
 import Chat from "./Chat";
 import Sparkline from "./Sparkline";
 import { loadDebunkVerdicts, saveDebunkVerdict } from "../debunkVerdicts";
+import { avatarGlyph } from "../avatar";
 
-type Props = { roomId: string; state: RoomState; aliasOf: (id: string) => string };
+type Props = { roomId: string; state: RoomState; aliasOf: (id: string) => string; readOnly?: boolean };
 
 type NewsGroup = { key: string; items: NewsItem[] };
 
@@ -57,7 +58,7 @@ function accuracyText(acc: MediaAccuracy | undefined, mediaID: string, t: TFunc)
 
 const DEBUNK_FEE_CENTS = 200_000;
 
-export default function RightRail({ roomId, state, aliasOf }: Props) {
+export default function RightRail({ roomId, state, aliasOf, readOnly = false }: Props) {
   const user = useUser();
   const { t, lang } = useT();
   const { toast, node } = useToast();
@@ -114,7 +115,7 @@ export default function RightRail({ roomId, state, aliasOf }: Props) {
         {body && <div className="fi-body">{body}</div>}
         <div className="fi-actions" onClick={e => e.stopPropagation()}>
           <Link className="fi-act" to={`/rooms/${roomId}/news/${n.id}`}>{t("news.readFull")}</Link>
-          {!n.disputed && !verdict && (
+          {!readOnly && !n.disputed && !verdict && (
             <button className="fi-act" onClick={() => investigate(n.id)}>
               {t("news.investigate", { fee: fmtCents(DEBUNK_FEE_CENTS) })}
             </button>
@@ -137,6 +138,7 @@ export default function RightRail({ roomId, state, aliasOf }: Props) {
           <div key={row.username}
             className={`lb-row ${row.username === user.username ? "me" : ""} ${row.bankrupt ? "bankrupt" : ""}`}>
             <span className="rank num">{i + 1}</span>
+            {!row.is_agent && <span className="lb-player-avatar">{avatarGlyph(row.avatar_id, row.username)}</span>}
             <span className="who">{row.username}
               {row.is_agent && <small className="agent-badge">{t("common.agent")}</small>}
               {row.late_join && <small>{t("reveal.lateJoin")}</small>}
@@ -151,7 +153,7 @@ export default function RightRail({ roomId, state, aliasOf }: Props) {
         ))}
       </div>
 
-      <Chat roomId={roomId} />
+      <Chat roomId={roomId} readOnly={readOnly} />
 
       <div className="card">
         <h2>{t("rail.events")}</h2>

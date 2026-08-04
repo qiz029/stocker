@@ -115,6 +115,75 @@ func TestCreateRoomValidatesDayDuration(t *testing.T) {
 	}
 }
 
+func TestEraLeaderboardUsesFinalSnapshotsAcrossEras(t *testing.T) {
+	pool := TestDB(t, "store")
+	ctx := context.Background()
+	now := time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC)
+
+	makeCompletedRoom := func(scenarioID, hostName string) (*Room, *User) {
+		t.Helper()
+		sc := scenario.Synthetic()
+		sc.ID = scenarioID
+		if err := SaveScenario(ctx, pool, sc); err != nil {
+			t.Fatal(err)
+		}
+		host := mkUser(t, pool, hostName)
+		room, err := CreateRoom(ctx, pool, sc, host.ID, 60, nil, "public")
+		if err != nil {
+			t.Fatal(err)
+		}
+		startedAt := now.Add(-time.Duration(sc.Days+1) * time.Minute)
+		if _, err := pool.Exec(ctx, `UPDATE rooms SET status = 'running', started_at = $2 WHERE id = $1`, room.ID, startedAt); err != nil {
+			t.Fatal(err)
+		}
+		return room, host
+	}
+
+	roomA, hostA := makeCompletedRoom("era-a", "winner-a")
+	roomB, hostB := makeCompletedRoom("era-b", "winner-b")
+	for _, result := range []struct {
+		room  *Room
+		host  *User
+		total int64
+	}{{roomA, hostA, 12_000_000}, {roomB, hostB, 11_000_000}} {
+		if _, err := pool.Exec(ctx, `
+			INSERT INTO room_player_daily (room_id, user_id, day, total_cents)
+			VALUES ($1, $2, $3, $4)`, result.room.ID, result.host.ID, result.room.Days-1, result.total); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// A large but non-final snapshot must not leak into the completed leaderboard.
+	stale := mkUser(t, pool, "stale-player")
+	if _, err := pool.Exec(ctx, `INSERT INTO room_players (room_id, user_id, cash_cents) VALUES ($1, $2, $3)`,
+		roomA.ID, stale.ID, InitialCashCents); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO room_player_daily (room_id, user_id, day, total_cents) VALUES ($1, $2, $3, $4)`,
+		roomA.ID, stale.ID, roomA.Days-2, 99_000_000); err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := EraLeaderboard(ctx, pool, now, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("leaderboard rows = %+v, want one final result per era", rows)
+	}
+	got := map[string]string{}
+	for _, row := range rows {
+		got[row.ScenarioID] = row.Username
+		if row.Username == stale.Username {
+			t.Fatalf("stale snapshot entered leaderboard: %+v", row)
+		}
+	}
+	if got["era-a"] != hostA.Username || got["era-b"] != hostB.Username {
+		t.Fatalf("leaderboard by era = %v", got)
+	}
+}
+
 func TestJoinStartAndClock(t *testing.T) {
 	pool := TestDB(t, "store")
 	ctx := context.Background()

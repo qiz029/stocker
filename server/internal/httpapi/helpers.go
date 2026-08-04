@@ -31,12 +31,17 @@ func (s *Server) storeErr(w http.ResponseWriter, err error) {
 		writeErr(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, store.ErrUsernameTaken),
 		errors.Is(err, store.ErrAlreadyJoined),
+		errors.Is(err, store.ErrRoomFull),
+		errors.Is(err, store.ErrPublicJoinClosed),
 		errors.Is(err, store.ErrRoomEnded),
 		errors.Is(err, store.ErrNotCancellable):
 		writeErr(w, http.StatusConflict, err.Error())
 	case errors.Is(err, store.ErrCannotStart):
 		writeErr(w, http.StatusForbidden, err.Error())
+	case errors.Is(err, store.ErrBadProfile):
+		writeErr(w, http.StatusUnprocessableEntity, err.Error())
 	case errors.Is(err, store.ErrBadDayDuration),
+		errors.Is(err, store.ErrBadVisibility),
 		errors.Is(err, store.ErrBadOrder),
 		errors.Is(err, store.ErrUnknownInstrument),
 		errors.Is(err, store.ErrInsufficientCash),

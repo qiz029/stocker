@@ -76,6 +76,14 @@ func (c *client) mustJSON(method, path string, body any, wantStatus int) map[str
 
 func registerClient(t *testing.T, s *Server, username string) *client {
 	t.Helper()
+	c := registerIncompleteClient(t, s, username)
+	c.mustJSON("PUT", "/api/me/profile",
+		map[string]any{"display_name": username, "avatar_id": "bull"}, http.StatusOK)
+	return c
+}
+
+func registerIncompleteClient(t *testing.T, s *Server, username string) *client {
+	t.Helper()
 	c := newClient(t, s)
 	c.mustJSON("POST", "/api/register",
 		map[string]any{"username": username, "password": "password123"}, http.StatusOK)

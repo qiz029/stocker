@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"io/fs"
 	"testing"
 )
 
@@ -31,12 +32,16 @@ func TestMigrateCreatesSchemaAndIsIdempotent(t *testing.T) {
 		}
 	}
 
-	// Exactly thirteen migrations recorded, exactly once.
+	// Every embedded migration is recorded exactly once.
 	var applied int
 	if err := pool.QueryRow(ctx, "SELECT count(*) FROM schema_migrations").Scan(&applied); err != nil {
 		t.Fatalf("schema_migrations: %v", err)
 	}
-	if applied != 13 {
-		t.Fatalf("applied migrations = %d, want 13", applied)
+	names, err := fs.Glob(migrationsFS, "migrations/*.sql")
+	if err != nil {
+		t.Fatalf("glob migrations: %v", err)
+	}
+	if applied != len(names) {
+		t.Fatalf("applied migrations = %d, want %d", applied, len(names))
 	}
 }

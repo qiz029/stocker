@@ -669,3 +669,5 @@ canvas.chart { width: 100%; height: auto; display: block; touch-action: none; }
 @media (prefers-reduced-motion: reduce) {
   .toast, .feed-item.news .fi-title::after, .era-card, .era-card-art, .era-node, .era-card::after { transition: none; }
 }
+.lb-player-avatar { width: 24px; height: 24px; display: inline-grid; place-items: center; margin-right: 7px; border-radius: 50%; background: #252b35; font-size: .72rem; }
+.chat-avatar { width: 20px; height: 20px; display: inline-grid; place-items: center; margin-right: 5px; border-radius: 50%; background: #252b35; font-size: .62rem; }

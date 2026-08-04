@@ -13,6 +13,8 @@ import Docs from "./pages/Docs";
 // Exported so page/component tests can provide a fake user.
 export const UserCtxForTest = createContext<User | null>(null);
 export const useUser = () => useContext(UserCtxForTest)!;
+const UserUpdateCtx = createContext<(user: User) => void>(() => undefined);
+export const useUpdateUser = () => useContext(UserUpdateCtx);
 
 function Shell() {
   const [user, setUser] = useState<User | null>(null);
@@ -32,14 +34,16 @@ function Shell() {
   }
   return (
     <UserCtxForTest.Provider value={user}>
-      <Routes>
-        <Route path="" element={<Lobby />} />
-        <Route path="rooms/:roomId" element={<Room />} />
-        <Route path="rooms/:roomId/i/:instrumentId" element={<Stock />} />
-        <Route path="rooms/:roomId/news/:newsId" element={<News />} />
-        <Route path="rooms/:roomId/reveal" element={<Reveal />} />
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
+      <UserUpdateCtx.Provider value={setUser}>
+        <Routes>
+          <Route path="" element={<Lobby />} />
+          <Route path="rooms/:roomId" element={<Room />} />
+          <Route path="rooms/:roomId/i/:instrumentId" element={<Stock />} />
+          <Route path="rooms/:roomId/news/:newsId" element={<News />} />
+          <Route path="rooms/:roomId/reveal" element={<Reveal />} />
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+      </UserUpdateCtx.Provider>
     </UserCtxForTest.Provider>
   );
 }

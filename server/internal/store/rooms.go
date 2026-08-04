@@ -21,6 +21,7 @@ import (
 const (
 	InitialCashCents int64 = 10_000_000 // $100,000 (spec §2.2)
 	AgentPlayerCount       = 5
+	MaxHumanPlayers        = 12
 )
 
 // CopyFillBudget bounds how long room creation waits for the news copy
@@ -53,15 +54,16 @@ type Room struct {
 	DayDurationSecs int
 	StartedAt       *time.Time
 	HostUserID      int64
+	Visibility      string // "public" | "private"
 }
 
-const roomCols = `id, invite_code, scenario_id, days, seed, status, day_duration_secs, started_at, host_user_id`
+const roomCols = `id, invite_code, scenario_id, days, seed, status, day_duration_secs, started_at, host_user_id, visibility`
 
 func scanRoom(row pgx.Row) (*Room, error) {
 	r := &Room{}
 	var seed int64
 	err := row.Scan(&r.ID, &r.InviteCode, &r.ScenarioID, &r.Days, &seed,
-		&r.Status, &r.DayDurationSecs, &r.StartedAt, &r.HostUserID)
+		&r.Status, &r.DayDurationSecs, &r.StartedAt, &r.HostUserID, &r.Visibility)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -110,9 +112,16 @@ func shockJSON(m map[string]float64) any {
 // CreateRoom generates this room's parallel world and persists it whole.
 // The fidelity gate (engine.VerifyFidelity) can reject a seed; we retry
 // derived seeds a bounded number of times (spec §4.6: "不达标的参数组合拒绝").
-func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, hostID int64, dayDurationSecs int, filler NewsCopyFiller) (*Room, error) {
+func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, hostID int64, dayDurationSecs int, filler NewsCopyFiller, visibility ...string) (*Room, error) {
 	if dayDurationSecs < 60 || dayDurationSecs > 86400 {
 		return nil, ErrBadDayDuration
+	}
+	roomVisibility := "private"
+	if len(visibility) > 0 && visibility[0] != "" {
+		roomVisibility = visibility[0]
+	}
+	if roomVisibility != "public" && roomVisibility != "private" {
+		return nil, ErrBadVisibility
 	}
 	var b [8]byte
 	if _, err := cryptorand.Read(b[:]); err != nil {
@@ -153,9 +162,9 @@ func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, ho
 	var room *Room
 	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
 		r, err := scanRoom(tx.QueryRow(ctx, `
-			INSERT INTO rooms (invite_code, scenario_id, days, seed, day_duration_secs, host_user_id)
-			VALUES ($1, $2, $3, $4, $5, $6) RETURNING `+roomCols,
-			invite, sc.ID, sc.Days, int64(seed), dayDurationSecs, hostID))
+			INSERT INTO rooms (invite_code, scenario_id, days, seed, day_duration_secs, host_user_id, visibility)
+			VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING `+roomCols,
+			invite, sc.ID, sc.Days, int64(seed), dayDurationSecs, hostID, roomVisibility))
 		if err != nil {
 			return err
 		}
@@ -417,4 +426,156 @@ func IsMember(ctx context.Context, q Querier, roomID, userID int64) (bool, error
 		SELECT EXISTS (SELECT 1 FROM room_players WHERE room_id = $1 AND user_id = $2)`,
 		roomID, userID).Scan(&ok)
 	return ok, err
+}
+
+func HumanPlayerCount(ctx context.Context, q Querier, roomID int64) (int, error) {
+	var count int
+	err := q.QueryRow(ctx, `
+		SELECT COUNT(*) FROM room_players rp JOIN users u ON u.id = rp.user_id
+		WHERE rp.room_id = $1 AND NOT u.is_agent`, roomID).Scan(&count)
+	return count, err
+}
+
+// JoinPublicRoom atomically verifies that the table is still public, waiting,
+// and below its human-player limit before seating the user. Locking the room
+// prevents a concurrent start or burst of joins from crossing that boundary.
+func JoinPublicRoom(ctx context.Context, db *pgxpool.Pool, roomID, userID int64) error {
+	return pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
+		room, err := scanRoom(tx.QueryRow(ctx, `SELECT `+roomCols+` FROM rooms WHERE id = $1 FOR UPDATE`, roomID))
+		if err != nil {
+			return err
+		}
+		if room.Visibility != "public" || room.Status != "lobby" {
+			return ErrPublicJoinClosed
+		}
+		humans, err := HumanPlayerCount(ctx, tx, room.ID)
+		if err != nil {
+			return err
+		}
+		if humans >= MaxHumanPlayers {
+			return ErrRoomFull
+		}
+		_, err = JoinRoom(ctx, tx, room, userID, time.Time{})
+		return err
+	})
+}
+
+type PublicRoomSummary struct {
+	Room
+	HumanPlayers int
+	LeaderName   string
+	LeaderAvatar string
+	LeaderReturn float64
+}
+
+// ListPublicRooms returns lobby and running rooms without any invite codes or
+// private player state. Agents are counted separately by the API contract and
+// never consume the human capacity shown in the hall.
+func ListPublicRooms(ctx context.Context, q Querier, limit int) ([]PublicRoomSummary, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	rows, err := q.Query(ctx, `
+		SELECT r.id, r.invite_code, r.scenario_id, r.days, r.seed, r.status,
+			r.day_duration_secs, r.started_at, r.host_user_id, r.visibility,
+			(SELECT COUNT(*)::int FROM room_players rp JOIN users u ON u.id = rp.user_id
+			 WHERE rp.room_id = r.id AND NOT u.is_agent) AS human_players,
+			COALESCE(leader.username, ''), COALESCE(leader.avatar_id, ''),
+			COALESCE((leader.total_cents - $2)::double precision / $2, 0)
+		FROM rooms r
+		LEFT JOIN LATERAL (
+			SELECT COALESCE(NULLIF(u.display_name, ''), u.username) username,
+				u.avatar_id, latest.total_cents
+			FROM (
+				SELECT DISTINCT ON (d.user_id) d.user_id, d.total_cents
+				FROM room_player_daily d
+				WHERE d.room_id = r.id
+				ORDER BY d.user_id, d.day DESC
+			) latest
+			JOIN users u ON u.id = latest.user_id AND NOT u.is_agent
+			ORDER BY latest.total_cents DESC, u.id
+			LIMIT 1
+		) leader ON true
+		WHERE r.visibility = 'public'
+		ORDER BY CASE r.status WHEN 'running' THEN 0 ELSE 1 END, r.id DESC
+		LIMIT $1`, limit, InitialCashCents)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []PublicRoomSummary{}
+	for rows.Next() {
+		r := PublicRoomSummary{}
+		var seed int64
+		if err := rows.Scan(&r.ID, &r.InviteCode, &r.ScenarioID, &r.Days, &seed,
+			&r.Status, &r.DayDurationSecs, &r.StartedAt, &r.HostUserID, &r.Visibility,
+			&r.HumanPlayers, &r.LeaderName, &r.LeaderAvatar, &r.LeaderReturn); err != nil {
+			return nil, err
+		}
+		r.Seed = uint64(seed)
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+type EraLeaderboardRow struct {
+	ScenarioID string
+	Username   string
+	AvatarID   string
+	ReturnPct  float64
+	Wins       int
+}
+
+// EraLeaderboard ranks humans by their best settled total in completed public
+// rooms. A player's best run represents them once per era; agents are excluded.
+func EraLeaderboard(ctx context.Context, q Querier, now time.Time, limit int) ([]EraLeaderboardRow, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	rows, err := q.Query(ctx, `
+		WITH completed AS (
+			SELECT r.id, r.scenario_id
+			FROM rooms r
+			WHERE r.visibility = 'public' AND r.started_at IS NOT NULL
+			  AND r.started_at + make_interval(secs => r.day_duration_secs * r.days) <= $2
+		), final_totals AS (
+			SELECT d.room_id, d.user_id, d.total_cents
+			FROM room_player_daily d
+			JOIN completed c ON c.id = d.room_id
+			JOIN rooms r ON r.id = d.room_id
+			WHERE d.day = r.days - 1
+		), ranked AS (
+			SELECT c.scenario_id, u.id, COALESCE(NULLIF(u.display_name, ''), u.username) username,
+				u.avatar_id, (f.total_cents - $1)::double precision / $1 AS return_pct,
+				ROW_NUMBER() OVER (PARTITION BY c.id ORDER BY f.total_cents DESC, u.id) room_rank
+			FROM final_totals f
+			JOIN completed c ON c.id = f.room_id
+			JOIN users u ON u.id = f.user_id
+			WHERE NOT u.is_agent
+		), best AS (
+			SELECT scenario_id, id, username, avatar_id, MAX(return_pct) return_pct,
+				COUNT(*) FILTER (WHERE room_rank = 1)::int wins
+			FROM ranked GROUP BY scenario_id, id, username, avatar_id
+		), era_ranked AS (
+			SELECT *, ROW_NUMBER() OVER (
+				PARTITION BY scenario_id ORDER BY return_pct DESC, username
+			) era_rank
+			FROM best
+		)
+		SELECT scenario_id, username, avatar_id, return_pct, wins
+		FROM era_ranked WHERE era_rank <= $3
+		ORDER BY scenario_id, era_rank`, InitialCashCents, now, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []EraLeaderboardRow{}
+	for rows.Next() {
+		var r EraLeaderboardRow
+		if err := rows.Scan(&r.ScenarioID, &r.Username, &r.AvatarID, &r.ReturnPct, &r.Wins); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
 }

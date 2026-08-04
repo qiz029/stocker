@@ -30,7 +30,7 @@ describe("Lobby", () => {
     ] } : { rooms: [] });
     render(
       <MemoryRouter>
-        <UserCtxForTest.Provider value={{ id: 1, username: "alice" }}>
+        <UserCtxForTest.Provider value={{ id: 1, username: "alice", profile_complete: true }}>
           <Lobby />
         </UserCtxForTest.Provider>
       </MemoryRouter>
@@ -60,7 +60,7 @@ describe("Lobby", () => {
     mockRoutes((url) => url === "/api/scenarios" ? { items: available } : { rooms: [] });
     render(
       <MemoryRouter>
-        <UserCtxForTest.Provider value={{ id: 1, username: "alice" }}>
+        <UserCtxForTest.Provider value={{ id: 1, username: "alice", profile_complete: true }}>
           <Lobby />
         </UserCtxForTest.Provider>
       </MemoryRouter>
@@ -81,15 +81,14 @@ describe("Lobby", () => {
     ] } : { rooms });
     render(
       <MemoryRouter>
-        <UserCtxForTest.Provider value={{ id: 1, username: "alice" }}>
+        <UserCtxForTest.Provider value={{ id: 1, username: "alice", profile_complete: true }}>
           <Lobby />
         </UserCtxForTest.Provider>
       </MemoryRouter>
     );
-    // day counter is split across nodes (第 <b>150</b> / 300) — assert the bold number
-    await waitFor(() => expect(screen.getByText("150")).toBeInTheDocument());
-    expect(screen.getByText("Ended")).toBeInTheDocument();
-    expect(screen.getByText("Waiting to start")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText("Day 150/300").length).toBeGreaterThan(0));
+    expect(screen.getAllByText("ENDED").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("WAITING").length).toBeGreaterThan(0);
   });
 
   it("joins a room by invite code", async () => {
@@ -105,7 +104,7 @@ describe("Lobby", () => {
     });
     render(
       <MemoryRouter>
-        <UserCtxForTest.Provider value={{ id: 1, username: "alice" }}>
+        <UserCtxForTest.Provider value={{ id: 1, username: "alice", profile_complete: true }}>
           <Lobby />
         </UserCtxForTest.Provider>
       </MemoryRouter>
@@ -128,13 +127,56 @@ describe("Lobby", () => {
       }
       return { rooms: [] };
     });
-    render(<MemoryRouter><UserCtxForTest.Provider value={{ id: 1, username: "me" }}><Lobby /></UserCtxForTest.Provider></MemoryRouter>);
+    render(<MemoryRouter><UserCtxForTest.Provider value={{ id: 1, username: "me", profile_complete: true }}><Lobby /></UserCtxForTest.Provider></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: "＋ Create new room" }));
     // scenario defaults to the earliest dated entry; pick the 2-week duration
     fireEvent.change(screen.getByRole("combobox", { name: "Game duration" }),
       { target: { value: String(Math.round(2 * 604800 / 750)) } });
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(bodies).toEqual([
-      { scenario_id: "dotcom-2000", day_duration_secs: Math.round(2 * 604800 / 750) }]));
+      { scenario_id: "dotcom-2000", day_duration_secs: Math.round(2 * 604800 / 750), visibility: "public" }]));
+  });
+
+  it("collects a player identity before opening the create-room dialog", async () => {
+    const calls: string[] = [];
+    mockRoutes((url, init) => {
+      calls.push(`${init?.method ?? "GET"} ${url}`);
+      if (url === "/api/scenarios") return { items: [{ id: "synthetic-v1", name: "Synthetic", days: 300 }] };
+      if (url === "/api/me/profile") return { id: 1, username: "alice", display_name: "Market Owl", avatar_id: "owl", profile_complete: true };
+      if (url === "/api/leaderboards/eras") return { items: [] };
+      return { rooms: [] };
+    });
+    render(<MemoryRouter><UserCtxForTest.Provider value={{ id: 1, username: "alice", profile_complete: false }}><Lobby /></UserCtxForTest.Provider></MemoryRouter>);
+
+    fireEvent.click(await screen.findByRole("button", { name: "＋ Create new room" }));
+    expect(screen.getByRole("heading", { name: "Choose your player identity" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "Market Owl" } });
+    fireEvent.click(screen.getByRole("button", { name: "owl" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save & continue" }));
+
+    expect(await screen.findByRole("heading", { name: "Open a public timeline" })).toBeInTheDocument();
+    expect(calls).toContain("PUT /api/me/profile");
+  });
+
+  it("requires a display name and avatar before joining a public waiting room", async () => {
+    const calls: { url: string; method: string; body?: unknown }[] = [];
+    const waiting = { ...rooms[2], visibility: "public", human_players: 1, max_human_players: 12, agent_players: 5 };
+    mockRoutes((url, init) => {
+      calls.push({ url, method: init?.method ?? "GET", body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      if (url === "/api/scenarios") return { items: [{ id: "synthetic-v1", name: "Synthetic", days: 300 }] };
+      if (url === "/api/rooms/public") return { rooms: [waiting] };
+      if (url === "/api/leaderboards/eras") return { items: [] };
+      if (url === "/api/me/profile") return { id: 1, username: "alice", display_name: "Market Fox", avatar_id: "fox", profile_complete: true };
+      if (url === "/api/rooms/3/join") return waiting;
+      return { rooms: [] };
+    });
+    render(<MemoryRouter><UserCtxForTest.Provider value={{ id: 1, username: "alice", profile_complete: false }}><Lobby /></UserCtxForTest.Provider></MemoryRouter>);
+    const room = await screen.findByText("Room #3");
+    fireEvent.click(room.closest(".hall-room")!.querySelector(".hall-room-action")!);
+    fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "Market Fox" } });
+    fireEvent.click(screen.getByRole("button", { name: "fox" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save & join" }));
+    await waitFor(() => expect(calls.some(call => call.url === "/api/me/profile" && call.method === "PUT")).toBe(true));
+    await waitFor(() => expect(calls.some(call => call.url === "/api/rooms/3/join" && call.method === "POST")).toBe(true));
   });
 });

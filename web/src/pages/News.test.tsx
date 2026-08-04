@@ -84,4 +84,29 @@ describe("News detail page", () => {
     fireEvent.click(screen.getByRole("button", { name: "中文" }));
     expect(await screen.findByText(/结论：大概率属实/)).toBeInTheDocument();
   });
+
+  it("keeps paid investigation controls hidden from spectators", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async input => {
+      if (String(input).endsWith("/news/7")) {
+        return new Response(JSON.stringify({
+          id: 7, day: 4, media_id: "wire", headline: "S1重组", body: "完整正文。",
+          headline_en: "S1 restructuring", body_en: "Full body.", disputed: false, exposed: false,
+        }), { status: 200 });
+      }
+      return new Response(JSON.stringify({
+        room: { id: 1, scenario_id: "s", days: 30, status: "running", day_duration_secs: 60, is_member: false },
+        instruments: [{ id: "S1", alias: "Ridgeline Networks", desc: "", profile: null }], quotes: [], leaderboard: [],
+      }), { status: 200 });
+    });
+    render(
+      <MemoryRouter initialEntries={["/rooms/1/news/7"]}>
+        <I18nProvider><UserCtxForTest.Provider value={{ id: 9, username: "watcher" }}>
+          <Routes><Route path="/rooms/:roomId/news/:newsId" element={<News />} /></Routes>
+        </UserCtxForTest.Provider></I18nProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByText("Full body.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Investigate/ })).not.toBeInTheDocument();
+  });
 });

@@ -33,7 +33,7 @@ func (s *Server) handlePostChat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleGetChat(w http.ResponseWriter, r *http.Request) {
-	room, ok := s.roomForMember(w, r)
+	room, _, ok := s.roomForViewer(w, r)
 	if !ok {
 		return
 	}
@@ -46,6 +46,7 @@ func (s *Server) handleGetChat(w http.ResponseWriter, r *http.Request) {
 	for _, m := range msgs {
 		items = append(items, map[string]any{
 			"id": m.ID, "username": m.Username, "is_agent": m.IsAgent,
+			"avatar_id": m.AvatarID, "is_me": m.UserID == userFrom(r).ID,
 			"day": m.Day, "text": m.Text, "text_en": m.TextEn,
 		})
 	}

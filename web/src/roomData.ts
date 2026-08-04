@@ -21,10 +21,11 @@ export function buildOhlcMap(entries: [string, PriceResponse][]): Record<string,
 export function useRoomData(roomId: string) {
   const { data: state, error, reload: reloadState } = usePoll(
     () => api.get<RoomState>(`/api/rooms/${roomId}`), 30_000, [roomId]);
+  const isMember = state ? state.room.is_member !== false : false;
   const { data: portfolio, reload: reloadPortfolio } = usePoll(
-    () => api.get<Portfolio>(`/api/rooms/${roomId}/portfolio`), 30_000, [roomId]);
+    () => isMember ? api.get<Portfolio>(`/api/rooms/${roomId}/portfolio`) : Promise.resolve(null), 30_000, [roomId, isMember]);
   const { data: tradesRes, reload: reloadTrades } = usePoll(
-    () => api.get<{ items: Trade[] }>(`/api/rooms/${roomId}/trades`), 30_000, [roomId]);
+    () => isMember ? api.get<{ items: Trade[] }>(`/api/rooms/${roomId}/trades`) : Promise.resolve({ items: [] }), 30_000, [roomId, isMember]);
 
   const [series, setSeries] = useState<Record<string, number[]>>({});
   const [ohlc, setOhlc] = useState<Record<string, OHLC[]>>({});

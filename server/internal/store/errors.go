@@ -25,4 +25,8 @@ var (
 	ErrBadAction             = errors.New("invalid action")
 	ErrActionLimit           = errors.New("daily action limit reached")
 	ErrAlreadyDisputed       = errors.New("news item already disputed")
+	ErrBadProfile            = errors.New("display name and avatar are required")
+	ErrBadVisibility         = errors.New("room visibility must be public or private")
+	ErrPublicJoinClosed      = errors.New("this public room is no longer open for joining")
+	ErrRoomFull              = errors.New("this room is full")
 )

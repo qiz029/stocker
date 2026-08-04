@@ -40,15 +40,23 @@ func scanVisibleNews(scanner newsScanner) (map[string]any, error) {
 	return item, nil
 }
 
-func roomJSON(room *store.Room, curDay int, ended, started bool, userID int64) map[string]any {
+func roomJSON(room *store.Room, curDay int, ended, started bool, userID int64, memberOverride ...bool) map[string]any {
+	member := true
+	if len(memberOverride) > 0 {
+		member = memberOverride[0]
+	}
 	m := map[string]any{
 		"id":                room.ID,
-		"invite_code":       room.InviteCode,
 		"scenario_id":       room.ScenarioID,
 		"days":              room.Days,
 		"status":            room.Status,
 		"day_duration_secs": room.DayDurationSecs,
-		"is_host":           room.HostUserID == userID,
+		"is_host":           member && room.HostUserID == userID,
+		"is_member":         member,
+		"visibility":        room.Visibility,
+	}
+	if member {
+		m["invite_code"] = room.InviteCode
 	}
 	if room.StartedAt != nil {
 		m["started_at"] = room.StartedAt.UTC().Format(time.RFC3339)
@@ -58,6 +66,32 @@ func roomJSON(room *store.Room, curDay int, ended, started bool, userID int64) m
 		m["ended"] = ended
 	}
 	return m
+}
+
+// roomForViewer grants members access to every room they joined and grants
+// non-members read-only access to public rooms. Mutation handlers continue to
+// use roomForMember.
+func (s *Server) roomForViewer(w http.ResponseWriter, r *http.Request) (*store.Room, bool, bool) {
+	id, err := strconv.ParseInt(chi.URLParam(r, "roomID"), 10, 64)
+	if err != nil {
+		writeErr(w, http.StatusNotFound, "no such room")
+		return nil, false, false
+	}
+	room, err := store.GetRoom(r.Context(), s.DB, id)
+	if err != nil {
+		s.storeErr(w, err)
+		return nil, false, false
+	}
+	member, err := store.IsMember(r.Context(), s.DB, room.ID, userFrom(r).ID)
+	if err != nil {
+		s.storeErr(w, err)
+		return nil, false, false
+	}
+	if !member && room.Visibility != "public" {
+		writeErr(w, http.StatusForbidden, "not a member of this room")
+		return nil, false, false
+	}
+	return room, member, true
 }
 
 // roomForMember loads the {roomID} route param and enforces membership.
@@ -88,9 +122,14 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ScenarioID      string `json:"scenario_id"`
 		DayDurationSecs int    `json:"day_duration_secs"`
+		Visibility      string `json:"visibility"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if !userFrom(r).ProfileComplete() {
+		writeErr(w, http.StatusUnprocessableEntity, store.ErrBadProfile.Error())
 		return
 	}
 	sc, err := store.LoadScenario(r.Context(), s.DB, req.ScenarioID)
@@ -98,12 +137,32 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 		s.storeErr(w, err)
 		return
 	}
-	room, err := store.CreateRoom(r.Context(), s.DB, sc, userFrom(r).ID, req.DayDurationSecs, s.CopyFiller)
+	room, err := store.CreateRoom(r.Context(), s.DB, sc, userFrom(r).ID, req.DayDurationSecs, s.CopyFiller, req.Visibility)
 	if err != nil {
 		s.storeErr(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, roomJSON(room, 0, false, false, userFrom(r).ID))
+}
+
+func (s *Server) handleJoinPublicRoom(w http.ResponseWriter, r *http.Request) {
+	room, member, ok := s.roomForViewer(w, r)
+	if !ok {
+		return
+	}
+	if member {
+		writeErr(w, http.StatusConflict, store.ErrAlreadyJoined.Error())
+		return
+	}
+	if !userFrom(r).ProfileComplete() {
+		writeErr(w, http.StatusUnprocessableEntity, store.ErrBadProfile.Error())
+		return
+	}
+	if err := store.JoinPublicRoom(r.Context(), s.DB, room.ID, userFrom(r).ID); err != nil {
+		s.storeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, roomJSON(room, 0, false, false, userFrom(r).ID, true))
 }
 
 func (s *Server) handleJoinRoom(w http.ResponseWriter, r *http.Request) {
@@ -119,7 +178,16 @@ func (s *Server) handleJoinRoom(w http.ResponseWriter, r *http.Request) {
 		s.storeErr(w, err)
 		return
 	}
-	if _, err := store.JoinRoom(r.Context(), s.DB, room, userFrom(r).ID, s.Now()); err != nil {
+	if !userFrom(r).ProfileComplete() {
+		writeErr(w, http.StatusUnprocessableEntity, store.ErrBadProfile.Error())
+		return
+	}
+	if room.Visibility == "public" {
+		err = store.JoinPublicRoom(r.Context(), s.DB, room.ID, userFrom(r).ID)
+	} else {
+		_, err = store.JoinRoom(r.Context(), s.DB, room, userFrom(r).ID, s.Now())
+	}
+	if err != nil {
 		s.storeErr(w, err)
 		return
 	}
@@ -166,8 +234,47 @@ func (s *Server) handleMyRooms(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"rooms": out})
 }
 
+func (s *Server) handlePublicRooms(w http.ResponseWriter, r *http.Request) {
+	rooms, err := store.ListPublicRooms(r.Context(), s.DB, 50)
+	if err != nil {
+		s.storeErr(w, err)
+		return
+	}
+	out := make([]map[string]any, 0, len(rooms))
+	for i := range rooms {
+		day, ended, started := s.roomProgress(&rooms[i].Room)
+		item := roomJSON(&rooms[i].Room, day, ended, started, userFrom(r).ID, false)
+		item["human_players"] = rooms[i].HumanPlayers
+		item["max_human_players"] = store.MaxHumanPlayers
+		item["agent_players"] = store.AgentPlayerCount
+		if started && rooms[i].LeaderName != "" {
+			item["leader_name"] = rooms[i].LeaderName
+			item["leader_avatar"] = rooms[i].LeaderAvatar
+			item["leader_return"] = rooms[i].LeaderReturn
+		}
+		out = append(out, item)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"rooms": out})
+}
+
+func (s *Server) handleEraLeaderboard(w http.ResponseWriter, r *http.Request) {
+	rows, err := store.EraLeaderboard(r.Context(), s.DB, s.Now(), 10)
+	if err != nil {
+		s.storeErr(w, err)
+		return
+	}
+	items := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, map[string]any{
+			"scenario_id": row.ScenarioID, "username": row.Username,
+			"avatar_id": row.AvatarID, "return_pct": row.ReturnPct, "wins": row.Wins,
+		})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
 func (s *Server) handleRoomState(w http.ResponseWriter, r *http.Request) {
-	room, ok := s.roomForMember(w, r)
+	room, member, ok := s.roomForViewer(w, r)
 	if !ok {
 		return
 	}
@@ -254,6 +361,7 @@ func (s *Server) handleRoomState(w http.ResponseWriter, r *http.Request) {
 		for _, lr := range rows {
 			leaderboard = append(leaderboard, map[string]any{
 				"username":    lr.Username,
+				"avatar_id":   lr.AvatarID,
 				"is_agent":    lr.IsAgent,
 				"total_cents": lr.TotalCents,
 				"return_pct":  float64(lr.TotalCents-store.InitialCashCents) / float64(store.InitialCashCents),
@@ -265,7 +373,7 @@ func (s *Server) handleRoomState(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"room":        roomJSON(room, curDay, ended, started, userFrom(r).ID),
+		"room":        roomJSON(room, curDay, ended, started, userFrom(r).ID, member),
 		"instruments": instruments,
 		"quotes":      quotes,
 		"leaderboard": leaderboard,
@@ -273,7 +381,7 @@ func (s *Server) handleRoomState(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handlePrices(w http.ResponseWriter, r *http.Request) {
-	room, ok := s.roomForMember(w, r)
+	room, _, ok := s.roomForViewer(w, r)
 	if !ok {
 		return
 	}
@@ -331,7 +439,7 @@ func afterParam(r *http.Request) int64 {
 // counts (see store.MediaAccuracy); the underlying report shocks are never
 // exposed.
 func (s *Server) handleNews(w http.ResponseWriter, r *http.Request) {
-	room, ok := s.roomForMember(w, r)
+	room, _, ok := s.roomForViewer(w, r)
 	if !ok {
 		return
 	}
@@ -378,7 +486,7 @@ func (s *Server) handleNews(w http.ResponseWriter, r *http.Request) {
 // the same blind-box-safe projection as the feed and applies the current-day
 // cutoff so a guessed ID cannot reveal future news.
 func (s *Server) handleNewsDetail(w http.ResponseWriter, r *http.Request) {
-	room, ok := s.roomForMember(w, r)
+	room, _, ok := s.roomForViewer(w, r)
 	if !ok {
 		return
 	}
@@ -415,7 +523,7 @@ func (s *Server) handleNewsDetail(w http.ResponseWriter, r *http.Request) {
 // body, npc_name_en, body_en — nothing else (persona hints never leave the
 // server).
 func (s *Server) handleForum(w http.ResponseWriter, r *http.Request) {
-	room, ok := s.roomForMember(w, r)
+	room, _, ok := s.roomForViewer(w, r)
 	if !ok {
 		return
 	}
@@ -459,7 +567,7 @@ func (s *Server) handleForum(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
-	room, ok := s.roomForMember(w, r)
+	room, _, ok := s.roomForViewer(w, r)
 	if !ok {
 		return
 	}

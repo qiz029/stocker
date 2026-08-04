@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UserCtxForTest } from "../App";
@@ -55,7 +55,7 @@ describe("Room page", () => {
         </UserCtxForTest.Provider>
       </MemoryRouter>,
     );
-    await waitFor(() => expect(screen.getByText("$104,000.00")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText("$104,000.00").length).toBeGreaterThan(0));
     // Ridgeline Networks appears in both positions and watchlist
     expect(screen.getAllByText("Ridgeline Networks").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Oldfield Energy").length).toBeGreaterThan(0);
@@ -160,5 +160,56 @@ describe("Room page", () => {
       expect(el?.textContent).toContain("Week 1 · Mon");
       expect(el?.textContent).toMatch(/\d{1,2}:\d{2}/);
     });
+  });
+
+  it("renders public spectators read-only without private portfolio requests", async () => {
+    const calls: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async url => {
+      const u = String(url); calls.push(u);
+      let body: unknown = { items: [] };
+      if (u === "/api/rooms/1") body = { ...state, room: { ...state.room, visibility: "public", is_member: false, invite_code: undefined } };
+      else if (u.includes("/prices/")) body = priceDays;
+      return new Response(JSON.stringify(body), { status: 200 });
+    });
+    render(
+      <MemoryRouter initialEntries={["/rooms/1"]}>
+        <UserCtxForTest.Provider value={{ id: 9, username: "viewer", profile_complete: false }}>
+          <Routes><Route path="/rooms/:roomId" element={<Room />} /></Routes>
+        </UserCtxForTest.Provider>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByText("Spectator mode")).toBeInTheDocument();
+    expect(screen.getByText(/cannot trade or post/)).toBeInTheDocument();
+    expect(screen.queryByText("Asset breakdown")).not.toBeInTheDocument();
+    expect(screen.queryByText("Credit line")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Invite friends" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Send" })).not.toBeInTheDocument();
+    expect(calls.some(url => url.endsWith("/portfolio") || url.endsWith("/trades"))).toBe(false);
+  });
+
+  it("lets a waiting-room spectator complete a profile and join", async () => {
+    const calls: { url: string; method: string }[] = [];
+    const waitingState = { ...state, room: { ...state.room, status: "lobby", started_at: undefined, current_day: undefined, visibility: "public", is_member: false, invite_code: undefined }, quotes: [], leaderboard: [] };
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      const u = String(url); calls.push({ url: u, method: init?.method ?? "GET" });
+      let body: unknown = { items: [] };
+      if (u === "/api/rooms/1") body = waitingState;
+      else if (u === "/api/me/profile") body = { id: 9, username: "viewer", display_name: "Night Owl", avatar_id: "owl", profile_complete: true };
+      else if (u === "/api/rooms/1/join") body = { ...waitingState.room, is_member: true };
+      return new Response(JSON.stringify(body), { status: 200 });
+    });
+    render(
+      <MemoryRouter initialEntries={["/rooms/1"]}>
+        <UserCtxForTest.Provider value={{ id: 9, username: "viewer", profile_complete: false }}>
+          <Routes><Route path="/rooms/:roomId" element={<Room />} /></Routes>
+        </UserCtxForTest.Provider>
+      </MemoryRouter>,
+    );
+    fireEvent.click(await screen.findByRole("button", { name: "Join game" }));
+    fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "Night Owl" } });
+    fireEvent.click(screen.getByRole("button", { name: "owl" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save & join" }));
+    await waitFor(() => expect(calls.some(call => call.url === "/api/me/profile" && call.method === "PUT")).toBe(true));
+    await waitFor(() => expect(calls.some(call => call.url === "/api/rooms/1/join" && call.method === "POST")).toBe(true));
   });
 });

@@ -26,17 +26,25 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 export const api = {
   get: <T>(path: string) => req<T>("GET", path),
   post: <T>(path: string, body?: unknown) => req<T>("POST", path, body),
+  put: <T>(path: string, body?: unknown) => req<T>("PUT", path, body),
   del: <T>(path: string) => req<T>("DELETE", path),
 };
 
 /* ---------- API types (mirror the Go handlers exactly) ---------- */
-export type User = { id: number; username: string };
+export type AvatarID = "bull" | "bear" | "fox" | "owl" | "shark" | "tiger" | "rocket" | "diamond";
+export type User = { id: number; username: string; display_name?: string; avatar_id?: AvatarID; profile_complete?: boolean };
 export type ScenarioInfo = { id: string; name: string; days: number; name_en?: string };
 export type Room = {
-  id: number; invite_code: string; scenario_id: string; days: number;
+  id: number; invite_code?: string; scenario_id: string; days: number;
   status: "lobby" | "running"; day_duration_secs: number;
   started_at?: string; current_day?: number; ended?: boolean; is_host?: boolean;
+  visibility?: "public" | "private"; is_member?: boolean;
 };
+export type PublicRoom = Room & {
+  human_players: number; max_human_players: number; agent_players: number;
+  leader_name?: string; leader_avatar?: AvatarID; leader_return?: number;
+};
+export type EraLeader = { scenario_id: string; username: string; avatar_id?: AvatarID; return_pct: number; wins: number };
 export type InstrumentProfile = { business: string; bull: string; bear: string };
 export type Instrument = {
   id: string; alias: string; desc: string; profile: InstrumentProfile | null;
@@ -45,7 +53,7 @@ export type Instrument = {
 export type Quote = { instrument_id: string; close: number; prev_close: number };
 export type LeaderboardRow = {
   username: string; total_cents: number; return_pct: number; late_join: boolean;
-  bankrupt: boolean; curve: number[]; is_agent?: boolean;   // curve: total_cents per sim day
+  bankrupt: boolean; curve: number[]; is_agent?: boolean; avatar_id?: AvatarID;   // curve: total_cents per sim day
 };
 export type RoomState = { room: Room; instruments: Instrument[]; quotes: Quote[]; leaderboard: LeaderboardRow[] };
 export type OHLC = { open: number; high: number; low: number; close: number };
@@ -84,7 +92,7 @@ export type EventItem = {
   payload: { instrument_id?: string; side?: string; username?: string; fine_cents?: number; is_agent?: boolean; order_id?: number };
 };
 export type ChatMessage = {
-  id: number; username: string; is_agent: boolean; day: number; text: string; text_en?: string;
+  id: number; username: string; is_agent: boolean; avatar_id?: AvatarID; is_me?: boolean; day: number; text: string; text_en?: string;
 };
 export type Position = {
   instrument_id: string; shares: number; close: number; value_cents: number;

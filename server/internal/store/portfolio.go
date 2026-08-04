@@ -235,6 +235,7 @@ type LeaderboardRow struct {
 	UserID     int64
 	Username   string
 	IsAgent    bool
+	AvatarID   string
 	TotalCents int64 // net of debt
 	JoinedDay  int
 	Bankrupt   bool
@@ -246,8 +247,9 @@ type LeaderboardRow struct {
 // first (net total desc), bankrupt players last (net total desc).
 func Leaderboard(ctx context.Context, q Querier, room *Room, curDay int) ([]LeaderboardRow, error) {
 	rows, err := q.Query(ctx, `
-		SELECT rp.user_id, COALESCE(u.agent_name, u.username), u.is_agent,
-			rp.joined_day, rp.bankrupt_day IS NOT NULL
+		SELECT rp.user_id,
+			CASE WHEN u.is_agent THEN u.agent_name ELSE COALESCE(NULLIF(u.display_name, ''), u.username) END,
+			u.is_agent, u.avatar_id, rp.joined_day, rp.bankrupt_day IS NOT NULL
 		FROM room_players rp JOIN users u ON u.id = rp.user_id
 		WHERE rp.room_id = $1`, room.ID)
 	if err != nil {
@@ -257,7 +259,7 @@ func Leaderboard(ctx context.Context, q Querier, room *Room, curDay int) ([]Lead
 	var out []LeaderboardRow
 	for rows.Next() {
 		var r LeaderboardRow
-		if err := rows.Scan(&r.UserID, &r.Username, &r.IsAgent, &r.JoinedDay, &r.Bankrupt); err != nil {
+		if err := rows.Scan(&r.UserID, &r.Username, &r.IsAgent, &r.AvatarID, &r.JoinedDay, &r.Bankrupt); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

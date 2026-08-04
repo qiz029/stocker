@@ -5,7 +5,9 @@ import (
 	"encoding/hex"
 	"net/http"
 	"regexp"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"golang.org/x/crypto/bcrypt"
 
@@ -18,6 +20,18 @@ const (
 )
 
 var usernameRe = regexp.MustCompile(`^[A-Za-z0-9_]{3,32}$`)
+
+var allowedAvatars = map[string]bool{
+	"bull": true, "bear": true, "fox": true, "owl": true,
+	"shark": true, "tiger": true, "rocket": true, "diamond": true,
+}
+
+func userJSON(u *store.User) map[string]any {
+	return map[string]any{
+		"id": u.ID, "username": u.Username, "display_name": u.DisplayName,
+		"avatar_id": u.AvatarID, "profile_complete": u.ProfileComplete(),
+	}
+}
 
 // dummyHash burns the same bcrypt cost on unknown usernames as on wrong
 // passwords, so login timing can't be used to enumerate accounts.
@@ -80,7 +94,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		s.storeErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"id": u.ID, "username": u.Username})
+	writeJSON(w, http.StatusOK, userJSON(u))
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -103,7 +117,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		s.storeErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"id": u.ID, "username": u.Username})
+	writeJSON(w, http.StatusOK, userJSON(u))
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
@@ -118,5 +132,27 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	u := userFrom(r)
-	writeJSON(w, http.StatusOK, map[string]any{"id": u.ID, "username": u.Username})
+	writeJSON(w, http.StatusOK, userJSON(u))
+}
+
+func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		DisplayName string `json:"display_name"`
+		AvatarID    string `json:"avatar_id"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	req.DisplayName = strings.TrimSpace(req.DisplayName)
+	if utf8.RuneCountInString(req.DisplayName) < 2 || utf8.RuneCountInString(req.DisplayName) > 24 || !allowedAvatars[req.AvatarID] {
+		writeErr(w, http.StatusBadRequest, "display name must be 2-24 characters and a valid avatar is required")
+		return
+	}
+	u, err := store.UpdateUserProfile(r.Context(), s.DB, userFrom(r).ID, req.DisplayName, req.AvatarID)
+	if err != nil {
+		s.storeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, userJSON(u))
 }

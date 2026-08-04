@@ -123,6 +123,133 @@ func TestRoomLifecycleAndState(t *testing.T) {
 	}
 }
 
+func TestPublicRoomSpectateProfileAndJoin(t *testing.T) {
+	s := newServer(t)
+	seedScenario(t, s)
+	fakeClock(s, time.Date(2026, 8, 3, 12, 0, 0, 0, time.UTC))
+	host := registerClient(t, s, "publichost")
+	viewer := registerIncompleteClient(t, s, "viewer")
+	incompleteCreator := registerIncompleteClient(t, s, "newhost")
+	resp, _ := incompleteCreator.do("POST", "/api/rooms", map[string]any{
+		"scenario_id": "synthetic-v1", "day_duration_secs": 60, "visibility": "public",
+	})
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("create without profile = %d, want 422", resp.StatusCode)
+	}
+
+	created := host.mustJSON("POST", "/api/rooms", map[string]any{
+		"scenario_id": "synthetic-v1", "day_duration_secs": 60, "visibility": "public",
+	}, http.StatusOK)
+	roomID := int64(created["id"].(float64))
+	invite := created["invite_code"].(string)
+
+	listing := viewer.mustJSON("GET", "/api/rooms/public", nil, http.StatusOK)
+	rooms := listing["rooms"].([]any)
+	if len(rooms) != 1 {
+		t.Fatalf("public rooms = %v", rooms)
+	}
+	listed := rooms[0].(map[string]any)
+	if _, leaksInvite := listed["invite_code"]; leaksInvite {
+		t.Fatalf("public listing leaks invite code: %v", listed)
+	}
+	if listed["human_players"].(float64) != 1 || listed["agent_players"].(float64) != store.AgentPlayerCount {
+		t.Fatalf("public counts: %v", listed)
+	}
+
+	state := viewer.mustJSON("GET", fmt.Sprintf("/api/rooms/%d", roomID), nil, http.StatusOK)
+	publicRoom := state["room"].(map[string]any)
+	if publicRoom["is_member"] != false {
+		t.Fatalf("viewer marked as member: %v", publicRoom)
+	}
+	if _, leaksInvite := publicRoom["invite_code"]; leaksInvite {
+		t.Fatalf("spectator state leaks invite code: %v", publicRoom)
+	}
+
+	resp, _ = viewer.do("POST", fmt.Sprintf("/api/rooms/%d/join", roomID), nil)
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("join without profile = %d, want 422", resp.StatusCode)
+	}
+	resp, _ = viewer.do("POST", "/api/rooms/join", map[string]any{"invite_code": invite})
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("invite join without profile = %d, want 422", resp.StatusCode)
+	}
+	profile := viewer.mustJSON("PUT", "/api/me/profile", map[string]any{
+		"display_name": "Market Fox", "avatar_id": "fox",
+	}, http.StatusOK)
+	if profile["profile_complete"] != true || profile["display_name"] != "Market Fox" {
+		t.Fatalf("profile response: %v", profile)
+	}
+	joined := viewer.mustJSON("POST", "/api/rooms/join", map[string]any{"invite_code": invite}, http.StatusOK)
+	if joined["is_member"] != true || joined["invite_code"] == "" {
+		t.Fatalf("joined room response: %v", joined)
+	}
+
+	// Read-only was real enforcement, not only hidden frontend controls.
+	outsider := registerClient(t, s, "watchonly")
+	resp, _ = outsider.do("POST", fmt.Sprintf("/api/rooms/%d/chat", roomID), map[string]any{"text": "hello"})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("spectator chat = %d, want 403", resp.StatusCode)
+	}
+
+	private := host.mustJSON("POST", "/api/rooms", map[string]any{
+		"scenario_id": "synthetic-v1", "day_duration_secs": 60,
+	}, http.StatusOK)
+	resp, _ = outsider.do("GET", fmt.Sprintf("/api/rooms/%d", int64(private["id"].(float64))), nil)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("private room spectator read = %d, want 403", resp.StatusCode)
+	}
+}
+
+func TestPublicRoomCapacityIsAtomic(t *testing.T) {
+	s := newServer(t)
+	seedScenario(t, s)
+	host := registerClient(t, s, "capacity_host")
+	created := host.mustJSON("POST", "/api/rooms", map[string]any{
+		"scenario_id": "synthetic-v1", "day_duration_secs": 60, "visibility": "public",
+	}, http.StatusOK)
+	roomID := int64(created["id"].(float64))
+	joinPath := fmt.Sprintf("/api/rooms/%d/join", roomID)
+
+	// Host plus ten successful joins leaves exactly one human seat.
+	for i := 0; i < store.MaxHumanPlayers-2; i++ {
+		player := registerClient(t, s, fmt.Sprintf("seat_%02d", i))
+		player.mustJSON("POST", joinPath, nil, http.StatusOK)
+	}
+	racers := []*client{
+		registerClient(t, s, "last_seat_a"),
+		registerClient(t, s, "last_seat_b"),
+	}
+	start := make(chan struct{})
+	statuses := make(chan int, len(racers))
+	for _, racer := range racers {
+		go func(c *client) {
+			<-start
+			resp, _ := c.do("POST", joinPath, nil)
+			statuses <- resp.StatusCode
+		}(racer)
+	}
+	close(start)
+	ok, conflict := 0, 0
+	for range racers {
+		switch <-statuses {
+		case http.StatusOK:
+			ok++
+		case http.StatusConflict:
+			conflict++
+		}
+	}
+	if ok != 1 || conflict != 1 {
+		t.Fatalf("concurrent final-seat results: ok=%d conflict=%d", ok, conflict)
+	}
+	humans, err := store.HumanPlayerCount(context.Background(), s.DB, roomID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if humans != store.MaxHumanPlayers {
+		t.Fatalf("human players = %d, want %d", humans, store.MaxHumanPlayers)
+	}
+}
+
 func TestNewsIsBlindBoxSafe(t *testing.T) {
 	s := newServer(t)
 	seedScenario(t, s)

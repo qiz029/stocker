@@ -23,6 +23,7 @@ export default function Stock() {
   const [openNews, setOpenNews] = useState<number | null>(null);
 
   if (!state) return null;
+  const spectator = state.room.is_member === false;
   const inst = state.instruments.find(i => i.id === instrumentId);
   const closes = series[instrumentId!] ?? [];
   const candles = ohlc[instrumentId!] ?? [];
@@ -70,10 +71,10 @@ export default function Stock() {
                 {closes[0] ? fmtPct(last / closes[0] - 1) : "—"}
               </span>
             </div>
-            <div><span className="k">{t("stock.myHolding")}</span>{held > 0 ? t("unit.shares", { n: held.toFixed(1) }) : "—"}</div>
+            {!spectator && <div><span className="k">{t("stock.myHolding")}</span>{held > 0 ? t("unit.shares", { n: held.toFixed(1) }) : "—"}</div>}
           </div>
 
-          {optionPositions.length > 0 && (
+          {!spectator && optionPositions.length > 0 && (
             <div className="section">
               <h2>{t("option.myPositions")}</h2>
               <OptionPositions roomId={roomId!} positions={optionPositions}
@@ -82,14 +83,14 @@ export default function Stock() {
             </div>
           )}
 
-          <OptionsChain roomId={roomId!} instrumentId={instrumentId!} alias={inst.alias}
+          {!spectator && <OptionsChain roomId={roomId!} instrumentId={instrumentId!} alias={inst.alias}
             lastClose={last} currentDay={state.room.current_day ?? 0}
             portfolio={portfolio} onChanged={reload}
-            disabled={optionsLocked} note={optionsNote} />
+            disabled={optionsLocked} note={optionsNote} />}
 
-          <ActionPanel roomId={roomId!} instrumentId={instrumentId!} alias={inst.alias}
+          {!spectator && <ActionPanel roomId={roomId!} instrumentId={instrumentId!} alias={inst.alias}
             portfolio={portfolio} onChanged={reload}
-            disabled={optionsLocked} note={actionsNote} />
+            disabled={optionsLocked} note={actionsNote} />}
 
           <div className="section">
             <h2>{t("stock.profile")}</h2>
@@ -127,9 +128,9 @@ export default function Stock() {
           </div>
         </div>
 
-        <TradePanel roomId={roomId!} instrumentId={instrumentId!} lastClose={last}
+        {!spectator && <TradePanel roomId={roomId!} instrumentId={instrumentId!} lastClose={last}
           portfolio={portfolio} onChanged={reload} disabled={portfolio?.bankrupt ?? false}
-          afterHours={clock?.phase === "closed" || clock?.phase === "weekend"} />
+          afterHours={clock?.phase === "closed" || clock?.phase === "weekend"} />}
       </div>
     </div>
   );

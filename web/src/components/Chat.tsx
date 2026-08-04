@@ -2,8 +2,9 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { api, ApiError, ChatMessage } from "../api";
 import { pickL, useT } from "../i18n";
 import { useUser } from "../App";
+import { avatarGlyph } from "../avatar";
 
-export default function Chat({ roomId }: { roomId: string }) {
+export default function Chat({ roomId, readOnly = false }: { roomId: string; readOnly?: boolean }) {
   const user = useUser();
   const { t, lang } = useT();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -61,8 +62,9 @@ export default function Chat({ roomId }: { roomId: string }) {
       <h2>{t("chat.title")}</h2>
       <div className="chat-list" ref={listRef}>
         {messages.map(m => (
-          <div key={m.id} className={`chat-msg ${!m.is_agent && m.username === user.username ? "me" : ""} ${m.is_agent ? "agent" : ""}`}>
+          <div key={m.id} className={`chat-msg ${!m.is_agent && (m.is_me ?? m.username === user.username) ? "me" : ""} ${m.is_agent ? "agent" : ""}`}>
             <div className="cm-meta">
+              {!m.is_agent && <span className="chat-avatar">{avatarGlyph(m.avatar_id, m.username)}</span>}
               <b>{m.username}</b>
               {m.is_agent && <small className="agent-badge">{t("common.agent")}</small>}
               {" · "}<span className="num">{t("common.day", { day: m.day })}</span>
@@ -72,11 +74,11 @@ export default function Chat({ roomId }: { roomId: string }) {
         ))}
       </div>
       {err && <p className="form-error">{err}</p>}
-      <form className="chat-input" onSubmit={send}>
+      {!readOnly && <form className="chat-input" onSubmit={send}>
         <input placeholder={t("chat.placeholder")} value={text} maxLength={500}
           onChange={e => setText(e.target.value)} />
         <button type="submit">{t("chat.send")}</button>
-      </form>
+      </form>}
     </div>
   );
 }
