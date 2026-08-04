@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UserCtxForTest } from "../App";
@@ -21,6 +21,59 @@ function mockRoutes(handler: (url: string, init?: RequestInit) => unknown) {
 afterEach(() => vi.restoreAllMocks());
 
 describe("Lobby", () => {
+  it("orders the production eras chronologically from left to right", async () => {
+    mockRoutes((url) => url === "/api/scenarios" ? { items: [
+      { id: "dotcom-2000", name: "2000 互联网泡沫", days: 750 },
+      { id: "gfc-2008", name: "2008 金融危机", days: 815 },
+      { id: "nifty-1972", name: "1972 漂亮50", days: 875 },
+      { id: "crash-1987", name: "1987 黑色星期一", days: 756 },
+    ] } : { rooms: [] });
+    render(
+      <MemoryRouter>
+        <UserCtxForTest.Provider value={{ id: 1, username: "alice" }}>
+          <Lobby />
+        </UserCtxForTest.Provider>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "＋ Create new room" }));
+    const timeline = await screen.findByRole("radiogroup", { name: "Choose an era" });
+    const eras = within(timeline).getAllByRole("radio");
+
+    expect(eras.map(era => era.getAttribute("data-era-year"))).toEqual(["1972", "1987", "2000", "2008"]);
+    expect(eras[0]).toHaveAttribute("aria-checked", "true");
+
+    eras[0]!.focus();
+    fireEvent.keyDown(eras[0]!, { key: "ArrowRight" });
+    expect(eras[1]).toHaveAttribute("aria-checked", "true");
+    expect(eras[1]).toHaveFocus();
+  });
+
+  it.each([1, 3, 5])("adapts the timeline to %i available scenarios", async (count) => {
+    const available = [
+      { id: "future-2015", name: "2015 Future Market", days: 600 },
+      { id: "dotcom-2000", name: "2000 Dot-com Bubble", days: 750 },
+      { id: "gfc-2008", name: "2008 Financial Crisis", days: 815 },
+      { id: "nifty-1972", name: "1972 Nifty Fifty", days: 875 },
+      { id: "crash-1987", name: "1987 Black Monday", days: 756 },
+    ].slice(0, count);
+    mockRoutes((url) => url === "/api/scenarios" ? { items: available } : { rooms: [] });
+    render(
+      <MemoryRouter>
+        <UserCtxForTest.Provider value={{ id: 1, username: "alice" }}>
+          <Lobby />
+        </UserCtxForTest.Provider>
+      </MemoryRouter>
+    );
+
+    fireEvent.click(await screen.findByRole("button", { name: "＋ Create new room" }));
+    const timeline = await screen.findByRole("radiogroup", { name: "Choose an era" });
+
+    expect(timeline).toHaveAttribute("data-era-count", String(count));
+    expect(timeline.style.getPropertyValue("--era-count")).toBe(String(count));
+    expect(timeline.querySelectorAll(".era-link")).toHaveLength(Math.max(0, count - 1));
+  });
+
   it("lists my rooms with status tags", async () => {
     mockRoutes((url) => url === "/api/scenarios" ? { items: [
       { id: "dotcom-2000", name: "2000 互联网泡沫", days: 750 },
@@ -77,9 +130,9 @@ describe("Lobby", () => {
     });
     render(<MemoryRouter><UserCtxForTest.Provider value={{ id: 1, username: "me" }}><Lobby /></UserCtxForTest.Provider></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: "＋ Create new room" }));
-    // scenario defaults to the first entry; pick the 2-week duration
-    const selects = screen.getAllByRole("combobox");
-    fireEvent.change(selects[1], { target: { value: String(Math.round(2 * 604800 / 750)) } });
+    // scenario defaults to the earliest dated entry; pick the 2-week duration
+    fireEvent.change(screen.getByRole("combobox", { name: "Game duration" }),
+      { target: { value: String(Math.round(2 * 604800 / 750)) } });
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(bodies).toEqual([
       { scenario_id: "dotcom-2000", day_duration_secs: Math.round(2 * 604800 / 750) }]));
