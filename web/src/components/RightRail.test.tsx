@@ -66,6 +66,7 @@ describe("RightRail", () => {
     fireEvent.click(headline);
     expect(item).toHaveClass("open");
     expect(screen.getByText("正文内容。")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Read full article" })).toHaveAttribute("href", "/rooms/1/news/1");
   });
 });
 

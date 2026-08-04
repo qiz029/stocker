@@ -14,14 +14,17 @@ describe("Chat", () => {
         return new Response(JSON.stringify({ id: 3 }), { status: 200 });
       }
       return new Response(JSON.stringify({ items: [
-        { id: 1, username: "host", day: 0, text: "开局前聊两句" },
-        { id: 2, username: "me", day: 2, text: "冲了" },
+        { id: 1, username: "host", is_agent: false, day: 0, text: "开局前聊两句", text_en: "" },
+        { id: 2, username: "me", is_agent: false, day: 2, text: "冲了", text_en: "" },
+        { id: 3, username: "Nova", is_agent: true, day: 2, text: "我先建仓。", text_en: "I'm opening a position." },
       ] }), { status: 200 });
     });
     render(<UserProviderForTest username="me"><Chat roomId="1" /></UserProviderForTest>);
     expect(await screen.findByText("开局前聊两句")).toBeInTheDocument();
     // own message gets the .me class
     expect(screen.getByText("冲了").closest(".chat-msg")).toHaveClass("me");
+    expect(screen.getByText("Agent")).toBeInTheDocument();
+    expect(screen.getByText("I'm opening a position.")).toBeInTheDocument();
 
     fireEvent.change(screen.getByPlaceholderText("Say something…"), { target: { value: "科技股什么情况" } });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
@@ -33,7 +36,7 @@ describe("Chat", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       calls += 1;
       return new Response(JSON.stringify({ items: [
-        { id: 1, username: "host", day: 0, text: "唯一的一条" },
+        { id: 1, username: "host", is_agent: false, day: 0, text: "唯一的一条", text_en: "" },
       ] }), { status: 200 });
     });
     render(<UserProviderForTest username="me"><Chat roomId="1" /></UserProviderForTest>);

@@ -9,8 +9,10 @@ import (
 type ChatMessage struct {
 	ID       int64
 	Username string
+	IsAgent  bool
 	Day      int
 	Text     string
+	TextEn   string
 }
 
 const maxChatRunes = 500
@@ -33,7 +35,8 @@ func PostChat(ctx context.Context, q Querier, room *Room, userID int64, day int,
 // ChatSince returns messages with id > afterID in ascending id order.
 func ChatSince(ctx context.Context, q Querier, roomID, afterID int64, limit int) ([]ChatMessage, error) {
 	rows, err := q.Query(ctx, `
-		SELECT c.id, u.username, c.day, c.text
+		SELECT c.id, COALESCE(u.agent_name, u.username), u.is_agent,
+		       c.day, c.text, c.text_en
 		FROM room_chat c JOIN users u ON u.id = c.user_id
 		WHERE c.room_id = $1 AND c.id > $2
 		ORDER BY c.id LIMIT $3`, roomID, afterID, limit)
@@ -44,7 +47,7 @@ func ChatSince(ctx context.Context, q Querier, roomID, afterID int64, limit int)
 	var out []ChatMessage
 	for rows.Next() {
 		var m ChatMessage
-		if err := rows.Scan(&m.ID, &m.Username, &m.Day, &m.Text); err != nil {
+		if err := rows.Scan(&m.ID, &m.Username, &m.IsAgent, &m.Day, &m.Text, &m.TextEn); err != nil {
 			return nil, err
 		}
 		out = append(out, m)

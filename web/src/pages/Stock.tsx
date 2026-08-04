@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { NewsItem, NewsResponse, fetchNews } from "../api";
 import { fmt$, fmtPct, prettifyHeadline } from "../format";
 import { LangSwitch, mediaName, pickL, useT } from "../i18n";
@@ -117,6 +117,9 @@ export default function Stock() {
                 <div className="fi-meta">{mediaName(n.media_id, t)} · <span className="num">{t("common.day", { day: n.day })}</span></div>
                 <div className={body ? "fi-title" : ""}>{prettifyHeadline(headline, aliasOf)}</div>
                 {body && <div className="fi-body">{body}</div>}
+                <div className="fi-actions" onClick={e => e.stopPropagation()}>
+                  <Link className="fi-act" to={`/rooms/${roomId}/news/${n.id}`}>{t("news.readFull")}</Link>
+                </div>
               </div>
               );
             })}

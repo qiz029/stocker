@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { ApiError, DebunkVerdict, EventItem, ForumItem, MediaAccuracy, NewsItem, NewsResponse, RoomState, api, fetchForum, fetchNews, postDebunk } from "../api";
 import { fmtCents, fmtPct, prettifyHeadline } from "../format";
 import { MsgKey, TFunc, mediaName, pickL, useT } from "../i18n";
@@ -105,6 +106,7 @@ export default function RightRail({ roomId, state, aliasOf }: Props) {
         <div className={body ? "fi-title" : ""}>{prettifyHeadline(headline, aliasOf)}</div>
         {body && <div className="fi-body">{body}</div>}
         <div className="fi-actions" onClick={e => e.stopPropagation()}>
+          <Link className="fi-act" to={`/rooms/${roomId}/news/${n.id}`}>{t("news.readFull")}</Link>
           {!n.disputed && !verdict && (
             <button className="fi-act" onClick={() => investigate(n.id)}>
               {t("news.investigate", { fee: fmtCents(DEBUNK_FEE_CENTS) })}

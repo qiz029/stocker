@@ -68,6 +68,11 @@ export function fetchNews(roomID: string, after: number): Promise<NewsResponse> 
   return api.get<NewsResponse>(`/api/rooms/${roomID}/news?after=${after}`);
 }
 
+/** Fetch one published story directly; future stories remain server-hidden. */
+export function fetchNewsItem(roomID: string, newsID: string): Promise<NewsItem> {
+  return api.get<NewsItem>(`/api/rooms/${roomID}/news/${newsID}`);
+}
+
 /** Incremental forum page (cursor = last seen id). */
 export function fetchForum(roomID: string, after: number): Promise<{ items: ForumItem[] }> {
   return api.get<{ items: ForumItem[] }>(`/api/rooms/${roomID}/forum?after=${after}`);
@@ -78,7 +83,9 @@ export type EventItem = {
   id: number; day: number; kind: string;
   payload: { instrument_id?: string; side?: string; username?: string; fine_cents?: number; is_agent?: boolean; order_id?: number };
 };
-export type ChatMessage = { id: number; username: string; day: number; text: string };
+export type ChatMessage = {
+  id: number; username: string; is_agent: boolean; day: number; text: string; text_en?: string;
+};
 export type Position = {
   instrument_id: string; shares: number; close: number; value_cents: number;
   avg_cost: number; pnl_cents: number; pnl_pct: number;

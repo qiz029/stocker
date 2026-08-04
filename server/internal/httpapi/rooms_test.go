@@ -130,6 +130,7 @@ func TestNewsIsBlindBoxSafe(t *testing.T) {
 	advance := fakeClock(s, t0)
 
 	host := registerClient(t, s, "host")
+	outsider := registerClient(t, s, "outsider")
 	created := host.mustJSON("POST", "/api/rooms",
 		map[string]any{"scenario_id": "synthetic-v1", "day_duration_secs": 60}, http.StatusOK)
 	roomID := int64(created["id"].(float64))
@@ -151,6 +152,32 @@ func TestNewsIsBlindBoxSafe(t *testing.T) {
 	items := news["items"].([]any)
 	if len(items) == 0 {
 		t.Fatal("no news items by day 10")
+	}
+	first := items[0].(map[string]any)
+	newsID := int64(first["id"].(float64))
+	detailPath := fmt.Sprintf("/api/rooms/%d/news/%d", roomID, newsID)
+	detail := host.mustJSON("GET", detailPath, nil, http.StatusOK)
+	if detail["body"] != first["body"] || detail["headline"] != first["headline"] {
+		t.Fatalf("news detail does not match feed item: detail=%v feed=%v", detail, first)
+	}
+	detailRaw := fmt.Sprintf("%v", detail)
+	for _, leak := range []string{"track", "true_shock", "report_shock", "real_name", "driven_by_user_id"} {
+		if strings.Contains(detailRaw, leak) {
+			t.Fatalf("news detail leaks %s: %s", leak, detailRaw)
+		}
+	}
+	resp, _ = outsider.do("GET", detailPath, nil)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("outsider news detail: %d", resp.StatusCode)
+	}
+	var futureID int64
+	if err := s.DB.QueryRow(context.Background(), `
+		SELECT id FROM room_news WHERE room_id = $1 AND day > 10 ORDER BY day, id LIMIT 1`, roomID).Scan(&futureID); err != nil {
+		t.Fatal(err)
+	}
+	resp, _ = host.do("GET", fmt.Sprintf("/api/rooms/%d/news/%d", roomID, futureID), nil)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("future news detail status = %d, want 404", resp.StatusCode)
 	}
 	maxID := 0.0
 	for _, it := range items {

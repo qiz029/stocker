@@ -7,6 +7,7 @@ import Lobby from "./pages/Lobby";
 import Room from "./pages/Room";
 import Stock from "./pages/Stock";
 import Reveal from "./pages/Reveal";
+import News from "./pages/News";
 
 // Exported so page/component tests can provide a fake user.
 export const UserCtxForTest = createContext<User | null>(null);
@@ -34,6 +35,7 @@ function Shell() {
         <Route path="/" element={<Lobby />} />
         <Route path="/rooms/:roomId" element={<Room />} />
         <Route path="/rooms/:roomId/i/:instrumentId" element={<Stock />} />
+        <Route path="/rooms/:roomId/news/:newsId" element={<News />} />
         <Route path="/rooms/:roomId/reveal" element={<Reveal />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>

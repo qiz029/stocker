@@ -1,11 +1,11 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { api, ApiError, ChatMessage } from "../api";
-import { useT } from "../i18n";
+import { pickL, useT } from "../i18n";
 import { useUser } from "../App";
 
 export default function Chat({ roomId }: { roomId: string }) {
   const user = useUser();
-  const { t } = useT();
+  const { t, lang } = useT();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState("");
   const [err, setErr] = useState<string | null>(null);
@@ -61,9 +61,13 @@ export default function Chat({ roomId }: { roomId: string }) {
       <h2>{t("chat.title")}</h2>
       <div className="chat-list" ref={listRef}>
         {messages.map(m => (
-          <div key={m.id} className={`chat-msg ${m.username === user.username ? "me" : ""}`}>
-            <div className="cm-meta"><b>{m.username}</b> · <span className="num">{t("common.day", { day: m.day })}</span></div>
-            <span className="cm-bubble">{m.text}</span>
+          <div key={m.id} className={`chat-msg ${m.username === user.username ? "me" : ""} ${m.is_agent ? "agent" : ""}`}>
+            <div className="cm-meta">
+              <b>{m.username}</b>
+              {m.is_agent && <small className="agent-badge">{t("common.agent")}</small>}
+              {" · "}<span className="num">{t("common.day", { day: m.day })}</span>
+            </div>
+            <span className="cm-bubble">{m.is_agent ? pickL(lang, m.text, m.text_en) : m.text}</span>
           </div>
         ))}
       </div>

@@ -42,6 +42,7 @@ func (s *Server) Router() http.Handler {
 		r.Get("/api/rooms/{roomID}", s.handleRoomState)
 		r.Get("/api/rooms/{roomID}/prices/{instrumentID}", s.handlePrices)
 		r.Get("/api/rooms/{roomID}/news", s.handleNews)
+		r.Get("/api/rooms/{roomID}/news/{newsID}", s.handleNewsDetail)
 		r.Get("/api/rooms/{roomID}/forum", s.handleForum)
 		r.Get("/api/rooms/{roomID}/events", s.handleEvents)
 		r.Post("/api/rooms/{roomID}/orders", s.handlePlaceOrder)

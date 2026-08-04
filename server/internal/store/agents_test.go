@@ -65,6 +65,42 @@ func TestAgentTurnsPlaceLabeledOrdersOncePerDay(t *testing.T) {
 	}
 }
 
+func TestAgentTurnsOccasionallyPostLabeledBilingualChat(t *testing.T) {
+	pool := TestDB(t, "store")
+	ctx := context.Background()
+	room, _, t0 := mkRunningRoom(t, pool)
+
+	if err := RunAgentTurns(ctx, pool, t0); err != nil {
+		t.Fatalf("RunAgentTurns day 0: %v", err)
+	}
+	msgs, err := ChatSince(ctx, pool, room.ID, 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) == 0 || len(msgs) >= AgentPlayerCount {
+		t.Fatalf("agent chat count = %d, want occasional messages between 1 and %d", len(msgs), AgentPlayerCount-1)
+	}
+	for _, msg := range msgs {
+		if !msg.IsAgent {
+			t.Fatalf("message %+v is not labeled as agent", msg)
+		}
+		if msg.Username == "" || msg.Text == "" || msg.TextEn == "" {
+			t.Fatalf("agent message is incomplete: %+v", msg)
+		}
+	}
+
+	if err := RunAgentTurns(ctx, pool, t0); err != nil {
+		t.Fatalf("RunAgentTurns repeat: %v", err)
+	}
+	repeated, err := ChatSince(ctx, pool, room.ID, 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(repeated) != len(msgs) {
+		t.Fatalf("repeat created duplicate chat: got %d messages, want %d", len(repeated), len(msgs))
+	}
+}
+
 func TestAgentTurnsIsolateBrokenRooms(t *testing.T) {
 	pool := TestDB(t, "store")
 	ctx := context.Background()

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/toddzheng/stocker/server/internal/engine"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -17,6 +19,11 @@ type agentPlayer struct {
 	slot      int
 	name      string
 	joinedDay int
+}
+
+type agentInstrument struct {
+	id    string
+	alias string
 }
 
 // RunAgentTurns advances every running room's built-in competitors. The
@@ -73,7 +80,7 @@ func runAgentRoom(ctx context.Context, db *pgxpool.Pool, room *Room, now time.Ti
 		if err := lockRoomTx(ctx, tx, room.ID); err != nil {
 			return err
 		}
-		instruments, err := agentInstruments(ctx, tx, room.ScenarioID)
+		instruments, err := agentInstruments(ctx, tx, room.ScenarioID, room.Seed)
 		if err != nil {
 			return err
 		}
@@ -130,19 +137,23 @@ func runAgentRoom(ctx context.Context, db *pgxpool.Pool, room *Room, now time.Ti
 	})
 }
 
-func agentInstruments(ctx context.Context, q Querier, scenarioID string) ([]string, error) {
-	rows, err := q.Query(ctx, `SELECT id FROM instruments WHERE scenario_id = $1 ORDER BY ord`, scenarioID)
+func agentInstruments(ctx context.Context, q Querier, scenarioID string, roomSeed uint64) ([]agentInstrument, error) {
+	rows, err := q.Query(ctx, `
+		SELECT id, alias, aliases FROM instruments
+		WHERE scenario_id = $1 ORDER BY ord`, scenarioID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []string
+	var out []agentInstrument
 	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
+		var inst agentInstrument
+		var aliases []string
+		if err := rows.Scan(&inst.id, &inst.alias, &aliases); err != nil {
 			return nil, err
 		}
-		out = append(out, id)
+		inst.alias = engine.ResolveAlias(roomSeed, inst.id, inst.alias, aliases)
+		out = append(out, inst)
 	}
 	return out, rows.Err()
 }
@@ -168,7 +179,7 @@ func roomAgents(ctx context.Context, q Querier, roomID int64) ([]agentPlayer, er
 	return out, rows.Err()
 }
 
-func takeAgentTurn(ctx context.Context, tx pgx.Tx, room *Room, day int, instruments []string, agent agentPlayer) error {
+func takeAgentTurn(ctx context.Context, tx pgx.Tx, room *Room, day int, instruments []agentInstrument, agent agentPlayer) error {
 	tag, err := tx.Exec(ctx, `
 		INSERT INTO agent_turns (room_id, user_id, day)
 		VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`, room.ID, agent.userID, day)
@@ -188,7 +199,8 @@ func takeAgentTurn(ctx context.Context, tx pgx.Tx, room *Room, day int, instrume
 		return nil
 	}
 
-	instrumentID := instruments[(int(room.Seed%uint64(len(instruments)))+agent.slot*7+day*3)%len(instruments)]
+	instrument := instruments[(int(room.Seed%uint64(len(instruments)))+agent.slot*7+day*3)%len(instruments)]
+	instrumentID := instrument.id
 	side := "buy"
 	var shares float64
 	// Every fourth turn realizes part of an existing position. If the agent
@@ -202,6 +214,12 @@ func takeAgentTurn(ctx context.Context, tx pgx.Tx, room *Room, day int, instrume
 		if err == nil {
 			side = "sell"
 			shares /= 3
+			for _, candidate := range instruments {
+				if candidate.id == instrumentID {
+					instrument = candidate
+					break
+				}
+			}
 		} else if !errors.Is(err, pgx.ErrNoRows) {
 			return err
 		}
@@ -245,11 +263,42 @@ func takeAgentTurn(ctx context.Context, tx pgx.Tx, room *Room, day int, instrume
 		orderID, instrumentID, side, room.ID, agent.userID, day); err != nil {
 		return err
 	}
-	_, err = tx.Exec(ctx, `
+	if _, err := tx.Exec(ctx, `
 		INSERT INTO room_events (room_id, day, kind, payload)
 		VALUES ($1, $2, 'agent_order', jsonb_build_object(
 			'username', $3::text, 'is_agent', true,
 			'instrument_id', $4::text, 'side', $5::text, 'order_id', $6::bigint))`,
-		room.ID, day, agent.name, instrumentID, side, orderID)
-	return err
+		room.ID, day, agent.name, instrumentID, side, orderID); err != nil {
+		return err
+	}
+
+	// A subset of completed turns speaks so the room feels alive without five
+	// automated messages flooding every simulated day. The same turn key that
+	// guards orders also makes these messages restart-safe.
+	if (day+agent.slot)%3 == 0 {
+		zh, en := agentTradeChat(side, instrument.alias, day, agent.slot)
+		_, err := tx.Exec(ctx, `
+			INSERT INTO room_chat (room_id, user_id, day, text, text_en)
+			VALUES ($1, $2, $3, $4, $5)`, room.ID, agent.userID, day, zh, en)
+		return err
+	}
+	return nil
+}
+
+func agentTradeChat(side, alias string, day, slot int) (string, string) {
+	variant := (day + slot) / 3 % 2
+	if side == "sell" {
+		if variant == 0 {
+			return fmt.Sprintf("%s 这笔我先减一点仓，留些现金。", alias),
+				fmt.Sprintf("I'm trimming some %s here and keeping cash available.", alias)
+		}
+		return fmt.Sprintf("%s 我先落袋一部分，继续观察。", alias),
+			fmt.Sprintf("I'm taking some profit on %s and staying watchful.", alias)
+	}
+	if variant == 0 {
+		return fmt.Sprintf("我在关注 %s，先小仓位买一点。", alias),
+			fmt.Sprintf("I'm watching %s and starting with a small position.", alias)
+	}
+	return fmt.Sprintf("%s 今天值得试一笔，我先建仓。", alias),
+		fmt.Sprintf("%s looks worth a try today, so I'm opening a position.", alias)
 }

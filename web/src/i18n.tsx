@@ -232,6 +232,9 @@ const en = {
   "news.disputed": "Disputed",
   "news.exposed": "Manipulation confirmed",
   "news.investigateFailed": "Investigation failed",
+  "news.readFull": "Read full article",
+  "news.noBody": "No additional article content is available.",
+  "news.loadFailed": "Failed to load this news article",
 
   "chat.title": "Chat",
   "chat.placeholder": "Say something…",
@@ -486,6 +489,9 @@ const zh: Record<MsgKey, string> = {
   "news.disputed": "存疑",
   "news.exposed": "已查实操纵",
   "news.investigateFailed": "调查失败",
+  "news.readFull": "阅读全文",
+  "news.noBody": "这条新闻暂无更多正文。",
+  "news.loadFailed": "新闻加载失败",
 
   "chat.title": "聊天室",
   "chat.placeholder": "说点什么…",

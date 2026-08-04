@@ -1,17 +1,44 @@
 package httpapi
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/toddzheng/stocker/server/internal/engine"
 	"github.com/toddzheng/stocker/server/internal/store"
 )
 
 const newsPageLimit = 200
+
+type newsScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanVisibleNews(scanner newsScanner) (map[string]any, error) {
+	var id, clusterID int64
+	var day int
+	var mediaID, headline, body, headlineEn, bodyEn string
+	var disputed, exposed bool
+	if err := scanner.Scan(&id, &day, &mediaID, &headline, &body, &clusterID, &disputed, &exposed, &headlineEn, &bodyEn); err != nil {
+		return nil, err
+	}
+	item := map[string]any{
+		"id": id, "day": day, "media_id": mediaID, "headline": headline, "body": body,
+		"headline_en": headlineEn, "body_en": bodyEn,
+		"disputed": disputed, "exposed": exposed,
+	}
+	if clusterID > 0 {
+		item["cluster_id"] = clusterID
+	} else {
+		item["cluster_id"] = nil
+	}
+	return item, nil
+}
 
 func roomJSON(room *store.Room, curDay int, ended, started bool, userID int64) map[string]any {
 	m := map[string]any{
@@ -328,23 +355,10 @@ func (s *Server) handleNews(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	items := []map[string]any{}
 	for rows.Next() {
-		var id, clusterID int64
-		var day int
-		var mediaID, headline, body, headlineEn, bodyEn string
-		var disputed, exposed bool
-		if err := rows.Scan(&id, &day, &mediaID, &headline, &body, &clusterID, &disputed, &exposed, &headlineEn, &bodyEn); err != nil {
+		item, err := scanVisibleNews(rows)
+		if err != nil {
 			s.storeErr(w, err)
 			return
-		}
-		item := map[string]any{
-			"id": id, "day": day, "media_id": mediaID, "headline": headline, "body": body,
-			"headline_en": headlineEn, "body_en": bodyEn,
-			"disputed": disputed, "exposed": exposed,
-		}
-		if clusterID > 0 {
-			item["cluster_id"] = clusterID
-		} else {
-			item["cluster_id"] = nil
 		}
 		items = append(items, item)
 	}
@@ -358,6 +372,43 @@ func (s *Server) handleNews(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "media_accuracy": accuracy})
+}
+
+// handleNewsDetail returns one already-published story. It deliberately uses
+// the same blind-box-safe projection as the feed and applies the current-day
+// cutoff so a guessed ID cannot reveal future news.
+func (s *Server) handleNewsDetail(w http.ResponseWriter, r *http.Request) {
+	room, ok := s.roomForMember(w, r)
+	if !ok {
+		return
+	}
+	if room.StartedAt == nil {
+		writeErr(w, http.StatusBadRequest, store.ErrNotStarted.Error())
+		return
+	}
+	newsID, err := strconv.ParseInt(chi.URLParam(r, "newsID"), 10, 64)
+	if err != nil || newsID <= 0 {
+		writeErr(w, http.StatusNotFound, "no such news item")
+		return
+	}
+	curDay, _, err := room.CurrentDay(s.Now())
+	if err != nil {
+		s.storeErr(w, err)
+		return
+	}
+	item, err := scanVisibleNews(s.DB.QueryRow(r.Context(), `
+		SELECT id, day, media_id, headline, body, cluster_id, disputed, exposed, headline_en, body_en
+		FROM room_news
+		WHERE room_id = $1 AND id = $2 AND day <= $3`, room.ID, newsID, curDay))
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeErr(w, http.StatusNotFound, "no such news item")
+		return
+	}
+	if err != nil {
+		s.storeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
 }
 
 // handleForum serves the NPC forum feed. Blind box: id, day, npc_name,
