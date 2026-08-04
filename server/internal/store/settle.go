@@ -39,6 +39,19 @@ func SettleRoom(ctx context.Context, db *pgxpool.Pool, room *Room, now time.Time
 // game has ended, and finally upserts the per-player daily net-asset
 // snapshot feeding the leaderboard curve.
 func SettleTx(ctx context.Context, tx pgx.Tx, room *Room, curDay int, ended bool) error {
+	// All settlement entry points share this room-row lock. curDay is usually
+	// computed before the transaction begins and may be stale after waiting
+	// for another request, so clamp it to the persisted monotonic watermark.
+	var settledThrough *int
+	if err := tx.QueryRow(ctx, `
+		SELECT settled_through_day FROM rooms WHERE id = $1 FOR UPDATE`, room.ID).
+		Scan(&settledThrough); err != nil {
+		return err
+	}
+	if settledThrough != nil && *settledThrough > curDay {
+		curDay = *settledThrough
+	}
+
 	type due struct {
 		id           int64
 		userID       int64
@@ -155,7 +168,14 @@ func SettleTx(ctx context.Context, tx pgx.Tx, room *Room, curDay int, ended bool
 		}
 	}
 
-	return snapshotDailyTotalsTx(ctx, tx, room, curDay)
+	if err := snapshotDailyTotalsTx(ctx, tx, room, curDay); err != nil {
+		return err
+	}
+	_, err = tx.Exec(ctx, `
+		UPDATE rooms SET settled_through_day = GREATEST(
+			COALESCE(settled_through_day, $2), $2)
+		WHERE id = $1`, room.ID, curDay)
+	return err
 }
 
 // accrueInterestTx compounds every active borrower's debt once per sim

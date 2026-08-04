@@ -156,7 +156,9 @@ func TestAgentCatchUpDoesNotRewindHumanLoanSettlement(t *testing.T) {
 		t.Fatal(err)
 	}
 	debtBefore, throughBefore, _ := debtOf(t, pool, room.ID, guest.ID)
-	if err := RunAgentTurns(ctx, pool, at3); err != nil {
+	// Simulate an Agent batch whose clock observation is stale (day 2) after
+	// an HTTP path has already settled through day 3.
+	if err := RunAgentTurns(ctx, pool, t0.Add(2*61*time.Second)); err != nil {
 		t.Fatal(err)
 	}
 	debtAfter, throughAfter, _ := debtOf(t, pool, room.ID, guest.ID)

@@ -55,3 +55,8 @@ CREATE TABLE agent_turns (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (room_id, user_id, day)
 );
+
+-- Shared monotonic settlement watermark. Every SettleTx caller locks the
+-- room row and clamps stale clock observations to this day, preventing a
+-- delayed request/agent loop from rewinding loan accrual.
+ALTER TABLE rooms ADD COLUMN settled_through_day INT;
