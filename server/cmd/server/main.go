@@ -49,6 +49,22 @@ func main() {
 		log.Printf("llm news copy disabled (LLM_BASE_URL unset) — template copy")
 	}
 	srv := &http.Server{Addr: addr, Handler: api.Router()}
+	agentCtx, stopAgents := context.WithCancel(ctx)
+	defer stopAgents()
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		for {
+			if err := store.RunAgentTurns(agentCtx, pool, time.Now()); err != nil && !errors.Is(err, context.Canceled) {
+				log.Printf("agent turns: %v", err)
+			}
+			select {
+			case <-agentCtx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
 	go func() {
 		log.Printf("listening on %s", addr)
 		if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
@@ -59,6 +75,7 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
+	stopAgents()
 	shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)

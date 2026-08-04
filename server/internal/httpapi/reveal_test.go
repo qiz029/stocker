@@ -60,7 +60,7 @@ func TestRevealOnlyAfterGameEnds(t *testing.T) {
 	if tr["username"] != "host" || tr["instrument_id"] != "S1" || tr["day"].(float64) != 1 {
 		t.Fatalf("trade: %v", tr)
 	}
-	if len(got["leaderboard"].([]any)) != 1 {
+	if len(got["leaderboard"].([]any)) != 1+store.AgentPlayerCount {
 		t.Fatalf("reveal leaderboard: %v", got["leaderboard"])
 	}
 	if got["real_period"] != "1999-01 ~ 2001-12" {

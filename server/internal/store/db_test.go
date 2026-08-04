@@ -23,7 +23,7 @@ func TestMigrateCreatesSchemaAndIsIdempotent(t *testing.T) {
 		"orders", "trades", "positions", "room_events",
 		"loan_txns", "room_player_daily",
 		"room_options", "option_positions", "option_trades",
-		"room_forum_posts", "player_actions",
+		"room_forum_posts", "player_actions", "agent_turns",
 	} {
 		var n int
 		if err := pool.QueryRow(ctx, "SELECT count(*) FROM "+table).Scan(&n); err != nil {
@@ -31,12 +31,12 @@ func TestMigrateCreatesSchemaAndIsIdempotent(t *testing.T) {
 		}
 	}
 
-	// Exactly eleven migrations recorded, exactly once.
+	// Exactly twelve migrations recorded, exactly once.
 	var applied int
 	if err := pool.QueryRow(ctx, "SELECT count(*) FROM schema_migrations").Scan(&applied); err != nil {
 		t.Fatalf("schema_migrations: %v", err)
 	}
-	if applied != 11 {
-		t.Fatalf("applied migrations = %d, want 11", applied)
+	if applied != 12 {
+		t.Fatalf("applied migrations = %d, want 12", applied)
 	}
 }

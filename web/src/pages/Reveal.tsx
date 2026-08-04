@@ -51,7 +51,10 @@ export default function Reveal() {
         {data.leaderboard.map((row, i) => (
           <div key={row.username} className="lb-row">
             <span className="rank num">{i === 0 ? "🏆" : i + 1}</span>
-            <span className="who">{row.username}{row.late_join && <small>{t("reveal.lateJoin")}</small>}</span>
+            <span className="who">{row.username}
+              {row.is_agent && <small className="agent-badge">{t("common.agent")}</small>}
+              {row.late_join && <small>{t("reveal.lateJoin")}</small>}
+            </span>
             <span className="val num">
               {fmtCents(row.total_cents)}
               <span className={`ret delta ${row.return_pct >= 0 ? "up" : "down"}`}>{fmtPct(row.return_pct)}</span>
@@ -92,7 +95,7 @@ export default function Reveal() {
             {data.trades.map((tr, i) => (
               <tr key={i}>
                 <td className="num">{tr.day}</td>
-                <td>{tr.username}</td>
+                <td>{tr.username}{tr.is_agent && <small className="agent-badge">{t("common.agent")}</small>}</td>
                 <td className={`delta ${tr.side === "buy" ? "up" : "down"}`}>{tr.side === "buy" ? t("side.Buy") : t("side.Sell")}</td>
                 <td>{aliasOf(tr.instrument_id)}</td>
                 <td className="num">{fmt$(tr.price)}</td>

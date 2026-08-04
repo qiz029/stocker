@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/toddzheng/stocker/server/internal/store"
 )
 
 // End-to-end loan flow: borrow → portfolio debt/rate → interest accrues
@@ -133,13 +135,19 @@ func TestLoanFlow(t *testing.T) {
 	// Leaderboard: solvent host first, bankrupt guest last with a curve.
 	state := host.mustJSON("GET", fmt.Sprintf("/api/rooms/%d", roomID), nil, http.StatusOK)
 	board := state["leaderboard"].([]any)
-	if len(board) != 2 {
+	if len(board) != 2+store.AgentPlayerCount {
 		t.Fatalf("leaderboard: %v", board)
 	}
-	first := board[0].(map[string]any)
-	last := board[1].(map[string]any)
-	if first["username"] != "host" || first["bankrupt"].(bool) {
-		t.Fatalf("leaderboard first: %v", first)
+	var hostRow map[string]any
+	for _, item := range board {
+		row := item.(map[string]any)
+		if row["username"] == "host" {
+			hostRow = row
+		}
+	}
+	last := board[len(board)-1].(map[string]any)
+	if hostRow == nil || hostRow["bankrupt"].(bool) {
+		t.Fatalf("leaderboard host: %v", hostRow)
 	}
 	if last["username"] != "guest" || !last["bankrupt"].(bool) {
 		t.Fatalf("leaderboard last: %v", last)

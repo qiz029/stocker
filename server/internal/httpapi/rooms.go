@@ -227,6 +227,7 @@ func (s *Server) handleRoomState(w http.ResponseWriter, r *http.Request) {
 		for _, lr := range rows {
 			leaderboard = append(leaderboard, map[string]any{
 				"username":    lr.Username,
+				"is_agent":    lr.IsAgent,
 				"total_cents": lr.TotalCents,
 				"return_pct":  float64(lr.TotalCents-store.InitialCashCents) / float64(store.InitialCashCents),
 				"late_join":   lr.JoinedDay > 0,

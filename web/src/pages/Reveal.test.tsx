@@ -12,9 +12,11 @@ const reveal = {
   ],
   trades: [
     { username: "amy", instrument_id: "S1", side: "buy", day: 20, price: 180.5, shares: 221.6, amount_cents: 4_000_000 },
+    { username: "Nova", is_agent: true, instrument_id: "S1", side: "sell", day: 21, price: 181, shares: 20, amount_cents: 362_000 },
   ],
   leaderboard: [
     { username: "amy", total_cents: 13_420_000, return_pct: 0.342, late_join: false },
+    { username: "Nova", is_agent: true, total_cents: 11_000_000, return_pct: 0.1, late_join: false },
     { username: "me", total_cents: 9_100_000, return_pct: -0.09, late_join: false },
   ],
   real_period: "1999-01 ~ 2001-12",
@@ -38,6 +40,7 @@ describe("Reveal page", () => {
     expect(screen.getAllByText("amy")[0].closest(".lb-row")).toBeTruthy();
     expect(screen.getByText("$40,000.00")).toBeInTheDocument();
     expect(screen.getByText(/1999-01 ~ 2001-12/)).toBeInTheDocument();
+    expect(screen.getAllByText("Agent")).toHaveLength(2);
   });
 
   it("shows a waiting message before the game ends", async () => {

@@ -58,7 +58,8 @@ func (s *Server) handleReveal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tradeRows, err := s.DB.Query(r.Context(), `
-		SELECT u.username, t.instrument_id, t.side, t.day, t.price, t.shares, t.amount_cents
+		SELECT COALESCE(u.agent_name, u.username), u.is_agent,
+			t.instrument_id, t.side, t.day, t.price, t.shares, t.amount_cents
 		FROM trades t JOIN users u ON u.id = t.user_id
 		WHERE t.room_id = $1 ORDER BY t.day, t.id`, room.ID)
 	if err != nil {
@@ -69,15 +70,16 @@ func (s *Server) handleReveal(w http.ResponseWriter, r *http.Request) {
 	trades := []map[string]any{}
 	for tradeRows.Next() {
 		var username, instrumentID, side string
+		var isAgent bool
 		var day int
 		var price, shares float64
 		var amountCents int64
-		if err := tradeRows.Scan(&username, &instrumentID, &side, &day, &price, &shares, &amountCents); err != nil {
+		if err := tradeRows.Scan(&username, &isAgent, &instrumentID, &side, &day, &price, &shares, &amountCents); err != nil {
 			s.storeErr(w, err)
 			return
 		}
 		trades = append(trades, map[string]any{
-			"username": username, "instrument_id": instrumentID, "side": side,
+			"username": username, "is_agent": isAgent, "instrument_id": instrumentID, "side": side,
 			"day": day, "price": price, "shares": shares, "amount_cents": amountCents,
 		})
 	}
@@ -95,6 +97,7 @@ func (s *Server) handleReveal(w http.ResponseWriter, r *http.Request) {
 	for _, lr := range lbRows {
 		leaderboard = append(leaderboard, map[string]any{
 			"username":    lr.Username,
+			"is_agent":    lr.IsAgent,
 			"total_cents": lr.TotalCents,
 			"return_pct":  float64(lr.TotalCents-store.InitialCashCents) / float64(store.InitialCashCents),
 			"late_join":   lr.JoinedDay > 0,

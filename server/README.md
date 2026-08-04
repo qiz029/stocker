@@ -1,7 +1,8 @@
 # stocker server
 
 Go backend for the time-travel stock game. Single binary + Postgres; no
-schedulers, no external services at runtime.
+external services at runtime. A lightweight in-process loop gives each of
+the five built-in Agent players one deterministic trading turn per sim day.
 
 ## Local development
 

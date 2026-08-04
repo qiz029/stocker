@@ -88,6 +88,20 @@ func TestCreateRoomPersistsWorld(t *testing.T) {
 	if cash != InitialCashCents {
 		t.Fatalf("host cash = %d, want %d", cash, InitialCashCents)
 	}
+
+	// Every room starts with five system-controlled competitors in addition
+	// to its human host. Agent identity is persisted, not inferred from names.
+	var players, agents int
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*), count(*) FILTER (WHERE u.is_agent)
+		FROM room_players rp JOIN users u ON u.id = rp.user_id
+		WHERE rp.room_id = $1`, room.ID).Scan(&players, &agents); err != nil {
+		t.Fatal(err)
+	}
+	if players != 6 || agents != AgentPlayerCount {
+		t.Fatalf("room players = %d (%d agents), want 6 (%d agents)",
+			players, agents, AgentPlayerCount)
+	}
 }
 
 func TestCreateRoomValidatesDayDuration(t *testing.T) {

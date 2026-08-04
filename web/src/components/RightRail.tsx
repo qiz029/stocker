@@ -129,6 +129,7 @@ export default function RightRail({ roomId, state, aliasOf }: Props) {
             className={`lb-row ${row.username === user.username ? "me" : ""} ${row.bankrupt ? "bankrupt" : ""}`}>
             <span className="rank num">{i + 1}</span>
             <span className="who">{row.username}
+              {row.is_agent && <small className="agent-badge">{t("common.agent")}</small>}
               {row.late_join && <small>{t("reveal.lateJoin")}</small>}
               {row.bankrupt && <small className="lb-badge">{t("rail.bankrupt")}</small>}
             </span>
@@ -146,7 +147,18 @@ export default function RightRail({ roomId, state, aliasOf }: Props) {
       <div className="card">
         <h2>{t("rail.events")}</h2>
         {events.length === 0 && <div className="feed-item">{t("rail.noEvents")}</div>}
-        {events.map(ev => ev.kind === "manipulation_bust" ? (
+        {events.map(ev => ev.kind === "agent_order" ? (
+          <div key={ev.id} className="feed-item agent-action">
+            <div className="fi-meta num">{t("rail.tradingDay", { day: ev.day })}</div>
+            <span className="whale-txt">
+              {t("rail.agentOrder", {
+                username: ev.payload.username ?? "?",
+                side: t(ev.payload.side === "buy" ? "side.buy" : "side.sell"),
+                alias: aliasOf(ev.payload.instrument_id ?? ""),
+              })}
+            </span>
+          </div>
+        ) : ev.kind === "manipulation_bust" ? (
           <div key={ev.id} className="feed-item bust">
             <div className="fi-meta num">{t("rail.tradingDay", { day: ev.day })}</div>
             <span className="whale-txt">

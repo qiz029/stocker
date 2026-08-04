@@ -18,7 +18,7 @@ git clone https://github.com/qiz029/stocker.git && cd stocker
 | Go | 1.26+(go.mod 声明 1.26.4) | 后端 `go run` 直跑,无需预编译 |
 | Node + npm | Node 18+ | 前端 Vite;首次 `cd web && npm install` |
 | Postgres | 已知可用版本 18(macOS:`brew install postgresql@18`;Linux:发行版对应包) | 唯一外部服务,本地即可 |
-| 数据库 | `createdb stocker` | schema 由服务启动时自动迁移(embed 的 5 个 migration),无需手动建表 |
+| 数据库 | `createdb stocker` | schema 由服务启动时自动迁移（内嵌 migration）,无需手动建表 |
 | `.env.local` | 仓库根目录,gitignored,建议 chmod 600 | **可选**。缺失时服务照常运行,新闻退化为模板文案 |
 | 外网 | 基本不需要 | 历史行情数据已 go:embed 进代码;只有 LLM 调用出网 |
 
@@ -75,6 +75,7 @@ cd ../server && STOCKER_TEST_DB='postgres://localhost:5432/stocker_test?sslmode=
 - **建房 ~48 秒、新闻 LLM 填充率 ~90%**:DeepSeek key 账户级并发实测被限流到 ~5,`LLM_CONCURRENCY` 调高无效。正文在建房后异步升级(先模板后 LLM),属设计行为
 - **游戏内时钟 2-4 小时一跳、有收盘和周末**:模拟市场时钟(PR #6,2026-07-27),纯前端展示,跳动不匀速是特性不是 bug
 - **四个剧本**:dotcom-2000 / crash-1987 / nifty-1972 / gfc-2008,数据全部内嵌,运行时不拉外部行情
+- **每房间 5 个 Agent 玩家**:迁移会给已有房间补齐，新房间自动加入；后端每 15 秒检查一次，每个 Agent 每个交易日最多下单一次，排行榜、房间动态与终局回放均有 Agent 标识
 - Stooq 数据源有 JS 反爬已弃用;若要重抓数据用 `cmd/pipeline fetch`(Yahoo chart API,一次性操作,平时不用)
 
 ## 五、常用运维操作

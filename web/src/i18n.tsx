@@ -76,6 +76,7 @@ const en = {
 
   "common.backToRoom": "← Back to room",
   "common.day": "Day {day}",
+  "common.agent": "Agent",
 
   "stock.unknown": "Unknown instrument",
   "stock.todayClose": "Today's close",
@@ -209,6 +210,7 @@ const en = {
   "rail.whale": "🐳 A player made a large {side} of {alias}",
   "rail.bust": "🚨 {username} was fined {amount} for manipulating {alias}",
   "rail.bankruptEvent": "💥 {username} went bankrupt",
+  "rail.agentOrder": "🤖 {username} [Agent] placed a {side} order for {alias}",
   "rail.news": "Today's news",
   "rail.noNews": "No news yet",
   "rail.moreNews": "Earlier news ↓",
@@ -328,6 +330,7 @@ const zh: Record<MsgKey, string> = {
 
   "common.backToRoom": "← 返回房间",
   "common.day": "第 {day} 日",
+  "common.agent": "Agent",
 
   "stock.unknown": "未知标的",
   "stock.todayClose": "今日收盘",
@@ -461,6 +464,7 @@ const zh: Record<MsgKey, string> = {
   "rail.whale": "🐳 有玩家大额{side} {alias}",
   "rail.bust": "🚨 {username} 因操纵 {alias} 被罚款 {amount}",
   "rail.bankruptEvent": "💥 {username} 已破产",
+  "rail.agentOrder": "🤖 {username} [Agent] 对 {alias} 提交了{side}委托",
   "rail.news": "今日新闻",
   "rail.noNews": "暂无新闻",
   "rail.moreNews": "更早的新闻 ↓",

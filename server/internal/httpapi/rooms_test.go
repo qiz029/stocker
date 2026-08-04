@@ -89,12 +89,21 @@ func TestRoomLifecycleAndState(t *testing.T) {
 		t.Fatalf("quotes: %d, want 8", len(quotes))
 	}
 	lb := state["leaderboard"].([]any)
-	if len(lb) != 2 {
+	if len(lb) != 2+store.AgentPlayerCount {
 		t.Fatalf("leaderboard: %v", lb)
 	}
-	row := lb[0].(map[string]any)
-	if _, hasUID := row["user_id"]; hasUID {
-		t.Fatalf("leaderboard leaks user_id: %v", row)
+	agents := 0
+	for _, item := range lb {
+		row := item.(map[string]any)
+		if _, hasUID := row["user_id"]; hasUID {
+			t.Fatalf("leaderboard leaks user_id: %v", row)
+		}
+		if row["is_agent"].(bool) {
+			agents++
+		}
+	}
+	if agents != store.AgentPlayerCount {
+		t.Fatalf("leaderboard agents = %d, want %d", agents, store.AgentPlayerCount)
 	}
 
 	// Price series is truncated at the current day (no future peeking).

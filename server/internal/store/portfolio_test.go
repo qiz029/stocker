@@ -73,8 +73,17 @@ func TestLeaderboardOrdering(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Leaderboard: %v", err)
 	}
-	if len(rows) != 2 {
-		t.Fatalf("leaderboard rows = %d, want 2", len(rows))
+	if len(rows) != 2+AgentPlayerCount {
+		t.Fatalf("leaderboard rows = %d, want %d", len(rows), 2+AgentPlayerCount)
+	}
+	agents := 0
+	for _, row := range rows {
+		if row.IsAgent {
+			agents++
+		}
+	}
+	if agents != AgentPlayerCount {
+		t.Fatalf("leaderboard agents = %d, want %d", agents, AgentPlayerCount)
 	}
 	// S1 is the tech-bubble instrument: its day-1 close is above its
 	// day-1 open in the synthetic scenario's boom phase, so the all-in
@@ -182,15 +191,23 @@ func TestLeaderboardBankruptSortingAndCurve(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 2 {
-		t.Fatalf("rows = %d, want 2", len(rows))
+	if len(rows) != 2+AgentPlayerCount {
+		t.Fatalf("rows = %d, want %d", len(rows), 2+AgentPlayerCount)
 	}
-	host, guestRow := rows[0], rows[1]
-	if host.UserID != room.HostUserID || host.Bankrupt {
-		t.Fatalf("first row: %+v, want solvent host", host)
+	var host, guestRow *LeaderboardRow
+	for i := range rows {
+		switch rows[i].UserID {
+		case room.HostUserID:
+			host = &rows[i]
+		case guest.ID:
+			guestRow = &rows[i]
+		}
 	}
-	if guestRow.UserID != guest.ID || !guestRow.Bankrupt {
-		t.Fatalf("last row: %+v, want bankrupt guest", guestRow)
+	if host == nil || host.Bankrupt {
+		t.Fatalf("missing solvent host: %+v", rows)
+	}
+	if guestRow == nil || !guestRow.Bankrupt || rows[len(rows)-1].UserID != guest.ID {
+		t.Fatalf("last row: %+v, want bankrupt guest", rows[len(rows)-1])
 	}
 	// The bankrupt guest has the higher net total, yet sorts last.
 	if guestRow.TotalCents <= host.TotalCents {

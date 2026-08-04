@@ -205,15 +205,16 @@ func TestSettleAccrualIdempotentAndSnapshots(t *testing.T) {
 		t.Fatalf("accrual not idempotent: %d → %d", debt1, debt2)
 	}
 
-	// Snapshots: days 0 and 3 for each of the 2 players — 4 rows total,
+	// Snapshots: days 0 and 3 for both humans and all five agents — 14 rows,
 	// exactly one row per (player, day), values stable across re-settle.
 	var n int
 	if err := pool.QueryRow(ctx,
 		`SELECT count(*) FROM room_player_daily WHERE room_id = $1`, room.ID).Scan(&n); err != nil {
 		t.Fatal(err)
 	}
-	if n != 4 {
-		t.Fatalf("snapshot rows = %d, want 4", n)
+	wantSnapshots := 2 * (2 + AgentPlayerCount)
+	if n != wantSnapshots {
+		t.Fatalf("snapshot rows = %d, want %d", n, wantSnapshots)
 	}
 	var hostDay3 int64
 	if err := pool.QueryRow(ctx, `

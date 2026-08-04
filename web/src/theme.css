@@ -202,6 +202,15 @@ canvas.chart { width: 100%; height: auto; display: block; touch-action: none; }
 .lb-row.me .who { color: var(--up); }
 .lb-row canvas { width: 64px; height: 22px; }
 .lb-row.bankrupt { opacity: 0.45; }
+.agent-badge {
+  color: #7357d9 !important;
+  background: rgba(115, 87, 217, 0.12);
+  border-radius: 999px;
+  padding: 1px 6px;
+  margin-left: 6px;
+  font-size: 0.72rem;
+}
+.agent-action { border-left: 3px solid #8b72e8; }
 .lb-badge {
   color: var(--ink2); background: var(--card-2);
   border-radius: 6px; padding: 1px 7px; font-size: 0.7rem;

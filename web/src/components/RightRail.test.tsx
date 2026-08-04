@@ -16,6 +16,8 @@ const state: RoomState = {
       bankrupt: false, curve: [10_000_000, 9_500_000, 9_000_000] },
     { username: "bob", total_cents: 0, return_pct: -1, late_join: false,
       bankrupt: true, curve: [10_000_000, 5_000_000, 0] },
+    { username: "Nova", is_agent: true, total_cents: 10_000_000, return_pct: 0, late_join: false,
+      bankrupt: false, curve: [10_000_000, 10_000_000, 10_000_000] },
   ],
 };
 
@@ -27,7 +29,9 @@ describe("RightRail", () => {
       const u = String(url);
       let body: unknown = { items: [] };
       if (u.includes("/events")) body = { items: [
-        { id: 1, day: 4, kind: "whale", payload: { instrument_id: "S1", side: "buy" } }] };
+        { id: 1, day: 4, kind: "whale", payload: { instrument_id: "S1", side: "buy" } },
+        { id: 2, day: 5, kind: "agent_order", payload: {
+          username: "Nova", is_agent: true, instrument_id: "S1", side: "sell" } }] };
       if (u.includes("/news")) body = { items: [
         { id: 1, day: 5, media_id: "wire", headline: "消息面变化，S1板块承压，市场解读不一", body: "正文内容。" }] };
       return new Response(JSON.stringify(body), { status: 200 });
@@ -41,7 +45,11 @@ describe("RightRail", () => {
     expect(screen.getByText("+20.00%")).toBeInTheDocument();
 
     // per-player asset curve sparklines on every row
-    expect(document.querySelectorAll(".lb-row canvas").length).toBe(3);
+    expect(document.querySelectorAll(".lb-row canvas").length).toBe(4);
+
+    // Agent identity and actions are explicit rather than name-based guesses.
+    expect(screen.getByText("Nova").closest(".lb-row")).toHaveTextContent("Agent");
+    expect(await screen.findByText(/Nova.*Agent.*sell order.*Ridgeline Networks/)).toBeInTheDocument();
 
     // bankrupt player: dimmed row + badge
     expect(screen.getByText("Bankrupt")).toBeInTheDocument();

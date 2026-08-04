@@ -18,7 +18,10 @@ import (
 	"github.com/toddzheng/stocker/server/internal/scenario"
 )
 
-const InitialCashCents int64 = 10_000_000 // $100,000 (spec §2.2)
+const (
+	InitialCashCents int64 = 10_000_000 // $100,000 (spec §2.2)
+	AgentPlayerCount       = 5
+)
 
 // CopyFillBudget bounds how long room creation waits for the news copy
 // filler. Providers with tight per-key concurrency limits (observed:
@@ -161,6 +164,14 @@ func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, ho
 			INSERT INTO room_players (room_id, user_id, cash_cents, joined_day)
 			VALUES ($1, $2, $3, 0)`, room.ID, hostID, InitialCashCents); err != nil {
 			return err
+		}
+		if tag, err := tx.Exec(ctx, `
+			INSERT INTO room_players (room_id, user_id, cash_cents, joined_day)
+			SELECT $1, id, $2, 0 FROM users WHERE is_agent ORDER BY agent_slot
+			ON CONFLICT (room_id, user_id) DO NOTHING`, room.ID, InitialCashCents); err != nil {
+			return err
+		} else if tag.RowsAffected() != AgentPlayerCount {
+			return fmt.Errorf("seat agents: inserted %d, want %d", tag.RowsAffected(), AgentPlayerCount)
 		}
 
 		prices := make([][]any, 0, len(sc.Instruments)*sc.Days)
