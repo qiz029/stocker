@@ -67,9 +67,6 @@ func runAgentRoom(ctx context.Context, db *pgxpool.Pool, room *Room, now time.Ti
 	if err != nil {
 		return err
 	}
-	if ended {
-		return nil
-	}
 	lastDecisionDay := min(curDay, room.Days-2)
 
 	return pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
@@ -87,6 +84,11 @@ func runAgentRoom(ctx context.Context, db *pgxpool.Pool, room *Room, now time.Ti
 		if err != nil {
 			return err
 		}
+		// Migrations intentionally leave already-completed historical rooms
+		// untouched. Rooms that ended after agents joined still catch up below.
+		if ended && len(agents) == 0 {
+			return nil
+		}
 		if len(agents) != AgentPlayerCount {
 			return fmt.Errorf("found %d agents, want %d", len(agents), AgentPlayerCount)
 		}
@@ -102,22 +104,29 @@ func runAgentRoom(ctx context.Context, db *pgxpool.Pool, room *Room, now time.Ti
 			room.ID, joinedDay).Scan(&lastTurnDay); err != nil {
 			return err
 		}
-		// Catch up chronologically when the process was stopped for multiple
-		// sim days. Each settlement fills the previous day's orders before the
-		// next deterministic decision reads cash and positions.
+		// Settle the room monotonically at today's watermark before reading
+		// agent resources. Never call SettleTx with a historical day here: an
+		// HTTP request may already have accrued human loans through curDay.
+		if err := SettleTx(ctx, tx, room, curDay, ended); err != nil {
+			return err
+		}
+		// Catch up decisions chronologically when the process was stopped for
+		// multiple sim days. An overdue order still carries its historical
+		// exec_day, so settling at curDay fills it at the correct historical
+		// open without rewinding any room-level settlement watermarks.
 		for day := max(joinedDay, lastTurnDay+1); day <= lastDecisionDay; day++ {
-			if err := SettleTx(ctx, tx, room, day, false); err != nil {
-				return err
-			}
 			for _, agent := range agents {
 				if err := takeAgentTurn(ctx, tx, room, day, instruments, agent); err != nil {
 					return err
 				}
 			}
+			if day < curDay {
+				if err := SettleTx(ctx, tx, room, curDay, ended); err != nil {
+					return err
+				}
+			}
 		}
-		// Fill the most recent due orders and refresh today's snapshots. This
-		// is also the only work needed when today's turns already exist.
-		return SettleTx(ctx, tx, room, curDay, false)
+		return nil
 	})
 }
 

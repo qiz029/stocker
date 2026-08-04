@@ -102,3 +102,66 @@ func TestAgentTurnsIsolateBrokenRooms(t *testing.T) {
 		t.Fatalf("healthy room events = %d, want %d", healthyEvents, AgentPlayerCount)
 	}
 }
+
+func TestAgentTurnsCatchUpAfterRoomEnds(t *testing.T) {
+	pool := TestDB(t, "store")
+	ctx := context.Background()
+	room, _, t0 := mkRunningRoom(t, pool)
+
+	// Keep this integration case small while exercising the same final-day
+	// boundary as production scenarios.
+	room.Days = 5
+	if _, err := pool.Exec(ctx, `UPDATE rooms SET days = 5 WHERE id = $1`, room.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := RunAgentTurns(ctx, pool, t0); err != nil {
+		t.Fatal(err)
+	}
+	if err := RunAgentTurns(ctx, pool, t0.Add(6*60*time.Second)); err != nil {
+		t.Fatalf("ended catch-up: %v", err)
+	}
+
+	var turns, trades, pending int
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM agent_turns WHERE room_id = $1`, room.ID).Scan(&turns); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*) FROM trades t JOIN users u ON u.id = t.user_id
+		WHERE t.room_id = $1 AND u.is_agent`, room.ID).Scan(&trades); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*) FROM orders o JOIN users u ON u.id = o.user_id
+		WHERE o.room_id = $1 AND u.is_agent AND o.status = 'pending'`, room.ID).Scan(&pending); err != nil {
+		t.Fatal(err)
+	}
+	want := 4 * AgentPlayerCount // decisions on days 0..3, fills on days 1..4
+	if turns != want || trades != want || pending != 0 {
+		t.Fatalf("ended activity: turns=%d trades=%d pending=%d, want %d/%d/0",
+			turns, trades, pending, want, want)
+	}
+}
+
+func TestAgentCatchUpDoesNotRewindHumanLoanSettlement(t *testing.T) {
+	pool := TestDB(t, "store")
+	ctx := context.Background()
+	room, guest, t0 := mkRunningRoom(t, pool)
+
+	if _, err := Borrow(ctx, pool, room, guest.ID, 1_000_000, t0); err != nil {
+		t.Fatal(err)
+	}
+	at3 := t0.Add(3*61*time.Second + time.Second)
+	if _, _, err := SettleRoom(ctx, pool, room, at3); err != nil {
+		t.Fatal(err)
+	}
+	debtBefore, throughBefore, _ := debtOf(t, pool, room.ID, guest.ID)
+	if err := RunAgentTurns(ctx, pool, at3); err != nil {
+		t.Fatal(err)
+	}
+	debtAfter, throughAfter, _ := debtOf(t, pool, room.ID, guest.ID)
+	if debtAfter != debtBefore || throughAfter == nil || throughBefore == nil || *throughAfter != *throughBefore {
+		t.Fatalf("human loan settlement changed during agent catch-up: debt %d→%d, through %v→%v",
+			debtBefore, debtAfter, throughBefore, throughAfter)
+	}
+}
