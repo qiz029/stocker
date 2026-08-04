@@ -15,20 +15,21 @@ func TestAgentTurnsPlaceLabeledOrdersOncePerDay(t *testing.T) {
 		t.Fatalf("RunAgentTurns day 0: %v", err)
 	}
 
-	var pending, events, labeled int
+	var pending, events, labeled, bilingual int
 	if err := pool.QueryRow(ctx, `
 		SELECT count(*) FROM orders o JOIN users u ON u.id = o.user_id
 		WHERE o.room_id = $1 AND u.is_agent AND o.status = 'pending'`, room.ID).Scan(&pending); err != nil {
 		t.Fatal(err)
 	}
 	if err := pool.QueryRow(ctx, `
-		SELECT count(*), count(*) FILTER (WHERE (payload->>'is_agent')::boolean)
-		FROM room_events WHERE room_id = $1 AND kind = 'agent_order'`, room.ID).Scan(&events, &labeled); err != nil {
+		SELECT count(*), count(*) FILTER (WHERE (payload->>'is_agent')::boolean),
+			count(*) FILTER (WHERE COALESCE(payload->>'username_en', '') <> '')
+		FROM room_events WHERE room_id = $1 AND kind = 'agent_order'`, room.ID).Scan(&events, &labeled, &bilingual); err != nil {
 		t.Fatal(err)
 	}
-	if pending != AgentPlayerCount || events != AgentPlayerCount || labeled != AgentPlayerCount {
-		t.Fatalf("day-0 agent activity: pending=%d events=%d labeled=%d; want %d each",
-			pending, events, labeled, AgentPlayerCount)
+	if pending != AgentPlayerCount || events != AgentPlayerCount || labeled != AgentPlayerCount || bilingual != AgentPlayerCount {
+		t.Fatalf("day-0 agent activity: pending=%d events=%d labeled=%d bilingual=%d; want %d each",
+			pending, events, labeled, bilingual, AgentPlayerCount)
 	}
 
 	// Same room/day is idempotent.
@@ -65,7 +66,7 @@ func TestAgentTurnsPlaceLabeledOrdersOncePerDay(t *testing.T) {
 	}
 }
 
-func TestAgentTurnsOccasionallyPostLabeledBilingualChat(t *testing.T) {
+func TestAgentPersonasDiscussInForumInsteadOfNarratingTradesInChat(t *testing.T) {
 	pool := TestDB(t, "store")
 	ctx := context.Background()
 	room, _, t0 := mkRunningRoom(t, pool)
@@ -77,27 +78,19 @@ func TestAgentTurnsOccasionallyPostLabeledBilingualChat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(msgs) == 0 || len(msgs) >= AgentPlayerCount {
-		t.Fatalf("agent chat count = %d, want occasional messages between 1 and %d", len(msgs), AgentPlayerCount-1)
-	}
-	for _, msg := range msgs {
-		if !msg.IsAgent {
-			t.Fatalf("message %+v is not labeled as agent", msg)
-		}
-		if msg.Username == "" || msg.Text == "" || msg.TextEn == "" {
-			t.Fatalf("agent message is incomplete: %+v", msg)
-		}
+	if len(msgs) != 0 {
+		t.Fatalf("agent turns narrated trades in chat: %+v", msgs)
 	}
 
-	if err := RunAgentTurns(ctx, pool, t0); err != nil {
-		t.Fatalf("RunAgentTurns repeat: %v", err)
-	}
-	repeated, err := ChatSince(ctx, pool, room.ID, 0, 100)
-	if err != nil {
+	var posts, labeled, voices int
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*), count(*) FILTER (WHERE is_agent), count(DISTINCT npc_name)
+		FROM room_forum_posts WHERE room_id = $1`, room.ID).Scan(&posts, &labeled, &voices); err != nil {
 		t.Fatal(err)
 	}
-	if len(repeated) != len(msgs) {
-		t.Fatalf("repeat created duplicate chat: got %d messages, want %d", len(repeated), len(msgs))
+	if posts == 0 || labeled != posts || voices != AgentPlayerCount {
+		t.Fatalf("forum personas: posts=%d labeled=%d voices=%d, want posts>0 all labeled and %d voices",
+			posts, labeled, voices, AgentPlayerCount)
 	}
 }
 

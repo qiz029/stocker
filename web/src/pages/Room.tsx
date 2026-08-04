@@ -155,7 +155,7 @@ export default function Room() {
             <div className="room-main-column">
               <section className="room-tab-panel room-trend-panel" id="mobile-room-trend" aria-label={lang === "zh" ? "趋势与持仓" : "Trend and holdings"}>
               {curve.length > 0 && (
-                <HeroChart label={t("room.totalAssets")} series={curve} startDay={0} formatValue={fmtCents} />
+                <HeroChart label={t("room.totalAssets")} series={curve} startDay={0} formatValue={fmtCents} intradaySeed={Number(roomId)} />
               )}
 
               {portfolio && (

@@ -20,11 +20,13 @@ describe("Docs page", () => {
     expect(screen.getByRole("heading", { name: "The core loop" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "News is a signal, not the truth" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Advanced moves" })).toBeInTheDocument();
-    expect(screen.getByText(/five Agent competitors/i)).toBeInTheDocument();
+    expect(screen.getByText(/five fictional Agent personas/i)).toBeInTheDocument();
+    expect(screen.getByText(/randomly assigns.*cunning, friendly, mentoring, cautious or humorous/i)).toBeInTheDocument();
     expect(screen.getByText(/next market open/i)).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "中文" }));
     expect(screen.getByRole("heading", { name: "Stocker 玩法说明" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "新闻是信号，不是事实" })).toBeInTheDocument();
+    expect(screen.getByText(/随机分配互不重复且整局稳定的社交性格/)).toBeInTheDocument();
   });
 });

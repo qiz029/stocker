@@ -7,14 +7,15 @@ import (
 )
 
 type ChatMessage struct {
-	ID       int64
-	UserID   int64
-	Username string
-	IsAgent  bool
-	AvatarID string
-	Day      int
-	Text     string
-	TextEn   string
+	ID         int64
+	UserID     int64
+	Username   string
+	UsernameEn string
+	IsAgent    bool
+	AvatarID   string
+	Day        int
+	Text       string
+	TextEn     string
 }
 
 const maxChatRunes = 500
@@ -39,6 +40,7 @@ func ChatSince(ctx context.Context, q Querier, roomID, afterID int64, limit int)
 	rows, err := q.Query(ctx, `
 		SELECT c.id, u.id,
 		       CASE WHEN u.is_agent THEN u.agent_name ELSE COALESCE(NULLIF(u.display_name, ''), u.username) END,
+		       CASE WHEN u.is_agent THEN COALESCE(u.agent_name_en, u.agent_name) ELSE COALESCE(NULLIF(u.display_name, ''), u.username) END,
 		       u.is_agent, u.avatar_id, c.day, c.text, c.text_en
 		FROM room_chat c JOIN users u ON u.id = c.user_id
 		WHERE c.room_id = $1 AND c.id > $2
@@ -50,7 +52,7 @@ func ChatSince(ctx context.Context, q Querier, roomID, afterID int64, limit int)
 	var out []ChatMessage
 	for rows.Next() {
 		var m ChatMessage
-		if err := rows.Scan(&m.ID, &m.UserID, &m.Username, &m.IsAgent, &m.AvatarID, &m.Day, &m.Text, &m.TextEn); err != nil {
+		if err := rows.Scan(&m.ID, &m.UserID, &m.Username, &m.UsernameEn, &m.IsAgent, &m.AvatarID, &m.Day, &m.Text, &m.TextEn); err != nil {
 			return nil, err
 		}
 		out = append(out, m)

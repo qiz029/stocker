@@ -440,7 +440,7 @@ func TestForumEndpoint(t *testing.T) {
 	maxID := 0.0
 	for _, it := range items {
 		m := it.(map[string]any)
-		if len(m) != 6 { // id, day, npc_name, body + npc_name_en, body_en
+		if len(m) != 7 { // bilingual post fields plus disclosed Agent identity
 			t.Fatalf("forum item carries extra fields: %v", m)
 		}
 		if d := m["day"].(float64); d > 5 {
@@ -448,6 +448,9 @@ func TestForumEndpoint(t *testing.T) {
 		}
 		if m["npc_name"].(string) == "" || m["body"].(string) == "" {
 			t.Fatalf("bad forum item: %v", m)
+		}
+		if m["is_agent"] != true {
+			t.Fatalf("forum persona is not disclosed as Agent: %v", m)
 		}
 		maxID = max(maxID, m["id"].(float64))
 	}

@@ -12,8 +12,12 @@ describe("HeroChart", () => {
   });
   it("switches range tabs", () => {
     render(<HeroChart label="x" series={series} startDay={0} formatValue={v => String(v)} />);
+    fireEvent.click(screen.getByRole("button", { name: "1D" }));
+    expect(screen.getByRole("button", { name: "1D" })).toHaveClass("on");
+    expect(screen.getByText(/\+4\.85%/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "7D" }));
     expect(screen.getByRole("button", { name: "7D" })).toHaveClass("on");
+    expect(screen.getByText(/\+8\.00%/)).toBeInTheDocument();
   });
   it("scrub label uses the fictional calendar", () => {
     // 单测 dayLabel 集成点:HeroChart 悬停文案 = dayLabel(startDay + winStart + hover)

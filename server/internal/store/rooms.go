@@ -210,10 +210,10 @@ func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, ho
 
 		posts := make([][]any, 0, len(world.Forum))
 		for _, p := range world.Forum {
-			posts = append(posts, []any{room.ID, p.Day, p.NPCName, p.Body, p.NPCNameEn, p.BodyEn})
+			posts = append(posts, []any{room.ID, p.Day, p.NPCName, p.Body, p.NPCNameEn, p.BodyEn, p.IsAgent})
 		}
 		if _, err := tx.CopyFrom(ctx, pgx.Identifier{"room_forum_posts"},
-			[]string{"room_id", "day", "npc_name", "body", "npc_name_en", "body_en"},
+			[]string{"room_id", "day", "npc_name", "body", "npc_name_en", "body_en", "is_agent"},
 			pgx.CopyFromRows(posts)); err != nil {
 			return err
 		}
@@ -298,7 +298,7 @@ func FillNewsCopy(ctx context.Context, db *pgxpool.Pool, roomID int64, sc *scena
 	return nil
 }
 
-// FillForumCopy runs the forum copy filler over a room's NPC posts and
+// FillForumCopy runs the forum copy filler over a room's Agent-persona posts and
 // writes the polished bodies back onto the already-inserted
 // room_forum_posts rows. Row order matches the posts slice, same as
 // FillNewsCopy: CopyFrom preserved insertion order and identity ids are

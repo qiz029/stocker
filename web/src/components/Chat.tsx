@@ -65,7 +65,7 @@ export default function Chat({ roomId, readOnly = false }: { roomId: string; rea
           <div key={m.id} className={`chat-msg ${!m.is_agent && (m.is_me ?? m.username === user.username) ? "me" : ""} ${m.is_agent ? "agent" : ""}`}>
             <div className="cm-meta">
               {!m.is_agent && <span className="chat-avatar">{avatarGlyph(m.avatar_id, m.username)}</span>}
-              <b>{m.username}</b>
+              <b>{m.is_agent ? pickL(lang, m.username, m.username_en) : m.username}</b>
               {m.is_agent && <small className="agent-badge">{t("common.agent")}</small>}
               {" · "}<span className="num">{t("common.day", { day: m.day })}</span>
             </div>

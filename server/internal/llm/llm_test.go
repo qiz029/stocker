@@ -376,6 +376,9 @@ func TestFillForumCopyHappyPath(t *testing.T) {
 	if !strings.Contains(sys, "股民论坛") || !strings.Contains(sys, "类似某个狂热") {
 		t.Fatalf("forum system prompt wrong: %s", sys)
 	}
+	if !strings.Contains(sys, "不得虚构自己买卖、持仓、收益或掌握内幕") {
+		t.Fatalf("forum system prompt allows fake trade narration: %s", sys)
+	}
 }
 
 func TestFillForumCopyNeverLeaksNumbersOrTruth(t *testing.T) {

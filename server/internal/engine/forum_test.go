@@ -48,6 +48,9 @@ func TestForumCadenceBoundsAndPersonaConsistency(t *testing.T) {
 		if p.NPCName == "" || p.Body == "" || p.NPCNameEn == "" || p.BodyEn == "" {
 			t.Fatalf("empty field in post: %+v", p)
 		}
+		if !p.IsAgent {
+			t.Fatalf("forum persona is not disclosed as Agent: %+v", p)
+		}
 		// The English handle must be the same-index translation of the
 		// Chinese one (same npc draw, no extra RNG).
 		idx := -1
@@ -72,27 +75,46 @@ func TestForumCadenceBoundsAndPersonaConsistency(t *testing.T) {
 	}
 }
 
+func TestForumVoiceAssignmentIsStableRandomAndUnique(t *testing.T) {
+	a := forumVoiceAssignment(42)
+	b := forumVoiceAssignment(42)
+	c := forumVoiceAssignment(43)
+	if !reflect.DeepEqual(a, b) {
+		t.Fatal("same room seed changed voice assignment")
+	}
+	if reflect.DeepEqual(a, c) {
+		t.Fatal("different room seeds produced the same voice assignment")
+	}
+	seen := map[string]bool{}
+	for _, voice := range a {
+		if seen[voice.Persona] {
+			t.Fatalf("voice %q assigned more than once", voice.Persona)
+		}
+		seen[voice.Persona] = true
+	}
+	if len(seen) != len(forumVoices) {
+		t.Fatalf("assigned %d voices, want %d", len(seen), len(forumVoices))
+	}
+}
+
 var digitRe = regexp.MustCompile(`[0-9]`)
 var floatRe = regexp.MustCompile(`\d+\.\d+`)
 
 func TestForumTemplatesNoRealNamesOrNumbers(t *testing.T) {
 	pools := map[string][]string{
-		"npc":         npcNames,
-		"npcEn":       npcNamesEn,
-		"up":          forumReactionUp,
-		"upEn":        forumReactionUpEn,
-		"down":        forumReactionDown,
-		"downEn":      forumReactionDownEn,
-		"mixed":       forumReactionMixed,
-		"mixedEn":     forumReactionMixedEn,
-		"bandwagon":   forumBandwagon,
-		"bandwagonEn": forumBandwagonEn,
-		"skeptic":     forumSkeptic,
-		"skepticEn":   forumSkepticEn,
-		"rumor":       forumRumor,
-		"rumorEn":     forumRumorEn,
-		"chatter":     forumChatter,
-		"chatterEn":   forumChatterEn,
+		"npc":   npcNames,
+		"npcEn": npcNamesEn,
+	}
+	for _, voice := range forumVoices {
+		prefix := voice.Persona
+		pools[prefix+" reaction"] = voice.Reaction
+		pools[prefix+" reactionEn"] = voice.ReactionEn
+		pools[prefix+" news"] = voice.News
+		pools[prefix+" newsEn"] = voice.NewsEn
+		pools[prefix+" rumor"] = voice.Rumor
+		pools[prefix+" rumorEn"] = voice.RumorEn
+		pools[prefix+" chatter"] = voice.Chatter
+		pools[prefix+" chatterEn"] = voice.ChatterEn
 	}
 	for family, pool := range pools {
 		for _, s := range pool {
@@ -124,22 +146,21 @@ func TestForumPoolsParallel(t *testing.T) {
 	if len(npcNamesEn) != len(npcNames) {
 		t.Fatalf("npc pools: zh=%d en=%d", len(npcNames), len(npcNamesEn))
 	}
-	pairs := map[string][2][]string{
-		"up":        {forumReactionUp, forumReactionUpEn},
-		"down":      {forumReactionDown, forumReactionDownEn},
-		"mixed":     {forumReactionMixed, forumReactionMixedEn},
-		"bandwagon": {forumBandwagon, forumBandwagonEn},
-		"skeptic":   {forumSkeptic, forumSkepticEn},
-		"rumor":     {forumRumor, forumRumorEn},
-		"chatter":   {forumChatter, forumChatterEn},
-	}
-	for name, p := range pairs {
-		if len(p[0]) != len(p[1]) {
-			t.Fatalf("%s pool: zh=%d en=%d", name, len(p[0]), len(p[1]))
+	for _, voice := range forumVoices {
+		pairs := map[string][2][]string{
+			"reaction": {voice.Reaction, voice.ReactionEn},
+			"news":     {voice.News, voice.NewsEn},
+			"rumor":    {voice.Rumor, voice.RumorEn},
+			"chatter":  {voice.Chatter, voice.ChatterEn},
 		}
-		for i, s := range p[1] {
-			if s == "" {
-				t.Fatalf("%s en template %d is empty", name, i)
+		for name, p := range pairs {
+			if len(p[0]) != len(p[1]) {
+				t.Fatalf("%s %s pool: zh=%d en=%d", voice.Persona, name, len(p[0]), len(p[1]))
+			}
+			for i, s := range p[1] {
+				if s == "" {
+					t.Fatalf("%s %s en template %d is empty", voice.Persona, name, i)
+				}
 			}
 		}
 	}
@@ -156,8 +177,15 @@ func TestForumChatterEnMatchesZhIndex(t *testing.T) {
 	}
 	found := false
 	for _, p := range w.Forum {
+		var chatter, chatterEn []string
+		for _, voice := range forumVoices {
+			if voice.Persona == p.Persona {
+				chatter, chatterEn = voice.Chatter, voice.ChatterEn
+				break
+			}
+		}
 		idx := -1
-		for k, tpl := range forumChatter {
+		for k, tpl := range chatter {
 			if tpl == p.Body {
 				idx = k
 				break
@@ -167,7 +195,7 @@ func TestForumChatterEnMatchesZhIndex(t *testing.T) {
 			continue // not a chatter post
 		}
 		found = true
-		if p.BodyEn != forumChatterEn[idx] {
+		if p.BodyEn != chatterEn[idx] {
 			t.Fatalf("en body not the same-index translation of %q: %q", p.Body, p.BodyEn)
 		}
 	}

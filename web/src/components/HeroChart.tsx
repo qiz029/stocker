@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import { RANGE_TABS, fmtPct, windowed } from "../format";
 import { useT } from "../i18n";
+import { buildIntradayCurve, intradayTimeLabel } from "../intradayCurve";
 import { dayLabel } from "../simClock";
 
 const cssVar = (n: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -12,15 +13,25 @@ type Props = {
   series: number[];   // full history, day 0 .. current day
   startDay: number;   // day index of series[0]
   formatValue: (v: number) => string;
+  intradaySeed?: number;
 };
 
-export default function HeroChart({ label, series, startDay, formatValue }: Props) {
+export default function HeroChart({ label, series, startDay, formatValue, intradaySeed = 0 }: Props) {
   const { lang, t } = useT();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [rangeDays, setRangeDays] = useState<number>(Infinity);
   const [hover, setHover] = useState<number | null>(null);
 
-  const [win, winStart] = useMemo(() => windowed(series, rangeDays), [series, rangeDays]);
+  const [dayWindow, winStart] = useMemo(() => windowed(series, rangeDays), [series, rangeDays]);
+  const isIntraday = rangeDays === 2;
+  const win = useMemo(() => {
+    if (!isIntraday || dayWindow.length === 0) return dayWindow;
+    const start = dayWindow.length > 1 ? dayWindow[0]! : dayWindow[dayWindow.length - 1]!;
+    const end = dayWindow[dayWindow.length - 1]!;
+    const day = startDay + series.length - 1;
+    const seed = Math.imul(intradaySeed + 1, 2654435761) ^ Math.imul(day + 1, 40503) ^ Math.round(start);
+    return buildIntradayCurve(start, end, seed);
+  }, [dayWindow, intradaySeed, isIntraday, series.length, startDay]);
   const shown = hover !== null && win[hover] !== undefined ? win[hover]! : win[win.length - 1] ?? 0;
   const ref = win[0] ?? 0;
   const up = shown >= ref;
@@ -123,7 +134,9 @@ export default function HeroChart({ label, series, startDay, formatValue }: Prop
           {up ? "▲" : "▼"} {formatValue(Math.abs(diff)).replace("-", "")} ({fmtPct(pct)}) {t("hero.range")}
         </div>
         <div className="scrub-date num">
-          {hover !== null ? dayLabel(startDay + winStart + hover, lang) : " "}
+          {hover !== null
+            ? isIntraday ? intradayTimeLabel(hover, win.length) : dayLabel(startDay + winStart + hover, lang)
+            : " "}
         </div>
       </div>
       <div className="chart-box">

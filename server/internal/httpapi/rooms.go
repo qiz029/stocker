@@ -361,6 +361,7 @@ func (s *Server) handleRoomState(w http.ResponseWriter, r *http.Request) {
 		for _, lr := range rows {
 			leaderboard = append(leaderboard, map[string]any{
 				"username":    lr.Username,
+				"username_en": lr.UsernameEn,
 				"avatar_id":   lr.AvatarID,
 				"is_agent":    lr.IsAgent,
 				"total_cents": lr.TotalCents,
@@ -519,9 +520,8 @@ func (s *Server) handleNewsDetail(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, item)
 }
 
-// handleForum serves the NPC forum feed. Blind box: id, day, npc_name,
-// body, npc_name_en, body_en — nothing else (persona hints never leave the
-// server).
+// handleForum serves the disclosed persona forum feed. Private persona hints
+// never leave the server; is_agent keeps automated voices transparent.
 func (s *Server) handleForum(w http.ResponseWriter, r *http.Request) {
 	room, _, ok := s.roomForViewer(w, r)
 	if !ok {
@@ -537,7 +537,7 @@ func (s *Server) handleForum(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows, err := s.DB.Query(r.Context(), `
-		SELECT id, day, npc_name, body, npc_name_en, body_en FROM room_forum_posts
+		SELECT id, day, npc_name, body, npc_name_en, body_en, is_agent FROM room_forum_posts
 		WHERE room_id = $1 AND day <= $2 AND id > $3
 		ORDER BY id LIMIT $4`, room.ID, curDay, afterParam(r), newsPageLimit)
 	if err != nil {
@@ -550,13 +550,14 @@ func (s *Server) handleForum(w http.ResponseWriter, r *http.Request) {
 		var id int64
 		var day int
 		var npcName, body, npcNameEn, bodyEn string
-		if err := rows.Scan(&id, &day, &npcName, &body, &npcNameEn, &bodyEn); err != nil {
+		var isAgent bool
+		if err := rows.Scan(&id, &day, &npcName, &body, &npcNameEn, &bodyEn, &isAgent); err != nil {
 			s.storeErr(w, err)
 			return
 		}
 		items = append(items, map[string]any{
 			"id": id, "day": day, "npc_name": npcName, "body": body,
-			"npc_name_en": npcNameEn, "body_en": bodyEn,
+			"npc_name_en": npcNameEn, "body_en": bodyEn, "is_agent": isAgent,
 		})
 	}
 	if err := rows.Err(); err != nil {

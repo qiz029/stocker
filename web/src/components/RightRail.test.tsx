@@ -53,8 +53,11 @@ describe("RightRail", () => {
     expect(document.querySelectorAll(".lb-row canvas").length).toBe(4);
 
     // Agent identity and actions are explicit rather than name-based guesses.
-    expect(screen.getByText("Nova").closest(".lb-row")).toHaveTextContent("Agent");
-    expect(await screen.findByText(/Nova.*Agent.*sell order.*Ridgeline Networks/)).toBeInTheDocument();
+    const leaderboardAgent = screen.getAllByText("Nova").find(node => node.closest(".lb-row"))!;
+    expect(leaderboardAgent.closest(".lb-row")).toHaveTextContent("Agent");
+    const agentTrade = (await screen.findByText("Sold Ridgeline Networks")).closest(".feed-item")!;
+    expect(agentTrade).toHaveTextContent("Nova");
+    expect(agentTrade).toHaveTextContent("Agent");
 
     // bankrupt player: dimmed row + badge
     expect(screen.getByText("Bankrupt")).toBeInTheDocument();
@@ -138,7 +141,7 @@ describe("RightRail news enrichment", () => {
         const after = new URL(u, "http://x").searchParams.get("after");
         body = after === "0"
           ? { items: [{ id: 1, day: 4, npc_name: "老韭菜", body: "这票我看着要涨" }] }
-          : { items: [{ id: 2, day: 5, npc_name: "量化小王", body: "模型提示风险" }] };
+          : { items: [{ id: 2, day: 5, npc_name: "量化小王", body: "模型提示风险", is_agent: true }] };
       }
       return new Response(JSON.stringify(body), { status: 200 });
     });
@@ -154,6 +157,7 @@ describe("RightRail news enrichment", () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
     expect(screen.getByText("量化小王")).toBeInTheDocument();
     expect(screen.getByText("模型提示风险")).toBeInTheDocument();
+    expect(screen.getByText("量化小王").closest(".feed-item")).toHaveTextContent("Agent");
     expect(forumCalls[0]).toContain("after=0");
     expect(forumCalls.some(u => u.includes("after=1"))).toBe(true);
   });

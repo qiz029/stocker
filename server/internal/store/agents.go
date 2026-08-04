@@ -18,6 +18,7 @@ type agentPlayer struct {
 	userID    int64
 	slot      int
 	name      string
+	nameEn    string
 	joinedDay int
 }
 
@@ -160,7 +161,7 @@ func agentInstruments(ctx context.Context, q Querier, scenarioID string, roomSee
 
 func roomAgents(ctx context.Context, q Querier, roomID int64) ([]agentPlayer, error) {
 	rows, err := q.Query(ctx, `
-		SELECT u.id, u.agent_slot, u.agent_name, rp.joined_day
+		SELECT u.id, u.agent_slot, u.agent_name, COALESCE(u.agent_name_en, u.agent_name), rp.joined_day
 		FROM room_players rp JOIN users u ON u.id = rp.user_id
 		WHERE rp.room_id = $1 AND u.is_agent
 		ORDER BY u.agent_slot`, roomID)
@@ -171,7 +172,7 @@ func roomAgents(ctx context.Context, q Querier, roomID int64) ([]agentPlayer, er
 	var out []agentPlayer
 	for rows.Next() {
 		var a agentPlayer
-		if err := rows.Scan(&a.userID, &a.slot, &a.name, &a.joinedDay); err != nil {
+		if err := rows.Scan(&a.userID, &a.slot, &a.name, &a.nameEn, &a.joinedDay); err != nil {
 			return nil, err
 		}
 		out = append(out, a)
@@ -266,39 +267,10 @@ func takeAgentTurn(ctx context.Context, tx pgx.Tx, room *Room, day int, instrume
 	if _, err := tx.Exec(ctx, `
 		INSERT INTO room_events (room_id, day, kind, payload)
 		VALUES ($1, $2, 'agent_order', jsonb_build_object(
-			'username', $3::text, 'is_agent', true,
-			'instrument_id', $4::text, 'side', $5::text, 'order_id', $6::bigint))`,
-		room.ID, day, agent.name, instrumentID, side, orderID); err != nil {
-		return err
-	}
-
-	// A subset of completed turns speaks so the room feels alive without five
-	// automated messages flooding every simulated day. The same turn key that
-	// guards orders also makes these messages restart-safe.
-	if (day+agent.slot)%3 == 0 {
-		zh, en := agentTradeChat(side, instrument.alias, day, agent.slot)
-		_, err := tx.Exec(ctx, `
-			INSERT INTO room_chat (room_id, user_id, day, text, text_en)
-			VALUES ($1, $2, $3, $4, $5)`, room.ID, agent.userID, day, zh, en)
+			'username', $3::text, 'username_en', $4::text, 'is_agent', true,
+			'instrument_id', $5::text, 'side', $6::text, 'order_id', $7::bigint))`,
+		room.ID, day, agent.name, agent.nameEn, instrumentID, side, orderID); err != nil {
 		return err
 	}
 	return nil
-}
-
-func agentTradeChat(side, alias string, day, slot int) (string, string) {
-	variant := (day + slot) / 3 % 2
-	if side == "sell" {
-		if variant == 0 {
-			return fmt.Sprintf("%s 这笔我先减一点仓，留些现金。", alias),
-				fmt.Sprintf("I'm trimming some %s here and keeping cash available.", alias)
-		}
-		return fmt.Sprintf("%s 我先落袋一部分，继续观察。", alias),
-			fmt.Sprintf("I'm taking some profit on %s and staying watchful.", alias)
-	}
-	if variant == 0 {
-		return fmt.Sprintf("我在关注 %s，先小仓位买一点。", alias),
-			fmt.Sprintf("I'm watching %s and starting with a small position.", alias)
-	}
-	return fmt.Sprintf("%s 今天值得试一笔，我先建仓。", alias),
-		fmt.Sprintf("%s looks worth a try today, so I'm opening a position.", alias)
 }

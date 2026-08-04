@@ -45,7 +45,7 @@ func (s *Server) handleGetChat(w http.ResponseWriter, r *http.Request) {
 	items := []map[string]any{}
 	for _, m := range msgs {
 		items = append(items, map[string]any{
-			"id": m.ID, "username": m.Username, "is_agent": m.IsAgent,
+			"id": m.ID, "username": m.Username, "username_en": m.UsernameEn, "is_agent": m.IsAgent,
 			"avatar_id": m.AvatarID, "is_me": m.UserID == userFrom(r).ID,
 			"day": m.Day, "text": m.Text, "text_en": m.TextEn,
 		})

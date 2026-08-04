@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/toddzheng/stocker/server/internal/scenario"
@@ -57,7 +58,7 @@ func TestGenerateWorldGolden(t *testing.T) {
 		t.Logf("golden recorded: %s", got)
 		return
 	}
-	if got != string(want) {
+	if got != strings.TrimSpace(string(want)) {
 		t.Fatalf("world changed for fixed seed:\n got %s\nwant %s", got, want)
 	}
 }

@@ -11,8 +11,8 @@ export const fmtSignedCents = (c: number): string =>
   (c >= 0 ? "+" : "-") + fmtCents(Math.abs(c));
 
 /** Chart range tabs as i18n key suffixes; render labels via t(`range.${key}`). */
-export type RangeTabKey = "7d" | "1m" | "3m" | "all";
-export const RANGE_TABS: [RangeTabKey, number][] = [["7d", 7], ["1m", 21], ["3m", 63], ["all", Infinity]];
+export type RangeTabKey = "1d" | "7d" | "1m" | "3m" | "all";
+export const RANGE_TABS: [RangeTabKey, number][] = [["1d", 2], ["7d", 7], ["1m", 21], ["3m", 63], ["all", Infinity]];
 
 export function windowed<T>(series: T[], days: number): [T[], number] {
   const start = days === Infinity ? 0 : Math.max(0, series.length - days);

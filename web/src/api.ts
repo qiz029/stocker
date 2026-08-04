@@ -52,7 +52,7 @@ export type Instrument = {
 };
 export type Quote = { instrument_id: string; close: number; prev_close: number };
 export type LeaderboardRow = {
-  username: string; total_cents: number; return_pct: number; late_join: boolean;
+  username: string; username_en?: string; total_cents: number; return_pct: number; late_join: boolean;
   bankrupt: boolean; curve: number[]; is_agent?: boolean; avatar_id?: AvatarID;   // curve: total_cents per sim day
 };
 export type RoomState = { room: Room; instruments: Instrument[]; quotes: Quote[]; leaderboard: LeaderboardRow[] };
@@ -68,7 +68,7 @@ export type MediaAccuracy = Record<string, MediaAccuracyStat>;
 export type NewsResponse = { items: NewsItem[]; media_accuracy?: MediaAccuracy };
 export type ForumItem = {
   id: number; day: number; npc_name: string; body: string;
-  npc_name_en?: string; body_en?: string;   // English mirrors of the zh fields
+  npc_name_en?: string; body_en?: string; is_agent?: boolean;   // English mirrors of the zh fields
 };
 
 /** Incremental news page (cursor = last seen id); carries per-outlet accuracy stats. */
@@ -89,10 +89,10 @@ export function fetchForum(roomID: string, after: number): Promise<{ items: Foru
     manipulation_bust carries username+fine_cents+instrument_id. */
 export type EventItem = {
   id: number; day: number; kind: string;
-  payload: { instrument_id?: string; side?: string; username?: string; fine_cents?: number; is_agent?: boolean; order_id?: number };
+  payload: { instrument_id?: string; side?: string; username?: string; username_en?: string; fine_cents?: number; is_agent?: boolean; order_id?: number };
 };
 export type ChatMessage = {
-  id: number; username: string; is_agent: boolean; avatar_id?: AvatarID; is_me?: boolean; day: number; text: string; text_en?: string;
+  id: number; username: string; username_en?: string; is_agent: boolean; avatar_id?: AvatarID; is_me?: boolean; day: number; text: string; text_en?: string;
 };
 export type Position = {
   instrument_id: string; shares: number; close: number; value_cents: number;
@@ -177,7 +177,7 @@ export function postIntel(roomID: string, instrumentID: string): Promise<IntelRe
 }
 export type Trade = { instrument_id: string; side: string; day: number; price: number; shares: number; amount_cents: number };
 export type RevealInstrument = { id: string; alias: string; real_name: string };
-export type RevealTrade = Trade & { username: string; is_agent?: boolean };
+export type RevealTrade = Trade & { username: string; username_en?: string; is_agent?: boolean };
 export type RevealData = { instruments: RevealInstrument[]; trades: RevealTrade[]; leaderboard: LeaderboardRow[]; real_period?: string };
 
 export const INITIAL_CASH_CENTS = 10_000_000;

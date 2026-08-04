@@ -408,16 +408,18 @@ func (g *Generator) fillChunk(ctx context.Context, sysPrompt string, displayName
 }
 
 // forumSystemPromptTmpl's %s is the scenario era hint, same convention as
-// systemPromptTmpl. The forum pass rewrites template drafts into NPC-voice
-// replies; drafts carry the only facts (aliases, sector names) allowed.
+// systemPromptTmpl. The forum pass rewrites template drafts into fictional
+// Agent-persona replies;
+// drafts carry the only facts (aliases, sector names) allowed.
 const forumSystemPromptTmpl = `你是一款股票模拟游戏的股民论坛写手。游戏背景是一个%s的虚构平行世界。把每条论坛草稿改写成自然的中文与英文回帖。
 
 铁律：
 1. 股民论坛回帖语气，20-80字，可阴阳怪气。
 2. 禁止真实公司名、真实人名与任何数字。
 3. 保留草稿中提到的化名与板块名，不要新增事实、行情判断或具体标的。
-4. 按每条的 NPC 人设写作，口吻与人设一致。
-5. 输出严格 JSON 数组，元素形如 {"idx":<原样返回>,"body":"20-80字","body_en":"English, natural forum voice"}，不要任何多余文本或代码围栏。
+4. 按每条的虚构 Agent 性格写作，让狡猾、友善、指导型等口吻有明显区别，但不要声称自己是真人或真实名人。
+5. 重点是回应观点、提问和讨论；不得虚构自己买卖、持仓、收益或掌握内幕。
+6. 输出严格 JSON 数组，元素形如 {"idx":<原样返回>,"body":"20-80字","body_en":"English, natural forum voice"}，不要任何多余文本或代码围栏。
 
 英文写作指引：body_en 不是中文的逐字翻译，而是同一意思在自然英文论坛腔下的写法（trading-forum slang、sarcasm 均可），同样禁止真实公司名、真实人名与任何数字。`
 
@@ -434,7 +436,7 @@ type forumCopyOut struct {
 	BodyEn string `json:"body_en"`
 }
 
-// FillForumCopy polishes NPC forum-post bodies (Chinese and English) in
+// FillForumCopy polishes fictional Agent forum-post bodies (Chinese and English) in
 // place, chunked like FillCopy with the same concurrency bound and
 // degrade-to-template behavior: any failure leaves the template body
 // untouched.

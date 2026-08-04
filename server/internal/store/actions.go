@@ -315,9 +315,9 @@ func Hype(ctx context.Context, db *pgxpool.Pool, room *Room, sc *scenario.Scenar
 		for _, p := range engine.ManipulationFollowUps(room.Seed, curDay, alias,
 			fmt.Sprint(userID), fmt.Sprint(userHypes)) {
 			if _, err := tx.Exec(ctx, `
-				INSERT INTO room_forum_posts (room_id, day, npc_name, body, npc_name_en, body_en)
-				VALUES ($1, $2, $3, $4, $5, $6)`,
-				room.ID, p.Day, p.NPCName, p.Body, p.NPCNameEn, p.BodyEn); err != nil {
+				INSERT INTO room_forum_posts (room_id, day, npc_name, body, npc_name_en, body_en, is_agent)
+				VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+				room.ID, p.Day, p.NPCName, p.Body, p.NPCNameEn, p.BodyEn, p.IsAgent); err != nil {
 				return err
 			}
 		}

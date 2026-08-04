@@ -139,7 +139,7 @@ export default function RightRail({ roomId, state, aliasOf, readOnly = false }: 
             className={`lb-row ${row.username === user.username ? "me" : ""} ${row.bankrupt ? "bankrupt" : ""}`}>
             <span className="rank num">{i + 1}</span>
             {!row.is_agent && <span className="lb-player-avatar">{avatarGlyph(row.avatar_id, row.username)}</span>}
-            <span className="who">{row.username}
+            <span className="who">{pickL(lang, row.username, row.username_en)}
               {row.is_agent && <small className="agent-badge">{t("common.agent")}</small>}
               {row.late_join && <small>{t("reveal.lateJoin")}</small>}
               {row.bankrupt && <small className="lb-badge">{t("rail.bankrupt")}</small>}
@@ -160,11 +160,13 @@ export default function RightRail({ roomId, state, aliasOf, readOnly = false }: 
         {events.length === 0 && <div className="feed-item">{t("rail.noEvents")}</div>}
         {events.map(ev => ev.kind === "agent_order" ? (
           <div key={ev.id} className="feed-item agent-action">
-            <div className="fi-meta num">{t("rail.tradingDay", { day: ev.day })}</div>
+            <div className="fi-meta">
+              <span className="forum-npc">{pickL(lang, ev.payload.username ?? "?", ev.payload.username_en)}</span>
+              {ev.payload.is_agent && <small className="agent-badge">{t("common.agent")}</small>}
+              {" · "}<span className="num">{t("rail.tradingDay", { day: ev.day })}</span>
+            </div>
             <span className="whale-txt">
-              {t("rail.agentOrder", {
-                username: ev.payload.username ?? "?",
-                side: t(ev.payload.side === "buy" ? "side.buy" : "side.sell"),
+              {t(ev.payload.side === "buy" ? "rail.orderBuy" : "rail.orderSell", {
                 alias: aliasOf(ev.payload.instrument_id ?? ""),
               })}
             </span>
@@ -227,6 +229,7 @@ export default function RightRail({ roomId, state, aliasOf, readOnly = false }: 
               <div key={p.id} className="feed-item">
                 <div className="fi-meta">
                   <span className="forum-npc">{pickL(lang, p.npc_name, p.npc_name_en)}</span>
+                  {p.is_agent && <small className="agent-badge">{t("common.agent")}</small>}
                   {" · "}<span className="num">{t("common.day", { day: p.day })}</span>
                 </div>
                 <div>{pickL(lang, p.body, p.body_en)}</div>
