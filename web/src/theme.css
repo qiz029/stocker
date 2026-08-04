@@ -196,19 +196,23 @@ canvas.chart { width: 100%; height: auto; display: block; touch-action: none; }
 .lb-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
 .lb-row .rank { width: 18px; color: var(--ink3); font-size: 0.8rem; }
 .lb-row .who { flex: 1; font-size: 0.9rem; font-weight: 550; }
-.lb-row .who small { color: var(--ink3); font-weight: 400; margin-left: 6px; }
+.lb-row .who small:not(.agent-badge) { color: var(--ink3); font-weight: 400; margin-left: 6px; }
 .lb-row .val { text-align: right; font-size: 0.86rem; font-weight: 600; }
 .lb-row .ret { display: block; font-size: 0.74rem; font-weight: 500; }
 .lb-row.me .who { color: var(--up); }
 .lb-row canvas { width: 64px; height: 22px; }
 .lb-row.bankrupt { opacity: 0.45; }
 .agent-badge {
-  color: #7357d9 !important;
-  background: rgba(115, 87, 217, 0.12);
+  color: color-mix(in srgb, var(--up) 80%, var(--ink));
+  background: color-mix(in srgb, var(--up) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--up) 55%, var(--line));
   border-radius: 999px;
-  padding: 1px 6px;
+  padding: 1px 5px;
   margin-left: 6px;
-  font-size: 0.72rem;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
 }
 .agent-action { border-left: 3px solid #8b72e8; }
 .lb-badge {
@@ -421,17 +425,6 @@ canvas.chart { width: 100%; height: auto; display: block; touch-action: none; }
 }
 .fi-act:hover { color: var(--up); border-color: var(--up); }
 
-.agent-badge {
-  margin-left: 6px;
-  padding: 1px 5px;
-  border: 1px solid color-mix(in srgb, var(--up) 55%, var(--line));
-  border-radius: 999px;
-  color: var(--up);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-}
 .chat-msg.agent .cm-bubble { border-left: 2px solid var(--up); }
 .news-detail { max-width: 860px; }
 .news-detail-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }

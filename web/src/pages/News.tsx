@@ -5,15 +5,15 @@ import { fmtCents, prettifyHeadline } from "../format";
 import { LangSwitch, mediaName, pickL, useT } from "../i18n";
 
 const DEBUNK_FEE_CENTS = 200_000;
+type NewsError = { message: string } | { key: "news.loadFailed" | "news.investigateFailed" };
 
 export default function News() {
   const { roomId, newsId } = useParams<{ roomId: string; newsId: string }>();
   const { t, lang } = useT();
   const [story, setStory] = useState<NewsItem | null>(null);
   const [room, setRoom] = useState<RoomState | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<NewsError | null>(null);
   const [verdict, setVerdict] = useState<DebunkVerdict | null>(null);
-  const loadFailed = t("news.loadFailed");
 
   useEffect(() => {
     let active = true;
@@ -29,10 +29,10 @@ export default function News() {
       setStory(nextStory);
       setRoom(nextRoom);
     }).catch((err: unknown) => {
-      if (active) setError(err instanceof ApiError ? err.message : loadFailed);
+      if (active) setError(err instanceof ApiError ? { message: err.message } : { key: "news.loadFailed" });
     });
     return () => { active = false; };
-  }, [loadFailed, newsId, roomId]);
+  }, [newsId, roomId]);
 
   async function investigate() {
     if (!story) return;
@@ -41,7 +41,7 @@ export default function News() {
       const result = await postDebunk(roomId!, story.id);
       setVerdict(result.verdict);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("news.investigateFailed"));
+      setError(err instanceof ApiError ? { message: err.message } : { key: "news.investigateFailed" });
     }
   }
 
@@ -53,7 +53,7 @@ export default function News() {
         <Link className="back-btn" to={`/rooms/${roomId}`}>{t("common.backToRoom")}</Link>
         <LangSwitch />
       </header>
-      {error && <div className="err-banner">{error}</div>}
+      {error && <div className="err-banner">{"message" in error ? error.message : t(error.key)}</div>}
       {story && room && (
         <article className="card news-article">
           <div className="news-kicker">

@@ -16,7 +16,7 @@ describe("Chat", () => {
       return new Response(JSON.stringify({ items: [
         { id: 1, username: "host", is_agent: false, day: 0, text: "开局前聊两句", text_en: "" },
         { id: 2, username: "me", is_agent: false, day: 2, text: "冲了", text_en: "" },
-        { id: 3, username: "Nova", is_agent: true, day: 2, text: "我先建仓。", text_en: "I'm opening a position." },
+        { id: 3, username: "me", is_agent: true, day: 2, text: "我先建仓。", text_en: "I'm opening a position." },
       ] }), { status: 200 });
     });
     render(<UserProviderForTest username="me"><Chat roomId="1" /></UserProviderForTest>);
@@ -24,7 +24,7 @@ describe("Chat", () => {
     // own message gets the .me class
     expect(screen.getByText("冲了").closest(".chat-msg")).toHaveClass("me");
     expect(screen.getByText("Agent")).toBeInTheDocument();
-    expect(screen.getByText("I'm opening a position.")).toBeInTheDocument();
+    expect(screen.getByText("I'm opening a position.").closest(".chat-msg")).not.toHaveClass("me");
 
     fireEvent.change(screen.getByPlaceholderText("Say something…"), { target: { value: "科技股什么情况" } });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));

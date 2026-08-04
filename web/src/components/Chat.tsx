@@ -61,7 +61,7 @@ export default function Chat({ roomId }: { roomId: string }) {
       <h2>{t("chat.title")}</h2>
       <div className="chat-list" ref={listRef}>
         {messages.map(m => (
-          <div key={m.id} className={`chat-msg ${m.username === user.username ? "me" : ""} ${m.is_agent ? "agent" : ""}`}>
+          <div key={m.id} className={`chat-msg ${!m.is_agent && m.username === user.username ? "me" : ""} ${m.is_agent ? "agent" : ""}`}>
             <div className="cm-meta">
               <b>{m.username}</b>
               {m.is_agent && <small className="agent-badge">{t("common.agent")}</small>}
