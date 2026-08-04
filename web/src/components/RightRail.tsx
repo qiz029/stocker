@@ -8,6 +8,7 @@ import { useToast } from "../Toast";
 import { useUser } from "../App";
 import Chat from "./Chat";
 import Sparkline from "./Sparkline";
+import { loadDebunkVerdicts, saveDebunkVerdict } from "../debunkVerdicts";
 
 type Props = { roomId: string; state: RoomState; aliasOf: (id: string) => string };
 
@@ -64,7 +65,9 @@ export default function RightRail({ roomId, state, aliasOf }: Props) {
   const [openNews, setOpenNews] = useState<number | null>(null);
   const [railTab, setRailTab] = useState<"news" | "forum">("news");
   // Verdicts from this session's investigations: private to the acting user.
-  const [verdicts, setVerdicts] = useState<Record<number, DebunkVerdict>>({});
+  const [verdicts, setVerdicts] = useState<Record<number, DebunkVerdict>>(
+    () => loadDebunkVerdicts(user.id, roomId),
+  );
   const { items: newsItems, extra: newsExtra } = useIncrementalFeed<NewsItem, NewsResponse>(
     after => fetchNews(roomId, after), 30_000, roomId);
   const { items: eventsItems } = useIncrementalFeed<EventItem, { items: EventItem[] }>(
@@ -81,6 +84,7 @@ export default function RightRail({ roomId, state, aliasOf }: Props) {
     try {
       const res = await postDebunk(roomId, newsID);
       setVerdicts(v => ({ ...v, [newsID]: res.verdict }));
+      saveDebunkVerdict(user.id, roomId, newsID, res.verdict);
     } catch (e) {
       toast(e instanceof ApiError ? e.message : t("news.investigateFailed"));
     }

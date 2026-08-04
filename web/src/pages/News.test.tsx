@@ -1,12 +1,14 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { UserCtxForTest } from "../App";
 import { I18nProvider } from "../i18n";
 import News from "./News";
 
 afterEach(() => {
   vi.restoreAllMocks();
   localStorage.clear();
+  sessionStorage.clear();
 });
 
 describe("News detail page", () => {
@@ -35,7 +37,9 @@ describe("News detail page", () => {
     render(
       <MemoryRouter initialEntries={["/rooms/1/news/7"]}>
         <I18nProvider>
-          <Routes><Route path="/rooms/:roomId/news/:newsId" element={<News />} /></Routes>
+          <UserCtxForTest.Provider value={{ id: 7, username: "me" }}>
+            <Routes><Route path="/rooms/:roomId/news/:newsId" element={<News />} /></Routes>
+          </UserCtxForTest.Provider>
         </I18nProvider>
       </MemoryRouter>,
     );
@@ -68,7 +72,9 @@ describe("News detail page", () => {
     render(
       <MemoryRouter initialEntries={["/rooms/1/news/7"]}>
         <I18nProvider>
-          <Routes><Route path="/rooms/:roomId/news/:newsId" element={<News />} /></Routes>
+          <UserCtxForTest.Provider value={{ id: 7, username: "me" }}>
+            <Routes><Route path="/rooms/:roomId/news/:newsId" element={<News />} /></Routes>
+          </UserCtxForTest.Provider>
         </I18nProvider>
       </MemoryRouter>,
     );

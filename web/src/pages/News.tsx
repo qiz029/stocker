@@ -4,12 +4,15 @@ import { ApiError, DebunkVerdict, NewsItem, RoomState, fetchNewsItem, api, postD
 import { fmtCents, prettifyHeadline } from "../format";
 import { LangSwitch, mediaName, pickL, useT } from "../i18n";
 import DocsLink from "../components/DocsLink";
+import { useUser } from "../App";
+import { loadDebunkVerdicts, saveDebunkVerdict } from "../debunkVerdicts";
 
 const DEBUNK_FEE_CENTS = 200_000;
 type NewsError = { message: string } | { key: "news.loadFailed" | "news.investigateFailed" };
 
 export default function News() {
   const { roomId, newsId } = useParams<{ roomId: string; newsId: string }>();
+  const user = useUser();
   const { t, lang } = useT();
   const [story, setStory] = useState<NewsItem | null>(null);
   const [room, setRoom] = useState<RoomState | null>(null);
@@ -21,7 +24,7 @@ export default function News() {
     setStory(null);
     setRoom(null);
     setError(null);
-    setVerdict(null);
+    setVerdict(loadDebunkVerdicts(user.id, roomId!)[Number(newsId)] ?? null);
     Promise.all([
       fetchNewsItem(roomId!, newsId!),
       api.get<RoomState>(`/api/rooms/${roomId}`),
@@ -33,7 +36,7 @@ export default function News() {
       if (active) setError(err instanceof ApiError ? { message: err.message } : { key: "news.loadFailed" });
     });
     return () => { active = false; };
-  }, [newsId, roomId]);
+  }, [newsId, roomId, user.id]);
 
   async function investigate() {
     if (!story) return;
@@ -41,6 +44,7 @@ export default function News() {
     try {
       const result = await postDebunk(roomId!, story.id);
       setVerdict(result.verdict);
+      saveDebunkVerdict(user.id, roomId!, story.id, result.verdict);
     } catch (err) {
       setError(err instanceof ApiError ? { message: err.message } : { key: "news.investigateFailed" });
     }

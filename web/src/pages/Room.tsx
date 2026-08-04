@@ -58,7 +58,7 @@ export default function Room() {
 
   return (
     <div>
-      <div className="topbar">
+      <div className="topbar room-topbar">
         <div className="brand" onClick={() => navigate("/")}><em>●</em> Stocker</div>
         <div className="day-pill">
           {room.status === "lobby"
@@ -80,13 +80,19 @@ export default function Room() {
           </div>
         )}
         <div className="spacer" />
-        {room.ended && (
-          <button className="invite" onClick={() => navigate(`/rooms/${roomId}/reveal`)}>{t("room.reveal")}</button>
-        )}
-        <button className="invite" onClick={copyInvite}>{t("room.invite")}</button>
-        <DocsLink />
-        <LangSwitch />
-        <div className="avatar">{user.username.slice(0, 2)}</div>
+        <div className="room-topbar-actions">
+          {room.ended && (
+            <button className="invite room-topbar-action" aria-label={t("room.reveal")} onClick={() => navigate(`/rooms/${roomId}/reveal`)}>
+              <span className="room-action-label">{t("room.reveal")}</span><span className="room-action-mark" aria-hidden="true">↗</span>
+            </button>
+          )}
+          <button className="invite room-topbar-action" aria-label={t("room.invite")} onClick={copyInvite}>
+            <span className="room-action-label">{t("room.invite")}</span><span className="room-action-mark" aria-hidden="true">＋</span>
+          </button>
+          <DocsLink />
+          <LangSwitch />
+          <div className="avatar">{user.username.slice(0, 2)}</div>
+        </div>
       </div>
 
       <div className="wrap">

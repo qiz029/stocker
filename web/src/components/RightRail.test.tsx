@@ -21,7 +21,11 @@ const state: RoomState = {
   ],
 };
 
-afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+  sessionStorage.clear();
+});
 
 describe("RightRail", () => {
   it("renders leaderboard, whale event and expandable news", async () => {

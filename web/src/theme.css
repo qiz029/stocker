@@ -42,6 +42,8 @@ button { font-family: inherit; cursor: pointer; }
 .countdown { font-size: 0.78rem; color: var(--ink3); white-space: nowrap; }
 .countdown b { color: var(--ink2); font-weight: 500; }
 .topbar .spacer { flex: 1; }
+.room-topbar-actions { display: flex; align-items: center; gap: 14px; }
+.room-action-mark { display: none; }
 .invite {
   font-size: 0.78rem; color: var(--up);
   background: var(--up-soft); border: none; border-radius: 999px;
@@ -483,7 +485,15 @@ canvas.chart { width: 100%; height: auto; display: block; touch-action: none; }
   .topbar .countdown { display: none; }
   .topbar .invite { padding-inline: 10px; }
   .topbar .docs-link-label { display: none; }
-  .topbar .docs-link { width: 30px; padding-inline: 5px; justify-content: center; }
+  .topbar .docs-link { width: 44px; min-height: 44px; padding-inline: 5px; justify-content: center; }
+  .room-topbar { flex-wrap: wrap; }
+  .room-topbar .day-pill { max-width: calc(100% - 90px); overflow: hidden; text-overflow: ellipsis; }
+  .room-topbar > .spacer { display: none; }
+  .room-topbar-actions { flex: 0 0 100%; justify-content: flex-end; gap: 8px; }
+  .room-topbar-actions .room-topbar-action { width: 44px; min-height: 44px; padding: 0; display: grid; place-items: center; }
+  .room-topbar-actions .room-action-label { display: none; }
+  .room-topbar-actions .room-action-mark { display: inline; font-size: 1rem; }
+  .room-topbar-actions .lang-switch { min-height: 44px; align-items: center; }
   .docs-steps, .docs-card-grid, .docs-card-grid.three, .docs-news-guide, .docs-finish { grid-template-columns: 1fr; }
   .docs-step { min-height: 0; border-right: none; border-bottom: 1px solid var(--line); }
   .docs-step:last-child { border-bottom: none; }
