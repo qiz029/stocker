@@ -13,9 +13,10 @@ import (
 const minimumAgentOrderCents int64 = 10_000 // do not emit dust orders below $100
 
 type agentPlayer struct {
-	userID int64
-	slot   int
-	name   string
+	userID    int64
+	slot      int
+	name      string
+	joinedDay int
 }
 
 // RunAgentTurns advances every running room's built-in competitors. The
@@ -41,16 +42,24 @@ func RunAgentTurns(ctx context.Context, db *pgxpool.Pool, now time.Time) error {
 		return err
 	}
 
+	var roomErrs []error
 	for _, roomID := range roomIDs {
 		room, err := GetRoom(ctx, db, roomID)
 		if err != nil {
-			return fmt.Errorf("agent room %d: %w", roomID, err)
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			roomErrs = append(roomErrs, fmt.Errorf("agent room %d: %w", roomID, err))
+			continue
 		}
 		if err := runAgentRoom(ctx, db, room, now); err != nil {
-			return fmt.Errorf("agent room %d: %w", roomID, err)
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			roomErrs = append(roomErrs, fmt.Errorf("agent room %d: %w", roomID, err))
 		}
 	}
-	return nil
+	return errors.Join(roomErrs...)
 }
 
 func runAgentRoom(ctx context.Context, db *pgxpool.Pool, room *Room, now time.Time) error {
@@ -58,21 +67,15 @@ func runAgentRoom(ctx context.Context, db *pgxpool.Pool, room *Room, now time.Ti
 	if err != nil {
 		return err
 	}
-	// Orders fill at the next open, so no decision is useful on or after the
-	// final trading day.
-	if ended || curDay+1 >= room.Days {
+	if ended {
 		return nil
 	}
+	lastDecisionDay := min(curDay, room.Days-2)
 
 	return pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
 		if err := lockRoomTx(ctx, tx, room.ID); err != nil {
 			return err
 		}
-		// Fill the previous turn before reading cash and positions for this one.
-		if err := SettleTx(ctx, tx, room, curDay, false); err != nil {
-			return err
-		}
-
 		instruments, err := agentInstruments(ctx, tx, room.ScenarioID)
 		if err != nil {
 			return err
@@ -87,12 +90,34 @@ func runAgentRoom(ctx context.Context, db *pgxpool.Pool, room *Room, now time.Ti
 		if len(agents) != AgentPlayerCount {
 			return fmt.Errorf("found %d agents, want %d", len(agents), AgentPlayerCount)
 		}
-		for _, agent := range agents {
-			if err := takeAgentTurn(ctx, tx, room, curDay, instruments, agent); err != nil {
-				return err
+		joinedDay := agents[0].joinedDay
+		for _, agent := range agents[1:] {
+			if agent.joinedDay != joinedDay {
+				return fmt.Errorf("agents have inconsistent joined days")
 			}
 		}
-		return nil
+		var lastTurnDay int
+		if err := tx.QueryRow(ctx, `
+			SELECT COALESCE(max(day), $2 - 1) FROM agent_turns WHERE room_id = $1`,
+			room.ID, joinedDay).Scan(&lastTurnDay); err != nil {
+			return err
+		}
+		// Catch up chronologically when the process was stopped for multiple
+		// sim days. Each settlement fills the previous day's orders before the
+		// next deterministic decision reads cash and positions.
+		for day := max(joinedDay, lastTurnDay+1); day <= lastDecisionDay; day++ {
+			if err := SettleTx(ctx, tx, room, day, false); err != nil {
+				return err
+			}
+			for _, agent := range agents {
+				if err := takeAgentTurn(ctx, tx, room, day, instruments, agent); err != nil {
+					return err
+				}
+			}
+		}
+		// Fill the most recent due orders and refresh today's snapshots. This
+		// is also the only work needed when today's turns already exist.
+		return SettleTx(ctx, tx, room, curDay, false)
 	})
 }
 
@@ -115,7 +140,7 @@ func agentInstruments(ctx context.Context, q Querier, scenarioID string) ([]stri
 
 func roomAgents(ctx context.Context, q Querier, roomID int64) ([]agentPlayer, error) {
 	rows, err := q.Query(ctx, `
-		SELECT u.id, u.agent_slot, u.agent_name
+		SELECT u.id, u.agent_slot, u.agent_name, rp.joined_day
 		FROM room_players rp JOIN users u ON u.id = rp.user_id
 		WHERE rp.room_id = $1 AND u.is_agent
 		ORDER BY u.agent_slot`, roomID)
@@ -126,7 +151,7 @@ func roomAgents(ctx context.Context, q Querier, roomID int64) ([]agentPlayer, er
 	var out []agentPlayer
 	for rows.Next() {
 		var a agentPlayer
-		if err := rows.Scan(&a.userID, &a.slot, &a.name); err != nil {
+		if err := rows.Scan(&a.userID, &a.slot, &a.name, &a.joinedDay); err != nil {
 			return nil, err
 		}
 		out = append(out, a)
