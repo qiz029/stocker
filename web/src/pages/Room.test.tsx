@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UserCtxForTest } from "../App";
@@ -84,6 +84,31 @@ describe("Room page", () => {
     // loan panel in the right rail
     expect(screen.getByText("Credit line")).toBeInTheDocument();
     expect(screen.getByText("Current debt")).toBeInTheDocument();
+  });
+
+  it("uses four mobile room tabs and keeps the hall action in the top bar", async () => {
+    mockApi();
+    render(
+      <MemoryRouter initialEntries={["/rooms/1"]}>
+        <UserCtxForTest.Provider value={{ id: 1, username: "me" }}>
+          <Routes>
+            <Route path="/" element={<div>Hall page</div>} />
+            <Route path="/rooms/:roomId" element={<Room />} />
+          </Routes>
+        </UserCtxForTest.Provider>
+      </MemoryRouter>,
+    );
+    await screen.findByText("Asset breakdown");
+
+    const nav = screen.getByRole("navigation", { name: "Game navigation" });
+    expect(within(nav).getAllByRole("button").map(button => button.textContent)).toEqual([
+      "⌁Trend", "▥Stocks", "$Bank", "◉Activity",
+    ]);
+    fireEvent.click(within(nav).getByRole("button", { name: "Bank" }));
+    expect(document.querySelector(".room-page")).toHaveClass("mobile-room-tab-bank");
+
+    fireEvent.click(screen.getByRole("button", { name: "Back to hall" }));
+    expect(screen.getByText("Hall page")).toBeInTheDocument();
   });
 
   it("shows the bankruptcy banner when the player is bankrupt", async () => {

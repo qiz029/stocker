@@ -38,5 +38,8 @@ export default function MobileNav({
 }
 
 export function scrollToMobileSection(id: string) {
-  document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const element = document.getElementById(id);
+  if (typeof element?.scrollIntoView === "function") {
+    element.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }

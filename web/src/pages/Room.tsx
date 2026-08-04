@@ -32,7 +32,7 @@ export default function Room() {
   const [displayName, setDisplayName] = useState(user.display_name ?? "");
   const [avatarID, setAvatarID] = useState<AvatarID>(user.avatar_id ?? "bull");
   const [joining, setJoining] = useState(false);
-  const [mobileTab, setMobileTab] = useState("portfolio");
+  const [mobileTab, setMobileTab] = useState<"trend" | "stocks" | "bank" | "activity">("trend");
 
   useEffect(() => {
     if (!showProfile) return;
@@ -89,9 +89,17 @@ export default function Room() {
     finally { setJoining(false); }
   }
 
+  function selectMobileTab(tab: "trend" | "stocks" | "bank" | "activity") {
+    setMobileTab(tab);
+    scrollToMobileSection("mobile-room-top");
+  }
+
   return (
-    <div className="has-mobile-nav">
-      <div className="topbar room-topbar">
+    <div className={`has-mobile-nav room-page mobile-room-tab-${mobileTab}`}>
+      <div className="topbar room-topbar" id="mobile-room-top">
+        <button className="room-hall-back" aria-label={lang === "zh" ? "返回大厅" : "Back to hall"} onClick={() => navigate("/")}>
+          <span aria-hidden="true">‹</span>{lang === "zh" ? "大厅" : "Hall"}
+        </button>
         <div className="brand" onClick={() => navigate("/")}><em>●</em> Stocker</div>
         <div className="day-pill">
           {room.status === "lobby"
@@ -128,7 +136,7 @@ export default function Room() {
         </div>
       </div>
 
-      <div className="wrap" id="mobile-room-top">
+      <div className="wrap" id="mobile-room-content">
         {spectator && <div className="spectator-banner"><div><b>{lang === "zh" ? "围观模式" : "Spectator mode"}</b><span>{lang === "zh" ? "你可以查看公开行情、新闻、聊天和榜单，但不能交易或发言。" : "You can view public market data, news, chat, and standings, but cannot trade or post."}</span></div>{room.status === "lobby" && <button onClick={()=>setShowProfile(true)}>{lang === "zh" ? "加入对局" : "Join game"}</button>}</div>}
         {room.status === "lobby" ? (
           <div className="room-card" style={{ cursor: "default" }}>
@@ -144,8 +152,9 @@ export default function Room() {
             <div className="err-banner bankrupt-banner">{t("room.bankruptBanner")}</div>
           )}
           <div className="grid">
-            <div id="mobile-portfolio">
-              {curve.length > 1 && (
+            <div className="room-main-column">
+              <section className="room-tab-panel room-trend-panel" id="mobile-room-trend" aria-label={lang === "zh" ? "趋势与持仓" : "Trend and holdings"}>
+              {curve.length > 0 && (
                 <HeroChart label={t("room.totalAssets")} series={curve} startDay={0} formatValue={fmtCents} />
               )}
 
@@ -199,11 +208,12 @@ export default function Room() {
                   <h2>{t("option.myPositions")}</h2>
                   <OptionPositions roomId={roomId!} positions={portfolio!.options!}
                     currentDay={curDay} aliasOf={aliasOf} onChanged={reload}
-                    disabled={(portfolio?.bankrupt ?? false) || (room.ended ?? false)} />
+                  disabled={(portfolio?.bankrupt ?? false) || (room.ended ?? false)} />
                 </div>
               )}
+              </section>
 
-              <div className="section" id="mobile-room-market">
+              <section className="section room-tab-panel room-stocks-panel" id="mobile-room-stocks" aria-label={lang === "zh" ? "股票列表" : "Stock list"}>
                 <h2>{t("room.market")}</h2>
                 {state.instruments.map(inst => {
                   const q = state.quotes.find(x => x.instrument_id === inst.id);
@@ -219,12 +229,16 @@ export default function Room() {
                     />
                   );
                 })}
-              </div>
+              </section>
             </div>
 
-            <div id="mobile-room-activity">
-              {!spectator && <LoanPanel roomId={roomId!} portfolio={portfolio} onChanged={reload} />}
-              <RightRail roomId={roomId!} state={state} aliasOf={aliasOf} readOnly={spectator} />
+            <div className="room-side-column">
+              {!spectator && <section className="room-tab-panel room-bank-panel" id="mobile-room-bank" aria-label={lang === "zh" ? "银行" : "Bank"}>
+                <LoanPanel roomId={roomId!} portfolio={portfolio} onChanged={reload} />
+              </section>}
+              <section className="room-tab-panel room-activity-panel" id="mobile-room-activity" aria-label={lang === "zh" ? "房间动态" : "Room activity"}>
+                <RightRail roomId={roomId!} state={state} aliasOf={aliasOf} readOnly={spectator} />
+              </section>
             </div>
           </div>
           </>
@@ -235,17 +249,16 @@ export default function Room() {
         label={lang === "zh" ? "对局导航" : "Game navigation"}
         active={mobileTab}
         items={room.status === "lobby" ? [
-          { id: "hall", icon: "⌂", label: lang === "zh" ? "大厅" : "Hall", onSelect: () => navigate("/") },
-          { id: "portfolio", icon: "◒", label: lang === "zh" ? "房间" : "Room", onSelect: () => { setMobileTab("portfolio"); scrollToMobileSection("mobile-room-top"); } },
+          { id: "trend", icon: "◒", label: lang === "zh" ? "房间" : "Room", onSelect: () => selectMobileTab("trend") },
           spectator
-            ? { id: "join", icon: "+", label: lang === "zh" ? "加入" : "Join", primary: true, onSelect: () => { setMobileTab("join"); setShowProfile(true); } }
-            : { id: "invite", icon: "+", label: lang === "zh" ? "邀请" : "Invite", primary: true, onSelect: () => { setMobileTab("invite"); copyInvite(); } },
+            ? { id: "join", icon: "+", label: lang === "zh" ? "加入" : "Join", primary: true, onSelect: () => setShowProfile(true) }
+            : { id: "invite", icon: "+", label: lang === "zh" ? "邀请" : "Invite", primary: true, onSelect: copyInvite },
           { id: "docs", icon: "?", label: lang === "zh" ? "规则" : "Rules", onSelect: () => navigate("/docs") },
         ] : [
-          { id: "hall", icon: "⌂", label: lang === "zh" ? "大厅" : "Hall", onSelect: () => navigate("/") },
-          { id: "portfolio", icon: "◒", label: lang === "zh" ? "资产" : "Portfolio", onSelect: () => { setMobileTab("portfolio"); scrollToMobileSection("mobile-portfolio"); } },
-          { id: "market", icon: "⌁", label: lang === "zh" ? "市场" : "Market", primary: true, onSelect: () => { setMobileTab("market"); scrollToMobileSection("mobile-room-market"); } },
-          { id: "activity", icon: "◉", label: lang === "zh" ? "动态" : "Activity", onSelect: () => { setMobileTab("activity"); scrollToMobileSection("mobile-room-activity"); } },
+          { id: "trend", icon: "⌁", label: lang === "zh" ? "趋势" : "Trend", onSelect: () => selectMobileTab("trend") },
+          { id: "stocks", icon: "▥", label: lang === "zh" ? "股票" : "Stocks", onSelect: () => selectMobileTab("stocks") },
+          ...(!spectator ? [{ id: "bank", icon: "$", label: lang === "zh" ? "银行" : "Bank", onSelect: () => selectMobileTab("bank") }] : []),
+          { id: "activity", icon: "◉", label: lang === "zh" ? "动态" : "Activity", onSelect: () => selectMobileTab("activity") },
         ]}
       />
       {node}

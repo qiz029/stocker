@@ -131,8 +131,8 @@ export default function RightRail({ roomId, state, aliasOf, readOnly = false }: 
   };
 
   return (
-    <div>
-      <div className="card">
+    <div className="right-rail">
+      <div className="card rail-leaderboard">
         <h2>{t("rail.leaderboard")}</h2>
         {state.leaderboard.map((row, i) => (
           <div key={row.username}
@@ -153,9 +153,9 @@ export default function RightRail({ roomId, state, aliasOf, readOnly = false }: 
         ))}
       </div>
 
-      <Chat roomId={roomId} readOnly={readOnly} />
+      <div className="rail-chat"><Chat roomId={roomId} readOnly={readOnly} /></div>
 
-      <div className="card">
+      <div className="card rail-events">
         <h2>{t("rail.events")}</h2>
         {events.length === 0 && <div className="feed-item">{t("rail.noEvents")}</div>}
         {events.map(ev => ev.kind === "agent_order" ? (
@@ -200,7 +200,7 @@ export default function RightRail({ roomId, state, aliasOf, readOnly = false }: 
         ))}
       </div>
 
-      <div className="card">
+      <div className="card rail-news-forum">
         <div className="seg">
           <button className={railTab === "news" ? "on" : ""} onClick={() => setRailTab("news")}>{t("rail.tabNews")}</button>
           <button className={railTab === "forum" ? "on" : ""} onClick={() => setRailTab("forum")}>{t("rail.tabForum")}</button>

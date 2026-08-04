@@ -27,7 +27,7 @@ export default function HeroChart({ label, series, startDay, formatValue }: Prop
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || win.length < 2) return;
+    if (!canvas || win.length === 0) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
     const W = canvas.width, H = canvas.height, n = win.length;
@@ -37,6 +37,21 @@ export default function HeroChart({ label, series, startDay, formatValue }: Prop
     const x = (i: number) => PAD.l + ((W - PAD.l - PAD.r) * i) / (n - 1);
     const y = (v: number) => H - PAD.b - ((H - PAD.b - PAD.t) * (v - lo)) / (hi - lo);
     const c = win[n - 1]! >= win[0]! ? cssVar("--up") : cssVar("--down");
+
+    if (n === 1) {
+      const valueY = y(win[0]!);
+      ctx.strokeStyle = c;
+      ctx.lineWidth = 3.5;
+      ctx.beginPath();
+      ctx.moveTo(PAD.l, valueY);
+      ctx.lineTo(W - PAD.r, valueY);
+      ctx.stroke();
+      ctx.fillStyle = c;
+      ctx.beginPath();
+      ctx.arc(W - PAD.r, valueY, 7, 0, 7);
+      ctx.fill();
+      return;
+    }
 
     // dashed period-start baseline
     ctx.strokeStyle = "rgba(255,255,255,0.18)";

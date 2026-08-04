@@ -44,6 +44,7 @@ button { font-family: inherit; cursor: pointer; }
 .countdown b { color: var(--ink2); font-weight: 500; }
 .topbar .spacer { flex: 1; }
 .room-topbar-actions { display: flex; align-items: center; gap: 14px; }
+.room-hall-back { display: none; }
 .room-action-mark { display: none; }
 .invite {
   font-size: 0.78rem; color: var(--up);
@@ -611,13 +612,17 @@ canvas.chart { width: 100%; height: auto; display: block; touch-action: none; }
   [id^="mobile-"] { scroll-margin-top: 76px; }
   .mobile-nav {
     position: fixed; z-index: 70; left: 0; right: 0; bottom: 0;
-    display: block; padding: 7px 10px calc(7px + env(safe-area-inset-bottom));
+    display: block;
+    padding: 7px max(10px, env(safe-area-inset-right)) calc(7px + env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
     border-top: 1px solid rgba(255,255,255,.09);
     background: rgba(12, 13, 16, .92); backdrop-filter: blur(22px) saturate(1.3);
   }
-  .mobile-nav-inner { max-width: 520px; min-height: 55px; margin: 0 auto; display: flex; align-items: end; justify-content: space-around; }
+  .mobile-nav-inner {
+    max-width: 520px; min-height: 55px; margin: 0 auto;
+    display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); align-items: end;
+  }
   .mobile-nav-item {
-    position: relative; flex: 1; min-width: 0; min-height: 52px; display: grid; place-items: center; align-content: center; gap: 2px;
+    position: relative; width: 100%; min-width: 0; min-height: 52px; display: grid; place-items: center; align-content: center; gap: 2px;
     border: 0; border-radius: 12px; color: var(--ink3); background: transparent; font-size: .61rem; font-weight: 650;
   }
   .mobile-nav-item::after { content: ""; position: absolute; top: -7px; width: 22px; height: 2px; border-radius: 2px; background: transparent; }
@@ -636,8 +641,13 @@ canvas.chart { width: 100%; height: auto; display: block; touch-action: none; }
   .topbar .docs-link-label { display: none; }
   .topbar .docs-link { width: 44px; min-height: 44px; padding-inline: 5px; justify-content: center; }
   .room-topbar { min-height: 58px; flex-wrap: nowrap; }
-  .room-topbar .brand { font-size: .9rem; }
-  .room-topbar .day-pill { max-width: min(45vw, 190px); overflow: hidden; text-overflow: ellipsis; }
+  .room-topbar .brand { display: none; }
+  .room-hall-back {
+    display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 4px 0 0;
+    border: 0; color: var(--ink); background: transparent; font-size: .78rem; font-weight: 700; white-space: nowrap;
+  }
+  .room-hall-back span { color: var(--up); font-size: 1.55rem; font-weight: 400; line-height: 1; }
+  .room-topbar .day-pill { max-width: min(34vw, 150px); overflow: hidden; text-overflow: ellipsis; }
   .room-topbar > .spacer { display: none; }
   .room-topbar-actions { flex: 1; justify-content: flex-end; gap: 6px; }
   .room-topbar-actions .docs-link, .room-topbar-actions .lang-switch, .room-topbar-actions .avatar { display: none; }
@@ -646,6 +656,21 @@ canvas.chart { width: 100%; height: auto; display: block; touch-action: none; }
   .room-topbar-actions .room-action-mark { display: inline; font-size: 1rem; }
   .room-topbar-actions .lang-switch { min-height: 44px; align-items: center; }
   .room-topbar-actions .lang-switch button { min-height: 44px; }
+  .room-page .grid { display: block; }
+  .room-page .room-tab-panel { display: none; }
+  .room-page.mobile-room-tab-trend .room-trend-panel,
+  .room-page.mobile-room-tab-stocks .room-stocks-panel,
+  .room-page.mobile-room-tab-bank .room-bank-panel,
+  .room-page.mobile-room-tab-activity .room-activity-panel { display: block; }
+  .room-page .room-stocks-panel { margin-top: 0; }
+  .room-page .room-side-column { min-width: 0; }
+  .room-page .room-bank-panel > .card:last-child,
+  .room-page .room-activity-panel .right-rail > :last-child { margin-bottom: 0; }
+  .room-activity-panel .right-rail { display: flex; flex-direction: column; }
+  .room-activity-panel .rail-events { order: 1; }
+  .room-activity-panel .rail-chat { order: 2; }
+  .room-activity-panel .rail-news-forum { order: 3; }
+  .room-activity-panel .rail-leaderboard { display: none; }
   .stock-page > div:first-child .page-tools { display: none; }
   .stock-page .back-btn { min-height: 44px; padding-bottom: 8px; }
   .stock-grid { gap: 10px; }
