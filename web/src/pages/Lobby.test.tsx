@@ -158,6 +158,28 @@ describe("Lobby", () => {
     expect(calls).toContain("PUT /api/me/profile");
   });
 
+  it("moves language and profile editing into the mobile account panel", async () => {
+    const calls: { url: string; method: string; body?: unknown }[] = [];
+    mockRoutes((url, init) => {
+      calls.push({ url, method: init?.method ?? "GET", body: init?.body ? JSON.parse(String(init.body)) : undefined });
+      if (url === "/api/scenarios") return { items: [] };
+      if (url === "/api/me/profile") return { id: 1, username: "alice", display_name: "Market Fox", avatar_id: "fox", profile_complete: true };
+      return url === "/api/leaderboards/eras" ? { items: [] } : { rooms: [] };
+    });
+    render(<MemoryRouter><UserCtxForTest.Provider value={{ id: 1, username: "alice", display_name: "Alice", avatar_id: "bull", profile_complete: true }}><Lobby /></UserCtxForTest.Provider></MemoryRouter>);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Profile" }));
+    expect(screen.getByRole("heading", { name: "Account settings" })).toBeInTheDocument();
+    expect(screen.getByText("Language")).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "Market Fox" } });
+    fireEvent.click(screen.getByRole("button", { name: "fox" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(calls).toContainEqual({
+      url: "/api/me/profile", method: "PUT", body: { display_name: "Market Fox", avatar_id: "fox" },
+    }));
+  });
+
   it("requires a display name and avatar before joining a public waiting room", async () => {
     const calls: { url: string; method: string; body?: unknown }[] = [];
     const waiting = { ...rooms[2], visibility: "public", human_players: 1, max_human_players: 12, agent_players: 5 };

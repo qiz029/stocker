@@ -19,6 +19,7 @@ body {
   font-family: -apple-system, "SF Pro Text", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", sans-serif;
   line-height: 1.5;
 }
+button, input, select { -webkit-tap-highlight-color: transparent; }
 .num { font-variant-numeric: tabular-nums; }
 button { font-family: inherit; cursor: pointer; }
 
@@ -67,6 +68,9 @@ button { font-family: inherit; cursor: pointer; }
 }
 .lang-switch button.on { background: var(--up-soft); color: var(--up); }
 .page-tools { display: flex; align-items: center; gap: 8px; }
+
+/* Phone navigation follows the app's task flow instead of shrinking desktop chrome. */
+.mobile-nav { display: none; }
 .docs-link {
   display: inline-flex; align-items: center; gap: 6px;
   min-height: 30px; padding: 3px 10px;
@@ -600,20 +604,59 @@ canvas.chart { width: 100%; height: auto; display: block; touch-action: none; }
 .docs-finish li { padding: 3px 0; }
 
 @media (max-width: 760px) {
+  html { scroll-padding-top: 72px; }
+  body { min-width: 320px; }
+  .has-mobile-nav { padding-bottom: calc(82px + env(safe-area-inset-bottom)); }
+  .has-mobile-nav .wrap { padding-inline: 16px; }
+  [id^="mobile-"] { scroll-margin-top: 76px; }
+  .mobile-nav {
+    position: fixed; z-index: 70; left: 0; right: 0; bottom: 0;
+    display: block; padding: 7px 10px calc(7px + env(safe-area-inset-bottom));
+    border-top: 1px solid rgba(255,255,255,.09);
+    background: rgba(12, 13, 16, .92); backdrop-filter: blur(22px) saturate(1.3);
+  }
+  .mobile-nav-inner { max-width: 520px; min-height: 55px; margin: 0 auto; display: flex; align-items: end; justify-content: space-around; }
+  .mobile-nav-item {
+    position: relative; flex: 1; min-width: 0; min-height: 52px; display: grid; place-items: center; align-content: center; gap: 2px;
+    border: 0; border-radius: 12px; color: var(--ink3); background: transparent; font-size: .61rem; font-weight: 650;
+  }
+  .mobile-nav-item::after { content: ""; position: absolute; top: -7px; width: 22px; height: 2px; border-radius: 2px; background: transparent; }
+  .mobile-nav-item.on { color: var(--ink); }
+  .mobile-nav-item.on::after { background: var(--up); box-shadow: 0 0 10px rgba(0,200,5,.55); }
+  .mobile-nav-icon { min-height: 24px; display: grid; place-items: center; font-size: 1.25rem; line-height: 1; }
+  .mobile-nav-item.primary .mobile-nav-icon {
+    width: 38px; height: 38px; margin-top: -20px; border-radius: 50%; color: #04140a; background: var(--up);
+    box-shadow: 0 8px 24px rgba(0,200,5,.25); font-size: 1.15rem; font-weight: 800;
+  }
+  .mobile-nav-item.primary::after { display: none; }
+  .mobile-nav-item.primary.on { color: var(--up); }
   .topbar { gap: 8px; padding-inline: 12px; }
   .topbar .countdown { display: none; }
   .topbar .invite { padding-inline: 10px; }
   .topbar .docs-link-label { display: none; }
   .topbar .docs-link { width: 44px; min-height: 44px; padding-inline: 5px; justify-content: center; }
-  .room-topbar { flex-wrap: wrap; }
-  .room-topbar .day-pill { max-width: calc(100% - 90px); overflow: hidden; text-overflow: ellipsis; }
+  .room-topbar { min-height: 58px; flex-wrap: nowrap; }
+  .room-topbar .brand { font-size: .9rem; }
+  .room-topbar .day-pill { max-width: min(45vw, 190px); overflow: hidden; text-overflow: ellipsis; }
   .room-topbar > .spacer { display: none; }
-  .room-topbar-actions { flex: 0 0 100%; justify-content: flex-end; gap: 8px; }
+  .room-topbar-actions { flex: 1; justify-content: flex-end; gap: 6px; }
+  .room-topbar-actions .docs-link, .room-topbar-actions .lang-switch, .room-topbar-actions .avatar { display: none; }
   .room-topbar-actions .room-topbar-action { width: 44px; min-height: 44px; padding: 0; display: grid; place-items: center; }
   .room-topbar-actions .room-action-label { display: none; }
   .room-topbar-actions .room-action-mark { display: inline; font-size: 1rem; }
   .room-topbar-actions .lang-switch { min-height: 44px; align-items: center; }
   .room-topbar-actions .lang-switch button { min-height: 44px; }
+  .stock-page > div:first-child .page-tools { display: none; }
+  .stock-page .back-btn { min-height: 44px; padding-bottom: 8px; }
+  .stock-grid { gap: 10px; }
+  .stock-grid > div, .grid > div { min-width: 0; }
+  .stat-strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 10px; }
+  .stat-strip div { min-width: 0; }
+  .trade { position: static; }
+  .row { grid-template-columns: minmax(0, 1fr) 74px minmax(86px, .72fr); gap: 8px; }
+  .row canvas { width: 74px; }
+  .card { border-radius: 16px; }
+  .toast { bottom: calc(88px + env(safe-area-inset-bottom)); max-width: calc(100vw - 32px); white-space: normal; text-align: center; }
   .docs-steps, .docs-card-grid, .docs-card-grid.three, .docs-news-guide, .docs-finish { grid-template-columns: 1fr; }
   .docs-step { min-height: 0; border-right: none; border-bottom: 1px solid var(--line); }
   .docs-step:last-child { border-bottom: none; }

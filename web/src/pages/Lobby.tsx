@@ -6,6 +6,7 @@ import { usePoll } from "../usePoll";
 import { useToast } from "../Toast";
 import { useUpdateUser, useUser } from "../App";
 import DocsLink from "../components/DocsLink";
+import MobileNav, { scrollToMobileSection } from "../components/MobileNav";
 import nifty1972 from "../assets/eras/nifty-1972.avif";
 import crash1987 from "../assets/eras/crash-1987.avif";
 import dotcom2000 from "../assets/eras/dotcom-2000.avif";
@@ -60,6 +61,8 @@ const hallCopy = {
     saveContinue: "Save & continue",
     createTitle: "Open a public timeline", createSub: "Players can spectate immediately. Waiting rooms allow them to complete a profile and join.",
     era: "Choose an era", duration: "Game duration", createNow: "Create", creating: "Generating parallel world…",
+    settings: "Profile", settingsTitle: "Account settings", settingsSub: "Manage how you appear in the Market Hall and choose your language.",
+    language: "Language", settingsCancel: "Cancel", settingsSave: "Save changes", settingsSaved: "Profile updated",
   },
   zh: {
     title: "时代大厅", sub: "找张桌子，看历史重演，或者开启你自己的时间线。",
@@ -73,6 +76,8 @@ const hallCopy = {
     saveContinue: "保存并继续",
     createTitle: "开启公开时间线", createSub: "所有人可以直接围观；等待开局时，完成资料即可加入。",
     era: "选择时代", duration: "游戏时长", createNow: "创建", creating: "正在生成平行世界…",
+    settings: "账户", settingsTitle: "账户设置", settingsSub: "管理你在时代大厅中的玩家身份与界面语言。",
+    language: "界面语言", settingsCancel: "取消", settingsSave: "保存修改", settingsSaved: "资料已更新",
   },
 };
 
@@ -122,7 +127,7 @@ export default function Lobby() {
   const [filter, setFilter] = useState<string>("all");
   const [boardEra, setBoardEra] = useState<string>("all");
   const [invite, setInvite] = useState("");
-  const [dialog, setDialog] = useState<"profile" | "create" | null>(null);
+  const [dialog, setDialog] = useState<"profile" | "create" | "settings" | null>(null);
   const [pendingRoom, setPendingRoom] = useState<PublicRoom | null>(null);
   const [pendingInvite, setPendingInvite] = useState("");
   const [pendingCreate, setPendingCreate] = useState(false);
@@ -132,6 +137,7 @@ export default function Lobby() {
   const [scenarioID, setScenarioID] = useState("");
   const [duration, setDuration] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [mobileTab, setMobileTab] = useState("market");
 
   useEffect(() => { api.get<{ items: ScenarioInfo[] }>("/api/scenarios").then(res => {
     const items = chronologicalScenarios(res.items ?? []); setScenarios(items); if (items[0]) setScenarioID(current => current || items[0]!.id);
@@ -140,7 +146,9 @@ export default function Lobby() {
     if (!dialog) return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
-      if (dialog === "profile") closeProfile(); else setDialog(null);
+      if (dialog === "profile") closeProfile();
+      else if (dialog === "settings") closeSettings();
+      else setDialog(null);
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -197,6 +205,24 @@ export default function Lobby() {
   function closeProfile() {
     setDialog(null); setPendingRoom(null); setPendingInvite(""); setPendingCreate(false);
   }
+  function openSettings() {
+    setDisplayName(profileUser.display_name ?? "");
+    setAvatarID(profileUser.avatar_id ?? "bull");
+    setMobileTab("settings");
+    setDialog("settings");
+  }
+  function closeSettings() {
+    setDialog(null);
+    setMobileTab("market");
+  }
+  async function saveSettings(e: FormEvent) {
+    e.preventDefault(); setBusy(true);
+    try {
+      const updated = await api.put<User>("/api/me/profile", { display_name: displayName.trim(), avatar_id: avatarID });
+      setProfileUser(updated); updateAccount(updated); closeSettings(); toast(c.settingsSaved);
+    } catch (err) { toast(err instanceof ApiError ? err.message : t("lobby.joinFailed")); }
+    finally { setBusy(false); }
+  }
   async function createRoom() {
     setBusy(true);
     try {
@@ -219,19 +245,35 @@ export default function Lobby() {
     event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
   }
 
-  return <div className="hall">
+  function selectMobileTab(tab: string, section?: string) {
+    setMobileTab(tab);
+    if (section) scrollToMobileSection(section);
+  }
+
+  return <div className="hall has-mobile-nav">
     <div className="topbar hall-topbar"><div className="brand"><em>●</em> Stocker</div><div className="hall-live"><i /> LIVE HALL</div><div className="spacer"/><DocsLink/><LangSwitch/><div className="avatar">{avatarGlyph(profileUser.avatar_id, profileUser.username)}</div></div>
     <main className="hall-page">
       <section className="hall-hero"><div><span className="hall-eyebrow"><i/> STOCKER / COMMUNITY</span><h1>{c.title}</h1><p>{c.sub}</p></div><div className="hall-actions"><form onSubmit={joinInvite}><input className="hall-invite" aria-label={c.invite} placeholder={c.invite} value={invite} onChange={e=>setInvite(e.target.value)}/><button disabled={!invite.trim()}>{c.join}</button></form><button className="hall-primary" onClick={openCreate}>{c.create}</button></div></section>
       <div className="hall-ribbon"><span><b>{activeRooms}</b>{c.active}</span><span><b>{humanSeats}</b>{c.online}</span><span><b>{scenarios.length}</b>{c.eras}</span>{mostActive?.count ? <span className="ticker">{lang==="zh"?"最活跃":"Most active"} <b>{yearLabel(mostActive.sc)} · {pickL(lang,mostActive.sc.name,mostActive.sc.name_en)}</b></span>:null}</div>
       <div className="hall-grid">
-        <section className="hall-panel"><header><div><h2>{c.rooms}</h2><p>{c.roomsSub}</p></div><div className="hall-filters"><button className={`hall-filter ${filter==="all"?"on":""}`} onClick={()=>setFilter("all")}>{c.all}</button>{scenarios.map(sc=><button key={sc.id} className={`hall-filter ${filter===sc.id?"on":""}`} onClick={()=>setFilter(sc.id)}>{yearLabel(sc)}</button>)}</div></header><div className="hall-room-list">{publicRooms.length?publicRooms.map(room=><HallRoomRow key={room.id} room={room} scenarios={scenarios} c={c} lang={lang} onWatch={()=>navigate(`/rooms/${room.id}`)} onJoin={()=>requestJoin(room)}/>):<div className="hall-empty">{c.empty}</div>}</div></section>
-        <aside className="hall-panel hall-board"><header><div><h2>{c.board}</h2><p>{c.boardSub}</p></div></header><div className="hall-tabs"><button className={`hall-tab ${boardEra==="all"?"on":""}`} onClick={()=>setBoardEra("all")}>{c.all}</button>{scenarios.map(sc=><button key={sc.id} className={`hall-tab ${boardEra===sc.id?"on":""}`} onClick={()=>setBoardEra(sc.id)}>{yearLabel(sc)}</button>)}</div><div className="hall-leaders">{leaders.length?leaders.map((row,i)=><div className="hall-leader" key={row.scenario_id+row.username}><span className={`hall-rank ${i<3?"top":""}`}>{String(i+1).padStart(2,"0")}</span><span className="hall-avatar">{row.avatar_id?avatarGlyphs[row.avatar_id]:row.username.slice(0,1).toUpperCase()}</span><span className="hall-leader-name"><b>{row.username}</b><small>{yearLabel(scenarios.find(sc=>sc.id===row.scenario_id) ?? {id:row.scenario_id,name:row.scenario_id,days:0})} · {row.wins} {c.wins}</small></span><b className="hall-return">{fmtReturn(row.return_pct)}</b></div>):<div className="hall-empty">—</div>}</div></aside>
+        <section className="hall-panel" id="mobile-market"><header><div><h2>{c.rooms}</h2><p>{c.roomsSub}</p></div><div className="hall-filters"><button className={`hall-filter ${filter==="all"?"on":""}`} onClick={()=>setFilter("all")}>{c.all}</button>{scenarios.map(sc=><button key={sc.id} className={`hall-filter ${filter===sc.id?"on":""}`} onClick={()=>setFilter(sc.id)}>{yearLabel(sc)}</button>)}</div></header><div className="hall-room-list">{publicRooms.length?publicRooms.map(room=><HallRoomRow key={room.id} room={room} scenarios={scenarios} c={c} lang={lang} onWatch={()=>navigate(`/rooms/${room.id}`)} onJoin={()=>requestJoin(room)}/>):<div className="hall-empty">{c.empty}</div>}</div></section>
+        <aside className="hall-panel hall-board" id="mobile-rankings"><header><div><h2>{c.board}</h2><p>{c.boardSub}</p></div></header><div className="hall-tabs"><button className={`hall-tab ${boardEra==="all"?"on":""}`} onClick={()=>setBoardEra("all")}>{c.all}</button>{scenarios.map(sc=><button key={sc.id} className={`hall-tab ${boardEra===sc.id?"on":""}`} onClick={()=>setBoardEra(sc.id)}>{yearLabel(sc)}</button>)}</div><div className="hall-leaders">{leaders.length?leaders.map((row,i)=><div className="hall-leader" key={row.scenario_id+row.username}><span className={`hall-rank ${i<3?"top":""}`}>{String(i+1).padStart(2,"0")}</span><span className="hall-avatar">{row.avatar_id?avatarGlyphs[row.avatar_id]:row.username.slice(0,1).toUpperCase()}</span><span className="hall-leader-name"><b>{row.username}</b><small>{yearLabel(scenarios.find(sc=>sc.id===row.scenario_id) ?? {id:row.scenario_id,name:row.scenario_id,days:0})} · {row.wins} {c.wins}</small></span><b className="hall-return">{fmtReturn(row.return_pct)}</b></div>):<div className="hall-empty">—</div>}</div></aside>
       </div>
-      {(mine?.rooms?.length??0)>0&&<section className="hall-mine"><header><h2>{c.mine}</h2><span>{mine!.rooms.length}</span></header><div>{mine!.rooms.slice(0,4).map(room=><HallRoomRow key={room.id} room={room} scenarios={scenarios} c={c} lang={lang} dense onWatch={()=>navigate(`/rooms/${room.id}`)}/>)}</div></section>}
+      {(mine?.rooms?.length??0)>0&&<section className="hall-mine" id="mobile-my-rooms"><header><h2>{c.mine}</h2><span>{mine!.rooms.length}</span></header><div>{mine!.rooms.slice(0,4).map(room=><HallRoomRow key={room.id} room={room} scenarios={scenarios} c={c} lang={lang} dense onWatch={()=>navigate(`/rooms/${room.id}`)}/>)}</div></section>}
     </main>
-    {dialog==="profile"&&<div className="hall-dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)closeProfile()}}><form className="hall-dialog" role="dialog" aria-modal="true" aria-labelledby="profile-title" onSubmit={saveProfileAndJoin}><h2 id="profile-title">{c.profileTitle}</h2><p>{c.profileSub}</p><label>{c.displayName}<input autoFocus minLength={2} maxLength={24} required value={displayName} onChange={e=>setDisplayName(e.target.value)}/></label><label>{c.avatar}<div className="hall-avatars">{avatarIDs.map(id=><button type="button" aria-label={id} aria-pressed={avatarID===id} className={`hall-avatar-option ${avatarID===id?"on":""}`} key={id} onClick={()=>setAvatarID(id)}>{avatarGlyphs[id]}</button>)}</div></label><div className="hall-dialog-actions"><button type="button" onClick={closeProfile}>{c.cancel}</button><button className="confirm" disabled={busy||displayName.trim().length<2}>{busy?"…":pendingCreate?c.saveContinue:c.saveJoin}</button></div></form></div>}
+    {(dialog==="profile"||dialog==="settings")&&<div className="hall-dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)(dialog==="settings"?closeSettings():closeProfile())}}><form className={`hall-dialog ${dialog==="settings"?"hall-settings":""}`} role="dialog" aria-modal="true" aria-labelledby="profile-title" onSubmit={dialog==="settings"?saveSettings:saveProfileAndJoin}><h2 id="profile-title">{dialog==="settings"?c.settingsTitle:c.profileTitle}</h2><p>{dialog==="settings"?c.settingsSub:c.profileSub}</p>{dialog==="settings"&&<div className="hall-setting-row"><span>{c.language}</span><LangSwitch/></div>}<label>{c.displayName}<input autoFocus minLength={2} maxLength={24} required value={displayName} onChange={e=>setDisplayName(e.target.value)}/></label><label>{c.avatar}<div className="hall-avatars">{avatarIDs.map(id=><button type="button" aria-label={id} aria-pressed={avatarID===id} className={`hall-avatar-option ${avatarID===id?"on":""}`} key={id} onClick={()=>setAvatarID(id)}>{avatarGlyphs[id]}</button>)}</div></label><div className="hall-dialog-actions"><button type="button" onClick={dialog==="settings"?closeSettings:closeProfile}>{dialog==="settings"?c.settingsCancel:c.cancel}</button><button className="confirm" disabled={busy||displayName.trim().length<2}>{busy?"…":dialog==="settings"?c.settingsSave:pendingCreate?c.saveContinue:c.saveJoin}</button></div></form></div>}
     {dialog==="create"&&<div className="hall-dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setDialog(null)}}><div className="hall-dialog hall-create" role="dialog" aria-modal="true" aria-labelledby="create-title"><h2 id="create-title">{c.createTitle}</h2><p>{c.createSub}</p><div className="era-timeline" role="radiogroup" aria-label={c.era} data-era-count={scenarios.length} style={{"--era-count":Math.max(1,scenarios.length)} as React.CSSProperties}>{scenarios.map((sc,index)=>{const visual=eraVisuals[sc.id];const selected=scenarioID===sc.id;return <button type="button" role="radio" aria-checked={selected} tabIndex={selected?0:-1} data-era-year={scenarioYear(sc)} key={sc.id} className={`era-card ${selected?"selected":""}`} style={{"--era-accent":visual?.accent??"#00c805"} as React.CSSProperties} onClick={()=>{setScenarioID(sc.id);setDuration(0)}} onKeyDown={e=>moveEra(e,index)}>{index<scenarios.length-1&&<span className="era-link"/>}<span className="era-node"/>{visual&&<img className="era-card-art" src={visual.image} alt=""/>}<span className="era-card-shade"/><span className="era-card-index">{String(index+1).padStart(2,"0")}</span><span className="era-card-copy"><strong className="era-year">{yearLabel(sc)}</strong><span className="era-title">{pickL(lang,sc.name,sc.name_en).replace(/^\s*(?:19|20)\d{2}\s*[·—:-]?\s*/,"")}</span><span className="era-days">{sc.days} {lang==="zh"?"个交易日":"trading days"}</span></span><span className="era-card-state">{selected?(lang==="zh"?"已选择":"Selected"):(lang==="zh"?"选择时代":"Select era")}</span></button>})}</div><label>{c.duration}<select aria-label={c.duration} value={duration||durationOptions(scenarios.find(sc=>sc.id===scenarioID)?.days??300,lang)[1]![1]} onChange={e=>setDuration(Number(e.target.value))}>{durationOptions(scenarios.find(sc=>sc.id===scenarioID)?.days??300,lang).map(([label,value])=><option key={value} value={value}>{label}</option>)}</select></label><div className="hall-dialog-actions"><button onClick={()=>setDialog(null)}>{c.cancel}</button><button className="confirm" onClick={createRoom} disabled={busy||!scenarioID}>{busy?c.creating:c.createNow}</button></div></div></div>}
+    <MobileNav
+      label={lang === "zh" ? "大厅导航" : "Hall navigation"}
+      active={mobileTab}
+      items={[
+        { id: "market", icon: "⌁", label: lang === "zh" ? "市场" : "Market", onSelect: () => selectMobileTab("market", "mobile-market") },
+        { id: "rankings", icon: "↗", label: lang === "zh" ? "排行" : "Ranks", onSelect: () => selectMobileTab("rankings", "mobile-rankings") },
+        { id: "create", icon: "+", label: lang === "zh" ? "开房" : "Create", ariaLabel: lang === "zh" ? "打开创建房间" : "Open create room", primary: true, onSelect: () => { setMobileTab("create"); openCreate(); } },
+        { id: "mine", icon: "◎", label: lang === "zh" ? "我的" : "Mine", onSelect: () => { setMobileTab("mine"); (mine?.rooms?.length ?? 0) > 0 ? scrollToMobileSection("mobile-my-rooms") : openCreate(); } },
+        { id: "settings", icon: avatarGlyph(profileUser.avatar_id, profileUser.username), label: c.settings, onSelect: openSettings },
+      ]}
+    />
     {node}
   </div>;
 }

@@ -11,6 +11,7 @@ import OptionsChain from "../components/OptionsChain";
 import OptionPositions from "../components/OptionPositions";
 import TradePanel from "../components/TradePanel";
 import DocsLink from "../components/DocsLink";
+import MobileNav, { scrollToMobileSection } from "../components/MobileNav";
 
 export default function Stock() {
   const { roomId, instrumentId } = useParams<{ roomId: string; instrumentId: string }>();
@@ -21,6 +22,7 @@ export default function Stock() {
   const { items: newsItems } = useIncrementalFeed<NewsItem, NewsResponse>(
     after => fetchNews(roomId!, after), 30_000, roomId!);
   const [openNews, setOpenNews] = useState<number | null>(null);
+  const [mobileTab, setMobileTab] = useState("quote");
 
   if (!state) return null;
   const spectator = state.room.is_member === false;
@@ -48,13 +50,13 @@ export default function Stock() {
     .slice(0, 5);
 
   return (
-    <div className="wrap">
+    <div className="wrap has-mobile-nav stock-page">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button className="back-btn" onClick={() => navigate(`/rooms/${roomId}`)}>{t("common.backToRoom")}</button>
         <div className="page-tools"><DocsLink /><LangSwitch /></div>
       </div>
       <div className="stock-grid">
-        <div>
+        <div id="mobile-stock-quote">
           {candles.length > 1 && (
             <CandleChart
               label={`${inst.alias} · ${pickL(lang, inst.desc, inst.desc_en)} · ${inst.id}`}
@@ -83,10 +85,10 @@ export default function Stock() {
             </div>
           )}
 
-          {!spectator && <OptionsChain roomId={roomId!} instrumentId={instrumentId!} alias={inst.alias}
+          {!spectator && <div id="mobile-stock-options"><OptionsChain roomId={roomId!} instrumentId={instrumentId!} alias={inst.alias}
             lastClose={last} currentDay={state.room.current_day ?? 0}
             portfolio={portfolio} onChanged={reload}
-            disabled={optionsLocked} note={optionsNote} />}
+            disabled={optionsLocked} note={optionsNote} /></div>}
 
           {!spectator && <ActionPanel roomId={roomId!} instrumentId={instrumentId!} alias={inst.alias}
             portfolio={portfolio} onChanged={reload}
@@ -106,7 +108,7 @@ export default function Stock() {
             </div>
           </div>
 
-          <div className="section">
+          <div className="section" id="mobile-stock-news">
             <h2>{t("stock.relatedNews")}</h2>
             {relatedNews.length === 0 && <div className="feed-item">{t("stock.noNews")}</div>}
             {relatedNews.map(n => {
@@ -128,10 +130,21 @@ export default function Stock() {
           </div>
         </div>
 
-        {!spectator && <TradePanel roomId={roomId!} instrumentId={instrumentId!} lastClose={last}
+        {!spectator && <div id="mobile-stock-trade"><TradePanel roomId={roomId!} instrumentId={instrumentId!} lastClose={last}
           portfolio={portfolio} onChanged={reload} disabled={portfolio?.bankrupt ?? false}
-          afterHours={clock?.phase === "closed" || clock?.phase === "weekend"} />}
+          afterHours={clock?.phase === "closed" || clock?.phase === "weekend"} /></div>}
       </div>
+      <MobileNav
+        label={lang === "zh" ? "个股导航" : "Stock navigation"}
+        active={mobileTab}
+        items={[
+          { id: "room", icon: "‹", label: lang === "zh" ? "对局" : "Room", onSelect: () => navigate(`/rooms/${roomId}`) },
+          { id: "quote", icon: "⌁", label: lang === "zh" ? "行情" : "Quote", onSelect: () => { setMobileTab("quote"); scrollToMobileSection("mobile-stock-quote"); } },
+          ...(!spectator ? [{ id: "trade", icon: "↕", label: lang === "zh" ? "交易" : "Trade", primary: true, onSelect: () => { setMobileTab("trade"); scrollToMobileSection("mobile-stock-trade"); } }] : []),
+          ...(!spectator ? [{ id: "options", icon: "◇", label: lang === "zh" ? "期权" : "Options", onSelect: () => { setMobileTab("options"); scrollToMobileSection("mobile-stock-options"); } }] : []),
+          { id: "news", icon: "◉", label: lang === "zh" ? "资讯" : "News", onSelect: () => { setMobileTab("news"); scrollToMobileSection("mobile-stock-news"); } },
+        ]}
+      />
     </div>
   );
 }

@@ -13,6 +13,7 @@ import LoanPanel from "../components/LoanPanel";
 import OptionPositions from "../components/OptionPositions";
 import RightRail from "../components/RightRail";
 import DocsLink from "../components/DocsLink";
+import MobileNav, { scrollToMobileSection } from "../components/MobileNav";
 import "./LobbyHall.css";
 import { avatarGlyph, avatarGlyphs, avatarIDs } from "../avatar";
 
@@ -31,6 +32,7 @@ export default function Room() {
   const [displayName, setDisplayName] = useState(user.display_name ?? "");
   const [avatarID, setAvatarID] = useState<AvatarID>(user.avatar_id ?? "bull");
   const [joining, setJoining] = useState(false);
+  const [mobileTab, setMobileTab] = useState("portfolio");
 
   useEffect(() => {
     if (!showProfile) return;
@@ -88,7 +90,7 @@ export default function Room() {
   }
 
   return (
-    <div>
+    <div className="has-mobile-nav">
       <div className="topbar room-topbar">
         <div className="brand" onClick={() => navigate("/")}><em>●</em> Stocker</div>
         <div className="day-pill">
@@ -126,7 +128,7 @@ export default function Room() {
         </div>
       </div>
 
-      <div className="wrap">
+      <div className="wrap" id="mobile-room-top">
         {spectator && <div className="spectator-banner"><div><b>{lang === "zh" ? "围观模式" : "Spectator mode"}</b><span>{lang === "zh" ? "你可以查看公开行情、新闻、聊天和榜单，但不能交易或发言。" : "You can view public market data, news, chat, and standings, but cannot trade or post."}</span></div>{room.status === "lobby" && <button onClick={()=>setShowProfile(true)}>{lang === "zh" ? "加入对局" : "Join game"}</button>}</div>}
         {room.status === "lobby" ? (
           <div className="room-card" style={{ cursor: "default" }}>
@@ -142,7 +144,7 @@ export default function Room() {
             <div className="err-banner bankrupt-banner">{t("room.bankruptBanner")}</div>
           )}
           <div className="grid">
-            <div>
+            <div id="mobile-portfolio">
               {curve.length > 1 && (
                 <HeroChart label={t("room.totalAssets")} series={curve} startDay={0} formatValue={fmtCents} />
               )}
@@ -201,7 +203,7 @@ export default function Room() {
                 </div>
               )}
 
-              <div className="section">
+              <div className="section" id="mobile-room-market">
                 <h2>{t("room.market")}</h2>
                 {state.instruments.map(inst => {
                   const q = state.quotes.find(x => x.instrument_id === inst.id);
@@ -220,7 +222,7 @@ export default function Room() {
               </div>
             </div>
 
-            <div>
+            <div id="mobile-room-activity">
               {!spectator && <LoanPanel roomId={roomId!} portfolio={portfolio} onChanged={reload} />}
               <RightRail roomId={roomId!} state={state} aliasOf={aliasOf} readOnly={spectator} />
             </div>
@@ -229,6 +231,23 @@ export default function Room() {
         )}
       </div>
       {showProfile && <div className="hall-dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setShowProfile(false)}}><form className="hall-dialog" role="dialog" aria-modal="true" aria-labelledby="room-profile-title" onSubmit={joinAsPlayer}><h2 id="room-profile-title">{lang === "zh" ? "设置玩家身份" : "Choose your player identity"}</h2><p>{lang === "zh" ? "加入前填写显示名称并选择头像。" : "Add a display name and avatar before joining."}</p><label>{lang === "zh" ? "显示名称" : "Display name"}<input autoFocus minLength={2} maxLength={24} required value={displayName} onChange={e=>setDisplayName(e.target.value)}/></label><label>{lang === "zh" ? "头像" : "Avatar"}<div className="hall-avatars">{avatarIDs.map(id=><button type="button" aria-label={id} aria-pressed={avatarID===id} className={`hall-avatar-option ${avatarID===id?"on":""}`} key={id} onClick={()=>setAvatarID(id)}>{avatarGlyphs[id]}</button>)}</div></label><div className="hall-dialog-actions"><button type="button" onClick={()=>setShowProfile(false)}>{lang === "zh" ? "取消" : "Cancel"}</button><button className="confirm" disabled={joining||displayName.trim().length<2}>{joining?"…":lang === "zh" ? "保存并加入" : "Save & join"}</button></div></form></div>}
+      <MobileNav
+        label={lang === "zh" ? "对局导航" : "Game navigation"}
+        active={mobileTab}
+        items={room.status === "lobby" ? [
+          { id: "hall", icon: "⌂", label: lang === "zh" ? "大厅" : "Hall", onSelect: () => navigate("/") },
+          { id: "portfolio", icon: "◒", label: lang === "zh" ? "房间" : "Room", onSelect: () => { setMobileTab("portfolio"); scrollToMobileSection("mobile-room-top"); } },
+          spectator
+            ? { id: "join", icon: "+", label: lang === "zh" ? "加入" : "Join", primary: true, onSelect: () => { setMobileTab("join"); setShowProfile(true); } }
+            : { id: "invite", icon: "+", label: lang === "zh" ? "邀请" : "Invite", primary: true, onSelect: () => { setMobileTab("invite"); copyInvite(); } },
+          { id: "docs", icon: "?", label: lang === "zh" ? "规则" : "Rules", onSelect: () => navigate("/docs") },
+        ] : [
+          { id: "hall", icon: "⌂", label: lang === "zh" ? "大厅" : "Hall", onSelect: () => navigate("/") },
+          { id: "portfolio", icon: "◒", label: lang === "zh" ? "资产" : "Portfolio", onSelect: () => { setMobileTab("portfolio"); scrollToMobileSection("mobile-portfolio"); } },
+          { id: "market", icon: "⌁", label: lang === "zh" ? "市场" : "Market", primary: true, onSelect: () => { setMobileTab("market"); scrollToMobileSection("mobile-room-market"); } },
+          { id: "activity", icon: "◉", label: lang === "zh" ? "动态" : "Activity", onSelect: () => { setMobileTab("activity"); scrollToMobileSection("mobile-room-activity"); } },
+        ]}
+      />
       {node}
     </div>
   );
