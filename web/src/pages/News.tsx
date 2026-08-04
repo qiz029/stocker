@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { ApiError, DebunkVerdict, NewsItem, RoomState, fetchNewsItem, api, postDebunk } from "../api";
 import { fmtCents, prettifyHeadline } from "../format";
 import { LangSwitch, mediaName, pickL, useT } from "../i18n";
+import DocsLink from "../components/DocsLink";
 
 const DEBUNK_FEE_CENTS = 200_000;
 type NewsError = { message: string } | { key: "news.loadFailed" | "news.investigateFailed" };
@@ -51,7 +52,7 @@ export default function News() {
     <div className="wrap news-detail">
       <header className="news-detail-nav">
         <Link className="back-btn" to={`/rooms/${roomId}`}>{t("common.backToRoom")}</Link>
-        <LangSwitch />
+        <div className="page-tools"><DocsLink /><LangSwitch /></div>
       </header>
       {error && <div className="err-banner">{"message" in error ? error.message : t(error.key)}</div>}
       {story && room && (

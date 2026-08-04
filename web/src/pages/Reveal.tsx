@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { api, ApiError, RevealData } from "../api";
 import { fmt$, fmtCents, fmtPct } from "../format";
 import { LangSwitch, useT } from "../i18n";
+import DocsLink from "../components/DocsLink";
 
 export default function Reveal() {
   const { roomId } = useParams<{ roomId: string }>();
@@ -21,7 +22,7 @@ export default function Reveal() {
   }, [roomId]);
 
   const langRow = (
-    <div style={{ display: "flex", justifyContent: "flex-end" }}><LangSwitch /></div>
+    <div className="page-tools" style={{ justifyContent: "flex-end" }}><DocsLink /><LangSwitch /></div>
   );
 
   if (error) return <div className="wrap err-banner">{error}</div>;

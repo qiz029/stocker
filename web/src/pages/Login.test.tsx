@@ -34,6 +34,7 @@ describe("Login page", () => {
 
   it("switches to register mode", async () => {
     render(<MemoryRouter><Login onAuthed={vi.fn()} /></MemoryRouter>);
+    expect(screen.getByRole("link", { name: "Docs" })).toHaveAttribute("href", "/docs");
     fireEvent.click(screen.getByRole("button", { name: "Create an account" }));
     expect(screen.getByRole("button", { name: "Sign up" })).toBeInTheDocument();
   });

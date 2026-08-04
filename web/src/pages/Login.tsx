@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 import { api, ApiError, User } from "../api";
 import { LangSwitch, useT } from "../i18n";
+import DocsLink from "../components/DocsLink";
 
 export default function Login({ onAuthed }: { onAuthed: (u: User) => void }) {
   const { t } = useT();
@@ -26,7 +27,7 @@ export default function Login({ onAuthed }: { onAuthed: (u: User) => void }) {
 
   return (
     <div className="auth-wrap">
-      <div style={{ position: "fixed", top: 14, right: 20 }}><LangSwitch /></div>
+      <div className="page-tools auth-tools"><DocsLink /><LangSwitch /></div>
       <div className="auth-card">
         <div className="brand"><em>●</em> Stocker</div>
         <p className="auth-sub">{t("auth.sub")}</p>

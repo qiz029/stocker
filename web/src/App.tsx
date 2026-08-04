@@ -8,6 +8,7 @@ import Room from "./pages/Room";
 import Stock from "./pages/Stock";
 import Reveal from "./pages/Reveal";
 import News from "./pages/News";
+import Docs from "./pages/Docs";
 
 // Exported so page/component tests can provide a fake user.
 export const UserCtxForTest = createContext<User | null>(null);
@@ -32,11 +33,11 @@ function Shell() {
   return (
     <UserCtxForTest.Provider value={user}>
       <Routes>
-        <Route path="/" element={<Lobby />} />
-        <Route path="/rooms/:roomId" element={<Room />} />
-        <Route path="/rooms/:roomId/i/:instrumentId" element={<Stock />} />
-        <Route path="/rooms/:roomId/news/:newsId" element={<News />} />
-        <Route path="/rooms/:roomId/reveal" element={<Reveal />} />
+        <Route path="" element={<Lobby />} />
+        <Route path="rooms/:roomId" element={<Room />} />
+        <Route path="rooms/:roomId/i/:instrumentId" element={<Stock />} />
+        <Route path="rooms/:roomId/news/:newsId" element={<News />} />
+        <Route path="rooms/:roomId/reveal" element={<Reveal />} />
         <Route path="*" element={<Navigate to="/" />} />
       </Routes>
     </UserCtxForTest.Provider>
@@ -52,7 +53,10 @@ export default function App() {
   return (
     <BrowserRouter>
       <I18nProvider>
-        <Shell />
+        <Routes>
+          <Route path="/docs" element={<Docs />} />
+          <Route path="/*" element={<Shell />} />
+        </Routes>
       </I18nProvider>
     </BrowserRouter>
   );

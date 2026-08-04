@@ -10,6 +10,7 @@ import ActionPanel from "../components/ActionPanel";
 import OptionsChain from "../components/OptionsChain";
 import OptionPositions from "../components/OptionPositions";
 import TradePanel from "../components/TradePanel";
+import DocsLink from "../components/DocsLink";
 
 export default function Stock() {
   const { roomId, instrumentId } = useParams<{ roomId: string; instrumentId: string }>();
@@ -49,7 +50,7 @@ export default function Stock() {
     <div className="wrap">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button className="back-btn" onClick={() => navigate(`/rooms/${roomId}`)}>{t("common.backToRoom")}</button>
-        <LangSwitch />
+        <div className="page-tools"><DocsLink /><LangSwitch /></div>
       </div>
       <div className="stock-grid">
         <div>

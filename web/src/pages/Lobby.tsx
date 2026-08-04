@@ -5,6 +5,7 @@ import { LangSwitch, TFunc, pickL, useT } from "../i18n";
 import { usePoll } from "../usePoll";
 import { useToast } from "../Toast";
 import { useUser } from "../App";
+import DocsLink from "../components/DocsLink";
 
 function durationOptions(days: number, t: TFunc): [string, number][] {
   const opts: [string, number][] = [1, 2, 4].map(weeks => {
@@ -78,6 +79,7 @@ export default function Lobby() {
       <div className="topbar" style={{ margin: "-22px -20px 22px" }}>
         <div className="brand"><em>●</em> Stocker</div>
         <div className="spacer" />
+        <DocsLink />
         <LangSwitch />
         <div className="avatar">{user.username.slice(0, 2)}</div>
       </div>

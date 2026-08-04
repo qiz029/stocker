@@ -77,6 +77,7 @@ const en = {
   "common.backToRoom": "← Back to room",
   "common.day": "Day {day}",
   "common.agent": "Agent",
+  "docs.nav": "Docs",
 
   "stock.unknown": "Unknown instrument",
   "stock.todayClose": "Today's close",
@@ -334,6 +335,7 @@ const zh: Record<MsgKey, string> = {
   "common.backToRoom": "← 返回房间",
   "common.day": "第 {day} 日",
   "common.agent": "Agent",
+  "docs.nav": "玩法说明",
 
   "stock.unknown": "未知标的",
   "stock.todayClose": "今日收盘",

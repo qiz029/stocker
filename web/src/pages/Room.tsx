@@ -11,6 +11,7 @@ import InstrumentRow from "../components/InstrumentRow";
 import LoanPanel from "../components/LoanPanel";
 import OptionPositions from "../components/OptionPositions";
 import RightRail from "../components/RightRail";
+import DocsLink from "../components/DocsLink";
 
 const mmss = (s: number) =>
   `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
@@ -83,6 +84,7 @@ export default function Room() {
           <button className="invite" onClick={() => navigate(`/rooms/${roomId}/reveal`)}>{t("room.reveal")}</button>
         )}
         <button className="invite" onClick={copyInvite}>{t("room.invite")}</button>
+        <DocsLink />
         <LangSwitch />
         <div className="avatar">{user.username.slice(0, 2)}</div>
       </div>

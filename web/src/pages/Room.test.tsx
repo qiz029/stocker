@@ -64,6 +64,7 @@ describe("Room page", () => {
     expect(screen.getAllByText("+10.00%").length).toBeGreaterThan(0);
     // day counter is split across nodes; assert the pill's combined text
     expect(document.querySelector(".day-pill")?.textContent).toContain("Day 2 / 300");
+    expect(screen.getByRole("link", { name: "Docs" })).toHaveAttribute("href", "/docs");
 
     // held-position P&L line: avg cost + unrealized amount and %
     expect(screen.getByText("Avg $100.00 · P&L +$4,000.00 (+10.00%)")).toBeInTheDocument();
