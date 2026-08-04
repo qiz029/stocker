@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { UserProviderForTest } from "./testutil";
 import RightRail from "./RightRail";
 import type { RoomState } from "../api";
+import { saveDebunkVerdict } from "../debunkVerdicts";
 
 const state: RoomState = {
   room: { id: 1, invite_code: "A", scenario_id: "s", days: 300, status: "running",
@@ -197,6 +198,31 @@ describe("RightRail news enrichment", () => {
 });
 
 describe("RightRail player actions", () => {
+  it("reloads private verdicts when the room changes", async () => {
+    saveDebunkVerdict(1, "1", 1, "likely_false");
+    vi.spyOn(globalThis, "fetch").mockImplementation(async url => {
+      const u = String(url);
+      const body = u.includes("/news")
+        ? { items: [{ id: 1, day: 5, media_id: "wire", headline: "S1重组", body: "正文。" }] }
+        : { items: [] };
+      return new Response(JSON.stringify(body), { status: 200 });
+    });
+    const view = render(
+      <UserProviderForTest username="me">
+        <RightRail roomId="1" state={state} aliasOf={() => "Ridgeline Networks"} />
+      </UserProviderForTest>,
+    );
+    expect(await screen.findByText(/Verdict: likely FALSE/)).toBeInTheDocument();
+
+    view.rerender(
+      <UserProviderForTest username="me">
+        <RightRail roomId="2" state={state} aliasOf={() => "Ridgeline Networks"} />
+      </UserProviderForTest>,
+    );
+    expect(await screen.findByRole("button", { name: "Investigate ($2,000.00)" })).toBeInTheDocument();
+    expect(screen.queryByText(/Verdict:/)).not.toBeInTheDocument();
+  });
+
   it("investigates a news item and shows the verdict only to the actor", async () => {
     const posted: { url: string; body: unknown }[] = [];
     vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {

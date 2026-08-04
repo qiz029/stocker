@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { ApiError, DebunkVerdict, EventItem, ForumItem, MediaAccuracy, NewsItem, NewsResponse, RoomState, api, fetchForum, fetchNews, postDebunk } from "../api";
 import { fmtCents, fmtPct, prettifyHeadline } from "../format";
@@ -68,6 +68,9 @@ export default function RightRail({ roomId, state, aliasOf }: Props) {
   const [verdicts, setVerdicts] = useState<Record<number, DebunkVerdict>>(
     () => loadDebunkVerdicts(user.id, roomId),
   );
+  useEffect(() => {
+    setVerdicts(loadDebunkVerdicts(user.id, roomId));
+  }, [roomId, user.id]);
   const { items: newsItems, extra: newsExtra } = useIncrementalFeed<NewsItem, NewsResponse>(
     after => fetchNews(roomId, after), 30_000, roomId);
   const { items: eventsItems } = useIncrementalFeed<EventItem, { items: EventItem[] }>(
