@@ -52,7 +52,7 @@ export default function Reveal() {
         {data.leaderboard.map((row, i) => (
           <div key={row.username} className="lb-row">
             <span className="rank num">{i === 0 ? "🏆" : i + 1}</span>
-            <span className="who">{pickL(lang, row.username, row.username_en)}
+            <span className="who"><span className="lb-name">{pickL(lang, row.username, row.username_en)}</span>
               {row.is_agent && <small className="agent-badge">{t("common.agent")}</small>}
               {row.late_join && <small>{t("reveal.lateJoin")}</small>}
             </span>

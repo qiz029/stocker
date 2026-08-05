@@ -139,7 +139,7 @@ export default function RightRail({ roomId, state, aliasOf, readOnly = false }: 
             className={`lb-row ${row.username === user.username ? "me" : ""} ${row.bankrupt ? "bankrupt" : ""}`}>
             <span className="rank num">{i + 1}</span>
             {!row.is_agent && <span className="lb-player-avatar">{avatarGlyph(row.avatar_id, row.username)}</span>}
-            <span className="who">{pickL(lang, row.username, row.username_en)}
+            <span className="who"><span className="lb-name">{pickL(lang, row.username, row.username_en)}</span>
               {row.is_agent && <small className="agent-badge">{t("common.agent")}</small>}
               {row.late_join && <small>{t("reveal.lateJoin")}</small>}
               {row.bankrupt && <small className="lb-badge">{t("rail.bankrupt")}</small>}

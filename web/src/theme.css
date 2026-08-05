@@ -334,7 +334,8 @@ canvas.chart { width: 100%; height: auto; display: block; touch-action: none; }
 }
 .lb-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; }
 .lb-row .rank { width: 18px; color: var(--ink3); font-size: 0.8rem; }
-.lb-row .who { flex: 1; font-size: 0.9rem; font-weight: 550; }
+.lb-row .who { flex: 1; min-width: 0; display: flex; align-items: baseline; font-size: 0.9rem; font-weight: 550; }
+.lb-name { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .lb-row .who small:not(.agent-badge) { color: var(--ink3); font-weight: 400; margin-left: 6px; }
 .lb-row .val { text-align: right; font-size: 0.86rem; font-weight: 600; }
 .lb-row .ret { display: block; font-size: 0.74rem; font-weight: 500; }
@@ -353,7 +354,7 @@ canvas.chart { width: 100%; height: auto; display: block; touch-action: none; }
   letter-spacing: .04em;
   text-transform: uppercase;
 }
-.agent-action { border-left: 3px solid #8b72e8; }
+.agent-action { border-left: 3px solid #8b72e8; padding-left: 10px; margin-left: -10px; }
 .lb-badge {
   color: var(--ink2); background: var(--card-2);
   border-radius: 6px; padding: 1px 7px; font-size: 0.7rem;
