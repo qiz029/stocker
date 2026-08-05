@@ -304,28 +304,22 @@ func TestCreateRoomAppliesCopyFiller(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The fill runs asynchronously after CreateRoom returns — poll for it.
+	// The fill is synchronous: generated copy is already persisted when
+	// CreateRoom returns.
 	var headline, body, headlineEn, bodyEn string
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		if err := pool.QueryRow(ctx, `
-			SELECT headline, body, headline_en, body_en FROM room_news WHERE room_id = $1 ORDER BY id LIMIT 1`,
-			room.ID).Scan(&headline, &body, &headlineEn, &bodyEn); err != nil {
-			t.Fatal(err)
-		}
-		if body != "" || time.Now().After(deadline) {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
+	if err := pool.QueryRow(ctx, `
+		SELECT headline, body, headline_en, body_en FROM room_news WHERE room_id = $1 ORDER BY id LIMIT 1`,
+		room.ID).Scan(&headline, &body, &headlineEn, &bodyEn); err != nil {
+		t.Fatal(err)
 	}
 	if filler.calls != 1 {
 		t.Fatalf("filler calls: %d", filler.calls)
 	}
 	if headline != "AI标题" || body != "AI正文。" {
-		t.Fatalf("async copy not persisted: %q %q", headline, body)
+		t.Fatalf("copy not persisted: %q %q", headline, body)
 	}
 	if headlineEn != "AI headline" || bodyEn != "AI body." {
-		t.Fatalf("async en copy not persisted: %q %q", headlineEn, bodyEn)
+		t.Fatalf("en copy not persisted: %q %q", headlineEn, bodyEn)
 	}
 	// Clusters persisted (synthetic worlds form clusters — engine Task 2).
 	var clustered int
@@ -361,9 +355,12 @@ func TestCreateRoomNilFillerKeepsTemplates(t *testing.T) {
 
 type deadlineProbeFiller struct{ remaining time.Duration }
 
-func (f *deadlineProbeFiller) FillCopy(ctx context.Context, _ *scenario.Scenario, _ []engine.NewsEvent) {
+func (f *deadlineProbeFiller) FillCopy(ctx context.Context, _ *scenario.Scenario, evs []engine.NewsEvent) {
 	if dl, ok := ctx.Deadline(); ok {
 		f.remaining = time.Until(dl)
+	}
+	for i := range evs {
+		evs[i].Body = "AI正文。" // fill so the copy gate passes
 	}
 }
 
@@ -381,16 +378,12 @@ func TestCopyFillBudgetIsConfigurable(t *testing.T) {
 	if _, err := CreateRoom(ctx, pool, sc, host.ID, 3600, probe); err != nil {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(10 * time.Second)
-	for probe.remaining == 0 && time.Now().Before(deadline) {
-		time.Sleep(50 * time.Millisecond)
-	}
 	if probe.remaining <= 0 || probe.remaining > 7*time.Second {
 		t.Fatalf("filler ctx deadline %v not within configured 7s budget", probe.remaining)
 	}
 }
 
-// enOnlyFiller produces only English copy: the row must still be upgraded
+// enOnlyFiller produces only English copy: the row must still be persisted
 // (the LLM can succeed in one language and fail the other).
 type enOnlyFiller struct{}
 
@@ -400,7 +393,7 @@ func (enOnlyFiller) FillCopy(_ context.Context, _ *scenario.Scenario, evs []engi
 	}
 }
 
-func TestFillNewsCopyEnOnlyStillUpgrades(t *testing.T) {
+func TestCreateRoomEnOnlyCopyStillPersists(t *testing.T) {
 	pool := TestDB(t, "store")
 	ctx := context.Background()
 	host := mkUser(t, pool, "host")
@@ -411,19 +404,54 @@ func TestFillNewsCopyEnOnlyStillUpgrades(t *testing.T) {
 		t.Fatal(err)
 	}
 	var body, bodyEn string
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		if err := pool.QueryRow(ctx, `
-			SELECT body, body_en FROM room_news WHERE room_id = $1 ORDER BY id LIMIT 1`,
-			room.ID).Scan(&body, &bodyEn); err != nil {
-			t.Fatal(err)
-		}
-		if bodyEn == "EN-only body." || time.Now().After(deadline) {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
+	if err := pool.QueryRow(ctx, `
+		SELECT body, body_en FROM room_news WHERE room_id = $1 ORDER BY id LIMIT 1`,
+		room.ID).Scan(&body, &bodyEn); err != nil {
+		t.Fatal(err)
 	}
 	if body != "" || bodyEn != "EN-only body." {
 		t.Fatalf("en-only fill: body=%q body_en=%q, want zh template kept and en persisted", body, bodyEn)
+	}
+}
+
+// noopFiller and halfFiller simulate broad fill failure (throttled or
+// failing provider): room creation must abort with ErrCopyFill and persist
+// nothing, instead of dealing players a room of bare template headlines.
+type noopFiller struct{}
+
+func (noopFiller) FillCopy(_ context.Context, _ *scenario.Scenario, _ []engine.NewsEvent) {}
+
+type halfFiller struct{}
+
+func (halfFiller) FillCopy(_ context.Context, _ *scenario.Scenario, evs []engine.NewsEvent) {
+	for i := 0; i < len(evs)/2; i++ {
+		evs[i].Body = "AI正文。"
+	}
+}
+
+func TestCreateRoomCopyFillGateAborts(t *testing.T) {
+	for name, filler := range map[string]NewsCopyFiller{"noop": noopFiller{}, "half": halfFiller{}} {
+		t.Run(name, func(t *testing.T) {
+			pool := TestDB(t, "store")
+			ctx := context.Background()
+			host := mkUser(t, pool, "host")
+			sc := mkScenario(t, pool)
+
+			var roomsBefore int
+			if err := pool.QueryRow(ctx, `SELECT count(*) FROM rooms`).Scan(&roomsBefore); err != nil {
+				t.Fatal(err)
+			}
+			_, err := CreateRoom(ctx, pool, sc, host.ID, 3600, filler)
+			if !errors.Is(err, ErrCopyFill) {
+				t.Fatalf("CreateRoom err = %v, want ErrCopyFill", err)
+			}
+			var roomsAfter int
+			if err := pool.QueryRow(ctx, `SELECT count(*) FROM rooms`).Scan(&roomsAfter); err != nil {
+				t.Fatal(err)
+			}
+			if roomsAfter != roomsBefore {
+				t.Fatalf("aborted creation persisted a room: before=%d after=%d", roomsBefore, roomsAfter)
+			}
+		})
 	}
 }

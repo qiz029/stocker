@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/toddzheng/stocker/server/internal/engine"
 	"github.com/toddzheng/stocker/server/internal/scenario"
@@ -72,11 +71,16 @@ func TestCreateRoomPersistsForumPosts(t *testing.T) {
 	}
 }
 
-// forumEnOnlyFiller changes only the English bodies: the rows must still
-// be upgraded (the LLM can succeed in one language and fail the other).
+// forumEnOnlyFiller changes only the English forum bodies: the rows must
+// still be persisted (the LLM can succeed in one language and fail the
+// other). Its news fill is a pass-through body so the copy gate passes.
 type forumEnOnlyFiller struct{}
 
-func (forumEnOnlyFiller) FillCopy(_ context.Context, _ *scenario.Scenario, _ []engine.NewsEvent) {}
+func (forumEnOnlyFiller) FillCopy(_ context.Context, _ *scenario.Scenario, evs []engine.NewsEvent) {
+	for i := range evs {
+		evs[i].Body = "AI正文。"
+	}
+}
 
 func (forumEnOnlyFiller) FillForumCopy(_ context.Context, _ *scenario.Scenario, posts []engine.ForumPost) {
 	for i := range posts {
@@ -84,7 +88,7 @@ func (forumEnOnlyFiller) FillForumCopy(_ context.Context, _ *scenario.Scenario, 
 	}
 }
 
-func TestFillForumCopyEnOnlyStillUpgrades(t *testing.T) {
+func TestCreateRoomEnOnlyForumCopyStillPersists(t *testing.T) {
 	pool := TestDB(t, "store")
 	ctx := context.Background()
 	host := mkUser(t, pool, "host")
@@ -94,20 +98,13 @@ func TestFillForumCopyEnOnlyStillUpgrades(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The fill runs asynchronously after CreateRoom returns — poll for it.
-	// (Template en copy may already be present, so wait for OUR value.)
+	// The fill is synchronous: polished copy is already persisted when
+	// CreateRoom returns.
 	var body, bodyEn string
-	deadline := time.Now().Add(10 * time.Second)
-	for {
-		if err := pool.QueryRow(ctx, `
-			SELECT body, body_en FROM room_forum_posts WHERE room_id = $1 ORDER BY id LIMIT 1`,
-			room.ID).Scan(&body, &bodyEn); err != nil {
-			t.Fatal(err)
-		}
-		if bodyEn == "EN-only polish." || time.Now().After(deadline) {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
+	if err := pool.QueryRow(ctx, `
+		SELECT body, body_en FROM room_forum_posts WHERE room_id = $1 ORDER BY id LIMIT 1`,
+		room.ID).Scan(&body, &bodyEn); err != nil {
+		t.Fatal(err)
 	}
 	if body == "" || bodyEn != "EN-only polish." {
 		t.Fatalf("en-only forum fill: body=%q body_en=%q, want zh template kept and en persisted", body, bodyEn)

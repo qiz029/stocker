@@ -25,11 +25,19 @@ const (
 )
 
 // CopyFillBudget bounds how long room creation waits for the news copy
-// filler. Providers with tight per-key concurrency limits (observed:
-// DeepSeek queues past ~5 in-flight requests) may need several minutes to
-// fill a 1500+-item world; unfilled items keep template copy either way.
+// filler. The fill is synchronous and gated (see CopyFillMinRatio): the
+// room is only persisted once its news copy is ready, so providers with
+// tight per-key concurrency limits (observed: DeepSeek queues past ~5
+// in-flight requests) get generous time to fill a 1500+-item world.
 // cmd/server overrides this from LLM_ROOM_BUDGET_SECS.
-var CopyFillBudget = 120 * time.Second
+var CopyFillBudget = 600 * time.Second
+
+// CopyFillMinRatio is the minimum share of news items that must carry
+// generated copy (either language) for room creation to proceed. A small
+// fraction of items legitimately stay on template copy (per-item
+// validation rejects), so the gate trips only on broad fill failure —
+// e.g. a throttled or failing provider.
+const CopyFillMinRatio = 0.9
 
 // NewsCopyFiller rewrites news headlines/bodies before a room's world is
 // persisted (the LLM generator in internal/llm; nil keeps template copy).
@@ -159,6 +167,29 @@ func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, ho
 		return nil, err
 	}
 
+	if filler != nil {
+		// Copy fill runs synchronously before anything is persisted: the
+		// room only goes live once its news copy is ready. A fill that
+		// lands below CopyFillMinRatio aborts creation (nothing is
+		// inserted) so the host can retry instead of playing a room of
+		// bare template headlines.
+		fctx, cancel := context.WithTimeout(ctx, CopyFillBudget)
+		filler.FillCopy(fctx, sc, world.News)
+		if ff, ok := filler.(ForumCopyFiller); ok {
+			ff.FillForumCopy(fctx, sc, world.Forum)
+		}
+		cancel()
+		filled := 0
+		for i := range world.News {
+			if world.News[i].Body != "" || world.News[i].BodyEn != "" {
+				filled++
+			}
+		}
+		if float64(filled) < CopyFillMinRatio*float64(len(world.News)) {
+			return nil, fmt.Errorf("%w (%d/%d items filled)", ErrCopyFill, filled, len(world.News))
+		}
+	}
+
 	var room *Room
 	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
 		r, err := scanRoom(tx.QueryRow(ctx, `
@@ -224,135 +255,7 @@ func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, ho
 	if err != nil {
 		return nil, err
 	}
-	if filler != nil {
-		news := world.News
-		forum := world.Forum
-		roomID := room.ID
-		// Copy generation runs after the response returns: providers with
-		// throttled keys can take minutes for 1500+ items, and news is
-		// disclosed day-by-day anyway — bodies upgrade in place long
-		// before players reach them. Template copy remains until then.
-		go func() {
-			fctx, cancel := context.WithTimeout(context.Background(), CopyFillBudget)
-			defer cancel()
-			if err := FillNewsCopy(fctx, db, roomID, sc, filler, news); err != nil {
-				log.Printf("room %d: async news copy fill failed (template copy stays): %v", roomID, err)
-			}
-			if ff, ok := filler.(ForumCopyFiller); ok {
-				if err := FillForumCopy(fctx, db, roomID, sc, ff, forum); err != nil {
-					log.Printf("room %d: async forum copy fill failed (template copy stays): %v", roomID, err)
-				}
-			}
-		}()
-	}
 	return room, nil
-}
-
-// FillNewsCopy runs the copy filler over a room's news and writes the
-// generated headlines/bodies back onto the already-inserted room_news
-// rows. Row order matches the news slice: CopyFrom preserved insertion
-// order and identity ids are monotonic.
-func FillNewsCopy(ctx context.Context, db *pgxpool.Pool, roomID int64, sc *scenario.Scenario, filler NewsCopyFiller, news []engine.NewsEvent) error {
-	filler.FillCopy(ctx, sc, news)
-	rows, err := db.Query(ctx, `SELECT id FROM room_news WHERE room_id = $1 ORDER BY id`, roomID)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	var ids []int64
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return err
-		}
-		ids = append(ids, id)
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	if len(ids) != len(news) {
-		return fmt.Errorf("room %d: %d news rows vs %d events", roomID, len(ids), len(news))
-	}
-	batch := &pgx.Batch{}
-	queued := 0
-	for i := range news {
-		if news[i].Body == "" && news[i].BodyEn == "" {
-			continue // template kept — nothing to upgrade (the LLM may
-			// have produced only one language, so check both)
-		}
-		batch.Queue(`UPDATE room_news SET headline = $1, body = $2, headline_en = $3, body_en = $4 WHERE id = $5`,
-			news[i].Headline, news[i].Body, news[i].HeadlineEn, news[i].BodyEn, ids[i])
-		queued++
-	}
-	if queued == 0 {
-		return nil
-	}
-	br := db.SendBatch(ctx, batch)
-	defer br.Close()
-	for i := 0; i < queued; i++ {
-		if _, err := br.Exec(); err != nil {
-			return err
-		}
-	}
-	log.Printf("room %d: news copy upgraded on %d/%d items", roomID, queued, len(news))
-	return nil
-}
-
-// FillForumCopy runs the forum copy filler over a room's Agent-persona posts and
-// writes the polished bodies back onto the already-inserted
-// room_forum_posts rows. Row order matches the posts slice, same as
-// FillNewsCopy: CopyFrom preserved insertion order and identity ids are
-// monotonic. Only bodies the filler actually changed are updated.
-func FillForumCopy(ctx context.Context, db *pgxpool.Pool, roomID int64, sc *scenario.Scenario, filler ForumCopyFiller, posts []engine.ForumPost) error {
-	orig := make([][2]string, len(posts)) // {Body, BodyEn} before the fill
-	for i := range posts {
-		orig[i] = [2]string{posts[i].Body, posts[i].BodyEn}
-	}
-	filler.FillForumCopy(ctx, sc, posts)
-	rows, err := db.Query(ctx, `SELECT id FROM room_forum_posts WHERE room_id = $1 ORDER BY id`, roomID)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	var ids []int64
-	for rows.Next() {
-		var id int64
-		if err := rows.Scan(&id); err != nil {
-			return err
-		}
-		ids = append(ids, id)
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	if len(ids) != len(posts) {
-		return fmt.Errorf("room %d: %d forum rows vs %d posts", roomID, len(ids), len(posts))
-	}
-	batch := &pgx.Batch{}
-	queued := 0
-	for i := range posts {
-		bothEmpty := posts[i].Body == "" && posts[i].BodyEn == ""
-		unchanged := posts[i].Body == orig[i][0] && posts[i].BodyEn == orig[i][1]
-		if bothEmpty || unchanged {
-			continue // template kept — nothing to upgrade (the LLM may
-			// have changed only one language, so check both)
-		}
-		batch.Queue(`UPDATE room_forum_posts SET body = $1, body_en = $2 WHERE id = $3`,
-			posts[i].Body, posts[i].BodyEn, ids[i])
-		queued++
-	}
-	if queued == 0 {
-		return nil
-	}
-	br := db.SendBatch(ctx, batch)
-	defer br.Close()
-	for i := 0; i < queued; i++ {
-		if _, err := br.Exec(); err != nil {
-			return err
-		}
-	}
-	log.Printf("room %d: forum copy upgraded on %d/%d posts", roomID, queued, len(posts))
-	return nil
 }
 
 func GetRoom(ctx context.Context, q Querier, id int64) (*Room, error) {
