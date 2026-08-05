@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/toddzheng/stocker/server/internal/store"
 )
@@ -29,6 +30,13 @@ func (s *Server) handlePostChat(w http.ResponseWriter, r *http.Request) {
 		s.storeErr(w, err)
 		return
 	}
+	// Push the new message to the other members; best-effort.
+	snippet := []rune(strings.TrimSpace(req.Text))
+	if len(snippet) > 50 {
+		snippet = snippet[:50]
+	}
+	body := userFrom(r).Username + ": " + string(snippet)
+	go s.notifyRoomMembers(room.ID, userFrom(r).ID, "Stocker", body)
 	writeJSON(w, http.StatusOK, map[string]any{"id": id})
 }
 

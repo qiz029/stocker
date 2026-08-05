@@ -8,6 +8,8 @@ Agent competitors per room.
 
 - `server/` — Go backend: deterministic world engine + Postgres + REST API
 - `web/` — React SPA (Vite + TS), Robinhood-style watch screen
+- `app/` — iOS app (Expo + expo-router), shares `core/` via Metro alias
+- `core/` — shared pure-TS logic: API client, formatting, i18n, sim clock
 - `docs/superpowers/` — design spec and implementation plans
 
 ## Quick start
