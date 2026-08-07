@@ -1,5 +1,5 @@
-// Package llm batch-generates bilingual (Chinese + English) news copy at
-// room creation through any OpenAI-compatible chat-completions endpoint
+// Package llm batch-generates bilingual (Chinese + English) news copy in
+// rolling background jobs through any OpenAI-compatible chat-completions endpoint
 // (DeepSeek, OpenAI, local proxies). It is the game's only external
 // dependency; every failure mode degrades to the engine's template copy,
 // never to a failed room.
@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/toddzheng/stocker/server/internal/engine"
 	"github.com/toddzheng/stocker/server/internal/scenario"
@@ -173,13 +174,17 @@ type promptItem struct {
 	Tilt    []promptTilt `json:"报道倾向,omitempty"`
 	// Note carries the recap item's template facts (alias/sector names
 	// only, no numbers) so the model expands rather than invents them.
-	Note string `json:"要点,omitempty"`
+	Note   string `json:"要点,omitempty"`
+	NoteEn string `json:"english_facts,omitempty"`
 }
 
 type promptTilt struct {
-	Subject   string `json:"对象"`
-	Direction string `json:"方向"`
-	Strength  string `json:"强度"`
+	Subject     string `json:"对象"`
+	SubjectEn   string `json:"english_subject"`
+	Direction   string `json:"方向"`
+	DirectionEn string `json:"english_direction"`
+	Strength    string `json:"强度"`
+	StrengthEn  string `json:"english_strength"`
 }
 
 type copyOut struct {
@@ -195,11 +200,17 @@ type copyOut struct {
 func (g *Generator) FillCopy(ctx context.Context, sc *scenario.Scenario, evs []engine.NewsEvent) {
 	sysPrompt := systemPromptFor(sc)
 	displayName := map[string]string{}
+	displayNameEn := map[string]string{}
 	for _, f := range sc.Factors {
 		displayName[f.ID] = f.Name
+		displayNameEn[f.ID] = f.Name
+		if f.NameEn != "" {
+			displayNameEn[f.ID] = f.NameEn
+		}
 	}
 	for _, inst := range sc.Instruments {
 		displayName["IDIO:"+inst.ID] = inst.Alias
+		displayNameEn["IDIO:"+inst.ID] = inst.Alias
 	}
 	dayDir := dayDirections(sc)
 
@@ -261,7 +272,7 @@ func (g *Generator) FillCopy(ctx context.Context, sc *scenario.Scenario, evs []e
 		sem <- struct{}{}
 		go func(ch []int) {
 			defer func() { <-sem }()
-			done <- g.fillChunk(ctx, sysPrompt, displayName, evs, ch, dayDir)
+			done <- g.fillChunk(ctx, sysPrompt, displayName, displayNameEn, evs, ch, dayDir)
 		}(ch)
 	}
 	for range chunks {
@@ -312,7 +323,7 @@ func dayDirections(sc *scenario.Scenario) []string {
 // validated and written back independently, so an entry counts when either
 // language lands and the other may stay empty for the engine's template
 // fallback.
-func (g *Generator) fillChunk(ctx context.Context, sysPrompt string, displayName map[string]string, evs []engine.NewsEvent, idxs []int, dayDir []string) int {
+func (g *Generator) fillChunk(ctx context.Context, sysPrompt string, displayName, displayNameEn map[string]string, evs []engine.NewsEvent, idxs []int, dayDir []string) int {
 	items := make([]promptItem, 0, len(idxs))
 	for _, i := range idxs {
 		ev := &evs[i]
@@ -326,6 +337,7 @@ func (g *Generator) fillChunk(ctx context.Context, sysPrompt string, displayName
 				it.Persona = "市场复盘专栏：客观克制的收盘综述，只陈述公开行情"
 				it.Kind = "每日复盘：依据要点扩写客观的市场回顾，不添加观点与预测"
 				it.Note = ev.Headline
+				it.NoteEn = ev.HeadlineEn
 			} else {
 				it.Kind = "行情解读：当日市场出现剧烈波动，为其撰写现场报道"
 				if ev.Day > 0 && ev.Day < len(dayDir) && dayDir[ev.Day] != "" {
@@ -341,24 +353,41 @@ func (g *Generator) fillChunk(ctx context.Context, sysPrompt string, displayName
 				if v > 0 {
 					dir = "利好"
 				}
-				strength := "弱"
+				strength, strengthEn := "弱", "weak"
 				if math.Abs(v) >= 0.025 {
-					strength = "强"
+					strength, strengthEn = "强", "strong"
 				} else if math.Abs(v) >= 0.01 {
-					strength = "中"
+					strength, strengthEn = "中", "medium"
 				}
 				name := displayName[f]
 				if name == "" {
 					name = f
 				}
-				it.Tilt = append(it.Tilt, promptTilt{Subject: name, Direction: dir, Strength: strength})
+				nameEn := displayNameEn[f]
+				if nameEn == "" {
+					nameEn = name
+				}
+				dirEn := "bearish"
+				if v > 0 {
+					dirEn = "bullish"
+				}
+				it.Tilt = append(it.Tilt, promptTilt{Subject: name, SubjectEn: nameEn,
+					Direction: dir, DirectionEn: dirEn, Strength: strength, StrengthEn: strengthEn})
 			}
 			if ev.ClusterID != 0 {
-				switch {
-				case ev.TrueShock != nil:
+				switch ev.CopyRole {
+				case "report":
 					it.Role = fmt.Sprintf("事件组%d：主事件", ev.ClusterID)
+				case "rumor":
+					it.Role = fmt.Sprintf("事件组%d：传闻", ev.ClusterID)
+				case "followup":
+					it.Role = fmt.Sprintf("事件组%d：追踪", ev.ClusterID)
 				default:
-					it.Role = fmt.Sprintf("事件组%d：传闻或追踪（按前后关系判断）", ev.ClusterID)
+					if ev.TrueShock != nil {
+						it.Role = fmt.Sprintf("事件组%d：主事件", ev.ClusterID)
+					} else {
+						it.Role = fmt.Sprintf("事件组%d：传闻或追踪", ev.ClusterID)
+					}
 				}
 			}
 		}
@@ -395,7 +424,7 @@ func (g *Generator) fillChunk(ctx context.Context, sysPrompt string, displayName
 		}
 		he := strings.TrimSpace(o.HeadlineEn)
 		be := strings.TrimSpace(o.BodyEn)
-		if he != "" && be != "" && len([]rune(he)) <= 120 && len([]rune(be)) <= 600 {
+		if he != "" && be != "" && !containsHan(he) && !containsHan(be) && len([]rune(he)) <= 120 && len([]rune(be)) <= 600 {
 			evs[o.Idx].HeadlineEn = he
 			evs[o.Idx].BodyEn = be
 			touched = true
@@ -405,6 +434,10 @@ func (g *Generator) fillChunk(ctx context.Context, sysPrompt string, displayName
 		}
 	}
 	return n
+}
+
+func containsHan(s string) bool {
+	return strings.IndexFunc(s, func(r rune) bool { return unicode.Is(unicode.Han, r) }) >= 0
 }
 
 // forumSystemPromptTmpl's %s is the scenario era hint, same convention as
@@ -426,8 +459,10 @@ const forumSystemPromptTmpl = `你是一款股票模拟游戏的股民论坛写�
 type forumPromptItem struct {
 	Idx     int    `json:"idx"`
 	NPC     string `json:"昵称"`
+	NPCEn   string `json:"english_handle"`
 	Persona string `json:"人设"`
 	Draft   string `json:"草稿"`
+	DraftEn string `json:"english_draft"`
 }
 
 type forumCopyOut struct {
@@ -473,7 +508,8 @@ func (g *Generator) fillForumChunk(ctx context.Context, sysPrompt string, posts 
 	items := make([]forumPromptItem, 0, hi-lo)
 	for i := lo; i < hi; i++ {
 		items = append(items, forumPromptItem{
-			Idx: i, NPC: posts[i].NPCName, Persona: posts[i].Persona, Draft: posts[i].Body,
+			Idx: i, NPC: posts[i].NPCName, NPCEn: posts[i].NPCNameEn,
+			Persona: posts[i].Persona, Draft: posts[i].Body, DraftEn: posts[i].BodyEn,
 		})
 	}
 	userJSON, err := json.Marshal(items)
@@ -500,7 +536,7 @@ func (g *Generator) fillForumChunk(ctx context.Context, sysPrompt string, posts 
 			touched = true
 		}
 		be := strings.TrimSpace(o.BodyEn)
-		if be != "" && len([]rune(be)) <= 300 {
+		if be != "" && !containsHan(be) && len([]rune(be)) <= 300 {
 			posts[o.Idx].BodyEn = be
 			touched = true
 		}

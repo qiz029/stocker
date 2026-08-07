@@ -57,8 +57,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   // src/notifications.ts.
   const userID = user?.id;
   useEffect(() => {
-    if (userID !== undefined) void registerPushToken();
-  }, [userID]);
+    if (userID !== undefined) void registerPushToken(lang);
+  }, [userID, lang]);
 
   const logout = useCallback(async () => {
     await unregisterPushToken();

@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
-import { I18nProvider, LangSwitch, mediaName, pickL, tFor, useT } from "./i18n";
+import { dicts, I18nProvider, LangSwitch, mediaName, pickL, tFor, useT } from "./i18n";
 
 function Probe() {
   const { t } = useT();
@@ -41,11 +41,18 @@ describe("i18n", () => {
     expect(mediaName("unknown-outlet", tFor("en"))).toBe("unknown-outlet");
   });
 
-  it("pickL selects the English variant in en mode and falls back to zh", () => {
+  it("pickL selects English without leaking untranslated Chinese", () => {
     expect(pickL("en", "中文", "English")).toBe("English");
-    expect(pickL("en", "中文", "")).toBe("中文");
-    expect(pickL("en", "中文", null)).toBe("中文");
-    expect(pickL("en", "中文", undefined)).toBe("中文");
+    expect(pickL("en", "中文", "English 中文")).toBe("");
+    expect(pickL("en", "中文", "")).toBe("");
+    expect(pickL("en", "中文", null)).toBe("");
+    expect(pickL("en", "中文", undefined)).toBe("");
+    expect(pickL("en", "Northgate Systems", "")).toBe("Northgate Systems");
     expect(pickL("zh", "中文", "English")).toBe("中文");
+  });
+
+  it("keeps every built-in English UI message free of Han text", () => {
+    const han = /\p{Script=Han}/u;
+    expect(Object.entries(dicts.en).filter(([, text]) => han.test(text))).toEqual([]);
   });
 });

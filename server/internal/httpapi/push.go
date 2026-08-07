@@ -53,7 +53,7 @@ func sendPush(ctx context.Context, msgs []pushMessage) {
 // notifyRoomMembers pushes to every human member of the room except
 // excludeUserID. Callers invoke it in a goroutine — it does its own
 // background DB read and never blocks the request.
-func (s *Server) notifyRoomMembers(roomID, excludeUserID int64, title, body string) {
+func (s *Server) notifyRoomMembers(roomID, excludeUserID int64, title, bodyEn, bodyZh string) {
 	tokens, err := store.PushTokensForRoom(context.Background(), s.DB, roomID, excludeUserID)
 	if err != nil {
 		log.Printf("push: tokens for room %d: %v", roomID, err)
@@ -61,7 +61,11 @@ func (s *Server) notifyRoomMembers(roomID, excludeUserID int64, title, body stri
 	}
 	msgs := make([]pushMessage, 0, len(tokens))
 	for _, tok := range tokens {
-		msgs = append(msgs, pushMessage{To: tok, Title: title, Body: body})
+		body := bodyEn
+		if tok.Lang == "zh" {
+			body = bodyZh
+		}
+		msgs = append(msgs, pushMessage{To: tok.Token, Title: title, Body: body})
 	}
 	sendPush(context.Background(), msgs)
 }
@@ -69,6 +73,7 @@ func (s *Server) notifyRoomMembers(roomID, excludeUserID int64, title, body stri
 func (s *Server) handleAddPushToken(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Token string `json:"token"`
+		Lang  string `json:"lang"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid JSON body")
@@ -79,7 +84,10 @@ func (s *Server) handleAddPushToken(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusBadRequest, "invalid push token")
 		return
 	}
-	if err := store.AddPushToken(r.Context(), s.DB, userFrom(r).ID, req.Token); err != nil {
+	if req.Lang != "zh" {
+		req.Lang = "en"
+	}
+	if err := store.AddPushToken(r.Context(), s.DB, userFrom(r).ID, req.Token, req.Lang); err != nil {
 		s.storeErr(w, err)
 		return
 	}

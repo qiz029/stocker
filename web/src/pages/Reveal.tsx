@@ -52,7 +52,7 @@ export default function Reveal() {
         {data.leaderboard.map((row, i) => (
           <div key={row.username} className="lb-row">
             <span className="rank num">{i === 0 ? "🏆" : i + 1}</span>
-            <span className="who"><span className="lb-name">{pickL(lang, row.username, row.username_en)}</span>
+            <span className="who"><span className="lb-name">{row.is_agent ? pickL(lang, row.username, row.username_en) : row.username}</span>
               {row.is_agent && <small className="agent-badge">{t("common.agent")}</small>}
               {row.late_join && <small>{t("reveal.lateJoin")}</small>}
             </span>
@@ -96,7 +96,7 @@ export default function Reveal() {
             {data.trades.map((tr, i) => (
               <tr key={i}>
                 <td className="num">{tr.day}</td>
-                <td>{pickL(lang, tr.username, tr.username_en)}{tr.is_agent && <small className="agent-badge">{t("common.agent")}</small>}</td>
+                <td>{tr.is_agent ? pickL(lang, tr.username, tr.username_en) : tr.username}{tr.is_agent && <small className="agent-badge">{t("common.agent")}</small>}</td>
                 <td className={`delta ${tr.side === "buy" ? "up" : "down"}`}>{tr.side === "buy" ? t("side.Buy") : t("side.Sell")}</td>
                 <td>{aliasOf(tr.instrument_id)}</td>
                 <td className="num">{fmt$(tr.price)}</td>

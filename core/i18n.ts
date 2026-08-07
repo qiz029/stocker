@@ -23,7 +23,7 @@ const en = {
   "lobby.join": "Join",
   "lobby.joinFailed": "Failed to join",
   "lobby.create": "Create",
-  "lobby.creating": "Generating parallel world…",
+  "lobby.creating": "Creating room…",
   "lobby.created": "Parallel world ready",
   "lobby.createFailed": "Failed to create",
   "lobby.newRoom": "＋ Create new room",
@@ -302,7 +302,7 @@ const zh: Record<MsgKey, string> = {
   "lobby.join": "加入",
   "lobby.joinFailed": "加入失败",
   "lobby.create": "创建",
-  "lobby.creating": "生成平行世界…",
+  "lobby.creating": "正在创建房间…",
   "lobby.created": "平行世界生成完毕",
   "lobby.createFailed": "创建失败",
   "lobby.newRoom": "＋ 创建新房间",
@@ -570,10 +570,16 @@ export function tFor(lang: Lang): TFunc {
   };
 }
 
-/** Pick the English variant of a server-provided string in en mode, falling
-    back to the Chinese original when the English field is missing/empty. */
+const hanText = /\p{Script=Han}/u;
+
+/** Pick a localized server-provided string without leaking Chinese copy into
+    the English UI. Language-neutral values (aliases, ids) remain valid as a
+    fallback; untranslated Chinese values become empty so the caller can show
+    its localized empty/loading state. */
 export function pickL(lang: Lang, zh: string, en?: string | null): string {
-  return lang === "en" && en ? en : zh;
+  if (lang === "zh") return zh;
+  if (en?.trim() && !hanText.test(en)) return en;
+  return hanText.test(zh) ? "" : zh;
 }
 
 /** Media outlet display name; unknown ids pass through unchanged. */

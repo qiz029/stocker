@@ -55,8 +55,11 @@ type NewsEvent struct {
 	ClusterID  int // 0 = standalone; shared by 传闻/主事件/追踪 triplets
 	// Recap marks the daily market-recap item (historical track, zero
 	// shock): the LLM copy pipeline gives it the objective market-wrap
-	// persona instead of the on-scene report persona. Not persisted.
+	// persona instead of the on-scene report persona.
 	Recap bool
+	// CopyRole is restored by the async copy worker for a day-sized prompt.
+	// It is not part of deterministic world state and is never serialized.
+	CopyRole string `json:"-"`
 }
 
 const (

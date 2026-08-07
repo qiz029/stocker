@@ -58,7 +58,7 @@ export default function RevealScreen() {
                   <Text style={styles.rank}>{i === 0 ? "🏆" : i + 1}</Text>
                   {!row.is_agent && <Avatar id={row.avatar_id} username={row.username} size={24} />}
                   <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <Text style={styles.lbName}>{pickL(lang, row.username, row.username_en)}</Text>
+                    <Text style={styles.lbName}>{row.is_agent ? pickL(lang, row.username, row.username_en) : row.username}</Text>
                     {row.is_agent && <Text style={styles.agentBadge}>{t("common.agent")}</Text>}
                     {row.late_join && <Text style={styles.meta}>{t("reveal.lateJoin")}</Text>}
                   </View>
@@ -107,7 +107,7 @@ export default function RevealScreen() {
                 <View key={i} style={styles.tableRow}>
                   <Text style={[styles.td, styles.num, { width: 30 }]}>{tr.day}</Text>
                   <Text style={[styles.td, { flex: 1.2 }]} numberOfLines={1}>
-                    {pickL(lang, tr.username, tr.username_en)}{tr.is_agent ? ` (${t("common.agent")})` : ""}
+                    {tr.is_agent ? pickL(lang, tr.username, tr.username_en) : tr.username}{tr.is_agent ? ` (${t("common.agent")})` : ""}
                   </Text>
                   <Text style={[styles.td, { width: 40 }, tr.side === "buy" ? styles.up : styles.down]}>
                     {tr.side === "buy" ? t("side.Buy") : t("side.Sell")}

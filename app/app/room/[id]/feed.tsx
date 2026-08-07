@@ -113,7 +113,7 @@ export default function FeedScreen() {
               <View style={styles.metaRow}>
                 {tone === "agent" && (
                   <>
-                    <Text style={styles.npc}>{pickL(lang, p.username ?? "?", p.username_en)}</Text>
+                    <Text style={styles.npc}>{p.is_agent ? pickL(lang, p.username ?? "?", p.username_en) : p.username ?? "?"}</Text>
                     {p.is_agent && <Text style={styles.agentBadge}>{t("common.agent")}</Text>}
                     <Text style={styles.meta}> · </Text>
                   </>

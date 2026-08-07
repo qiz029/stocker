@@ -11,7 +11,7 @@ func TestPushTokenEndpoints(t *testing.T) {
 	c := registerClient(t, s, "pusher")
 
 	c.mustJSON("POST", "/api/me/push-token",
-		map[string]any{"token": "ExponentPushToken[aaa]"}, http.StatusOK)
+		map[string]any{"token": "ExponentPushToken[aaa]", "lang": "zh"}, http.StatusOK)
 	// Idempotent re-register.
 	c.mustJSON("POST", "/api/me/push-token",
 		map[string]any{"token": "ExponentPushToken[aaa]"}, http.StatusOK)
@@ -24,6 +24,11 @@ func TestPushTokenEndpoints(t *testing.T) {
 	}
 	if n != 1 {
 		t.Fatalf("tokens = %d, want 1", n)
+	}
+	var lang string
+	if err := s.DB.QueryRow(context.Background(), `SELECT lang FROM push_tokens WHERE user_id =
+		(SELECT id FROM users WHERE username = 'pusher')`).Scan(&lang); err != nil || lang != "en" {
+		t.Fatalf("default/update lang = %q, err=%v", lang, err)
 	}
 
 	// Bad tokens rejected.

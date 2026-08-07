@@ -115,7 +115,8 @@ func TestFillCopyPartialBilingualDegradation(t *testing.T) {
 		fmt.Fprint(w, chatResponse(`[
 			{"idx":0,"headline":"中文标题","body":"中文正文"},
 			{"idx":1,"headline_en":"English headline","body_en":"English body"},
-			{"idx":2}
+			{"idx":2},
+			{"idx":3,"headline_en":"English 标题","body_en":"English body"}
 		]`))
 	}))
 	defer srv.Close()
@@ -124,6 +125,7 @@ func TestFillCopyPartialBilingualDegradation(t *testing.T) {
 		{Day: 1, Track: engine.TrackNoise, MediaID: "forum", Headline: "模板0"},
 		{Day: 1, Track: engine.TrackNoise, MediaID: "forum", Headline: "模板1"},
 		{Day: 1, Track: engine.TrackNoise, MediaID: "forum", Headline: "模板2"},
+		{Day: 1, Track: engine.TrackNoise, MediaID: "forum", Headline: "模板3", HeadlineEn: "Template 3"},
 	}
 	g.FillCopy(context.Background(), testScenario(), evs)
 
@@ -144,6 +146,10 @@ func TestFillCopyPartialBilingualDegradation(t *testing.T) {
 	// neither: template retained on both sides.
 	if evs[2].Headline != "模板2" || evs[2].HeadlineEn != "" || evs[2].BodyEn != "" {
 		t.Fatalf("item 2 must be fully untouched: %+v", evs[2])
+	}
+	// Mixed-language output is rejected instead of leaking Han text into en.
+	if evs[3].HeadlineEn != "Template 3" || evs[3].BodyEn != "" {
+		t.Fatalf("item 3 mixed English output must be rejected: %+v", evs[3])
 	}
 }
 
@@ -173,6 +179,10 @@ func TestFillCopyNeverLeaksNumbersOrTruth(t *testing.T) {
 	}
 	if !strings.Contains(req, "利空") {
 		t.Fatal("qualitative direction missing from prompt")
+	}
+	if !strings.Contains(req, "english_subject") || !strings.Contains(req, "the market") ||
+		!strings.Contains(req, "english_direction") || !strings.Contains(req, "bearish") {
+		t.Fatal("prompt missing English-safe subject/direction fields")
 	}
 }
 
@@ -416,7 +426,8 @@ func TestFillForumCopyPartialBilingualDegradation(t *testing.T) {
 		fmt.Fprint(w, chatResponse(`[
 			{"idx":0,"body":"中文回帖"},
 			{"idx":1,"body_en":"English reply"},
-			{"idx":2}
+			{"idx":2},
+			{"idx":3,"body_en":"English 回帖"}
 		]`))
 	}))
 	defer srv.Close()
@@ -425,6 +436,7 @@ func TestFillForumCopyPartialBilingualDegradation(t *testing.T) {
 		{Day: 1, NPCName: "n", Persona: "p", Body: "模板帖子0"},
 		{Day: 1, NPCName: "n", Persona: "p", Body: "模板帖子1"},
 		{Day: 1, NPCName: "n", Persona: "p", Body: "模板帖子2"},
+		{Day: 1, NPCName: "n", Persona: "p", Body: "模板帖子3", BodyEn: "Template reply 3"},
 	}
 	g.FillForumCopy(context.Background(), testScenario(), posts)
 
@@ -439,6 +451,9 @@ func TestFillForumCopyPartialBilingualDegradation(t *testing.T) {
 	// neither: template retained on both sides.
 	if posts[2].Body != "模板帖子2" || posts[2].BodyEn != "" {
 		t.Fatalf("post 2 must be fully untouched: %+v", posts[2])
+	}
+	if posts[3].BodyEn != "Template reply 3" {
+		t.Fatalf("post 3 mixed English output must be rejected: %+v", posts[3])
 	}
 }
 
@@ -468,7 +483,8 @@ func TestRecapPromptBranchIsObjectiveAndLeakFree(t *testing.T) {
 	g := New(Config{BaseURL: srv.URL, Model: "m", Concurrency: 1, Timeout: 5 * time.Second})
 	evs := []engine.NewsEvent{{
 		Day: 2, Track: engine.TrackHistorical, MediaID: "wire", Recap: true,
-		Headline: "昨日复盘：阿尔法领涨，贝塔垫底，明星板块最强",
+		Headline:   "昨日复盘：阿尔法领涨，贝塔垫底，明星板块最强",
+		HeadlineEn: "Daily recap: Alpha led, Beta lagged, Star Sector was strongest",
 	}}
 	g.FillCopy(context.Background(), testScenario(), evs)
 	req := captured.Load().(string)
@@ -477,6 +493,9 @@ func TestRecapPromptBranchIsObjectiveAndLeakFree(t *testing.T) {
 	}
 	if !strings.Contains(req, "阿尔法") || !strings.Contains(req, "明星板块") {
 		t.Fatal("recap prompt missing the template facts")
+	}
+	if !strings.Contains(req, "Daily recap: Alpha led") {
+		t.Fatal("recap prompt missing English facts")
 	}
 	for _, leak := range []string{"0.03", "TrueShock", "true_shock", "ReportShock", "report_shock"} {
 		if strings.Contains(req, leak) {

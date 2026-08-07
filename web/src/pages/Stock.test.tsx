@@ -8,7 +8,9 @@ const state = {
   room: { id: 1, invite_code: "A", scenario_id: "s", days: 300, status: "running",
     day_duration_secs: 60, started_at: "2026-07-26T12:00:00Z", current_day: 2, ended: false },
   instruments: [{ id: "S1", alias: "Ridgeline Networks", desc: "网络设备巨头",
-    profile: { business: "路由器业务", bull: "卖铲人逻辑", bear: "客户都在烧钱" } }],
+    desc_en: "Networking gear giant",
+    profile: { business: "路由器业务", bull: "卖铲人逻辑", bear: "客户都在烧钱" },
+    profile_en: { business: "Router business", bull: "Picks-and-shovels play", bear: "Funding risk" } }],
   quotes: [{ instrument_id: "S1", close: 110, prev_close: 105 }],
   leaderboard: [],
 };
@@ -45,11 +47,11 @@ describe("Stock page", () => {
     expect(screen.getAllByText("$110.00").length).toBeGreaterThan(0);
     expect(screen.getByText("Prev close")).toBeInTheDocument();
     expect(screen.getAllByText(/\+10\.00%/).length).toBeGreaterThan(0);
-    expect(screen.getByText("卖铲人逻辑")).toBeInTheDocument();   // profile bull
+    expect(screen.getByText("Picks-and-shovels play")).toBeInTheDocument(); // profile bull
     expect(screen.getByText("Place buy")).toBeInTheDocument();     // trade panel
   });
 
-  it("shows English instrument/news fields in en mode, falling back to zh when missing", async () => {
+  it("shows English instrument/news fields without leaking zh when English is missing", async () => {
     const enState = {
       ...state,
       instruments: [{ id: "S1", alias: "Ridgeline Networks", desc: "网络设备巨头",
@@ -83,16 +85,16 @@ describe("Stock page", () => {
         </UserCtxForTest.Provider>
       </MemoryRouter>,
     );
-    // en mode: English desc + profile fields (empty bear falls back to zh)
+    // en mode: English desc + profile fields; untranslated Chinese stays out.
     await waitFor(() => expect(screen.getByText("Networking gear giant")).toBeInTheDocument());
     expect(screen.getByText("Router business")).toBeInTheDocument();
     expect(screen.getByText("Picks-and-shovels play")).toBeInTheDocument();
-    expect(screen.getByText("客户都在烧钱")).toBeInTheDocument();
+    expect(screen.queryByText("客户都在烧钱")).not.toBeInTheDocument();
     // related news: English headline (S1 prettified to the alias) + body
     expect(screen.getByText("Ridgeline Networks sector under pressure")).toBeInTheDocument();
     expect(screen.getByText("English body.")).toBeInTheDocument();
-    // item without English fields shows the Chinese original
-    expect(screen.getByText(/Ridgeline Networks再创新高/)).toBeInTheDocument();
+    // item without English fields does not show the Chinese original
+    expect(screen.queryByText(/再创新高/)).not.toBeInTheDocument();
   });
 
   it("renders option positions with P&L and sells to close", async () => {

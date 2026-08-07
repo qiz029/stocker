@@ -25,6 +25,7 @@ func TestMigrateCreatesSchemaAndIsIdempotent(t *testing.T) {
 		"loan_txns", "room_player_daily",
 		"room_options", "option_positions", "option_trades",
 		"room_forum_posts", "player_actions", "agent_turns",
+		"room_copy_jobs",
 	} {
 		var n int
 		if err := pool.QueryRow(ctx, "SELECT count(*) FROM "+table).Scan(&n); err != nil {

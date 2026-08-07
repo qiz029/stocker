@@ -36,7 +36,7 @@ func (s *Server) handlePostChat(w http.ResponseWriter, r *http.Request) {
 		snippet = snippet[:50]
 	}
 	body := userFrom(r).Username + ": " + string(snippet)
-	go s.notifyRoomMembers(room.ID, userFrom(r).ID, "Stocker", body)
+	go s.notifyRoomMembers(room.ID, userFrom(r).ID, "Stocker", body, body)
 	writeJSON(w, http.StatusOK, map[string]any{"id": id})
 }
 

@@ -24,23 +24,9 @@ const (
 	MaxHumanPlayers        = 12
 )
 
-// CopyFillBudget bounds how long room creation waits for the news copy
-// filler. The fill is synchronous and gated (see CopyFillMinRatio): the
-// room is only persisted once its news copy is ready, so providers with
-// tight per-key concurrency limits (observed: DeepSeek queues past ~5
-// in-flight requests) get generous time to fill a 1500+-item world.
-// cmd/server overrides this from LLM_ROOM_BUDGET_SECS.
-var CopyFillBudget = 600 * time.Second
-
-// CopyFillMinRatio is the minimum share of news items that must carry
-// generated copy (either language) for room creation to proceed. A small
-// fraction of items legitimately stay on template copy (per-item
-// validation rejects), so the gate trips only on broad fill failure —
-// e.g. a throttled or failing provider.
-const CopyFillMinRatio = 0.9
-
-// NewsCopyFiller rewrites news headlines/bodies before a room's world is
-// persisted (the LLM generator in internal/llm; nil keeps template copy).
+// NewsCopyFiller rewrites news headlines/bodies. Room creation persists the
+// engine's bilingual templates immediately; copy_jobs.go invokes the filler
+// later for a small rolling window of simulation days.
 type NewsCopyFiller interface {
 	FillCopy(ctx context.Context, sc *scenario.Scenario, evs []engine.NewsEvent)
 }
@@ -120,7 +106,7 @@ func shockJSON(m map[string]float64) any {
 // CreateRoom generates this room's parallel world and persists it whole.
 // The fidelity gate (engine.VerifyFidelity) can reject a seed; we retry
 // derived seeds a bounded number of times (spec §4.6: "不达标的参数组合拒绝").
-func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, hostID int64, dayDurationSecs int, filler NewsCopyFiller, visibility ...string) (*Room, error) {
+func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, hostID int64, dayDurationSecs int, _ NewsCopyFiller, visibility ...string) (*Room, error) {
 	if dayDurationSecs < 60 || dayDurationSecs > 86400 {
 		return nil, ErrBadDayDuration
 	}
@@ -167,29 +153,6 @@ func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, ho
 		return nil, err
 	}
 
-	if filler != nil {
-		// Copy fill runs synchronously before anything is persisted: the
-		// room only goes live once its news copy is ready. A fill that
-		// lands below CopyFillMinRatio aborts creation (nothing is
-		// inserted) so the host can retry instead of playing a room of
-		// bare template headlines.
-		fctx, cancel := context.WithTimeout(ctx, CopyFillBudget)
-		filler.FillCopy(fctx, sc, world.News)
-		if ff, ok := filler.(ForumCopyFiller); ok {
-			ff.FillForumCopy(fctx, sc, world.Forum)
-		}
-		cancel()
-		filled := 0
-		for i := range world.News {
-			if world.News[i].Body != "" || world.News[i].BodyEn != "" {
-				filled++
-			}
-		}
-		if float64(filled) < CopyFillMinRatio*float64(len(world.News)) {
-			return nil, fmt.Errorf("%w (%d/%d items filled)", ErrCopyFill, filled, len(world.News))
-		}
-	}
-
 	var room *Room
 	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
 		r, err := scanRoom(tx.QueryRow(ctx, `
@@ -227,13 +190,14 @@ func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, ho
 		}
 
 		news := make([][]any, 0, len(world.News))
-		for _, ev := range world.News {
+		for i, ev := range world.News {
 			news = append(news, []any{room.ID, ev.Day, ev.MediaID, ev.Headline,
 				string(ev.Track), shockJSON(ev.TrueShock), shockJSON(ev.ReportShock),
-				ev.Body, ev.ClusterID, ev.HeadlineEn, ev.BodyEn})
+				ev.Body, ev.ClusterID, ev.HeadlineEn, ev.BodyEn, ev.Recap,
+				copyRole(world.News, i)})
 		}
 		_, err = tx.CopyFrom(ctx, pgx.Identifier{"room_news"},
-			[]string{"room_id", "day", "media_id", "headline", "track", "true_shock", "report_shock", "body", "cluster_id", "headline_en", "body_en"},
+			[]string{"room_id", "day", "media_id", "headline", "track", "true_shock", "report_shock", "body", "cluster_id", "headline_en", "body_en", "is_recap", "copy_role"},
 			pgx.CopyFromRows(news))
 		if err != nil {
 			return err
@@ -241,11 +205,19 @@ func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, ho
 
 		posts := make([][]any, 0, len(world.Forum))
 		for _, p := range world.Forum {
-			posts = append(posts, []any{room.ID, p.Day, p.NPCName, p.Body, p.NPCNameEn, p.BodyEn, p.IsAgent})
+			posts = append(posts, []any{room.ID, p.Day, p.NPCName, p.Body, p.NPCNameEn, p.BodyEn, p.IsAgent, p.Persona})
 		}
 		if _, err := tx.CopyFrom(ctx, pgx.Identifier{"room_forum_posts"},
-			[]string{"room_id", "day", "npc_name", "body", "npc_name_en", "body_en", "is_agent"},
+			[]string{"room_id", "day", "npc_name", "body", "npc_name_en", "body_en", "is_agent", "persona"},
 			pgx.CopyFromRows(posts)); err != nil {
+			return err
+		}
+		jobs := make([][]any, sc.Days)
+		for day := 0; day < sc.Days; day++ {
+			jobs[day] = []any{room.ID, day}
+		}
+		if _, err := tx.CopyFrom(ctx, pgx.Identifier{"room_copy_jobs"},
+			[]string{"room_id", "day"}, pgx.CopyFromRows(jobs)); err != nil {
 			return err
 		}
 		// Initial option chain: the first 2 expiries, strikes anchored to
@@ -256,6 +228,27 @@ func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, ho
 		return nil, err
 	}
 	return room, nil
+}
+
+// copyRole preserves a clustered story's position for day-sized LLM prompts.
+// This is server-only metadata and never enters the blind-box API projection.
+func copyRole(events []engine.NewsEvent, i int) string {
+	ev := events[i]
+	if ev.ClusterID == 0 {
+		return ""
+	}
+	if ev.TrueShock != nil {
+		return "report"
+	}
+	for j := range events {
+		if events[j].ClusterID == ev.ClusterID && events[j].TrueShock != nil {
+			if ev.Day < events[j].Day {
+				return "rumor"
+			}
+			return "followup"
+		}
+	}
+	return ""
 }
 
 func GetRoom(ctx context.Context, q Querier, id int64) (*Room, error) {

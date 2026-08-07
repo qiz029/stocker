@@ -38,7 +38,8 @@ describe("RightRail", () => {
         { id: 2, day: 5, kind: "agent_order", payload: {
           username: "Nova", is_agent: true, instrument_id: "S1", side: "sell" } }] };
       if (u.includes("/news")) body = { items: [
-        { id: 1, day: 5, media_id: "wire", headline: "消息面变化，S1板块承压，市场解读不一", body: "正文内容。" }] };
+        { id: 1, day: 5, media_id: "wire", headline: "消息面变化，S1板块承压，市场解读不一", body: "正文内容。",
+          headline_en: "S1 comes under pressure", body_en: "Full story." }] };
       return new Response(JSON.stringify(body), { status: 200 });
     });
     render(<UserProviderForTest username="me"><RightRail roomId="1" state={state} aliasOf={() => "Ridgeline Networks"} /></UserProviderForTest>);
@@ -68,12 +69,12 @@ describe("RightRail", () => {
 
     // news headline prettified + body expands on click (jsdom loads no CSS,
     // so assert the state class rather than computed visibility)
-    const headline = await screen.findByText(/Ridgeline Networks板块承压/);
+    const headline = await screen.findByText(/Ridgeline Networks comes under pressure/);
     const item = headline.closest(".feed-item")!;
     expect(item).not.toHaveClass("open");
     fireEvent.click(headline);
     expect(item).toHaveClass("open");
-    expect(screen.getByText("正文内容。")).toBeInTheDocument();
+    expect(screen.getByText("Full story.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Read full article" })).toHaveAttribute("href", "/rooms/1/news/1");
   });
 });
@@ -85,10 +86,10 @@ describe("RightRail news enrichment", () => {
       let body: unknown = { items: [] };
       if (u.includes("/news")) body = {
         items: [
-          { id: 1, day: 3, media_id: "tabloid", headline: "传闻：S1将停牌", body: "传闻正文。", cluster_id: 7 },
-          { id: 2, day: 4, media_id: "wire", headline: "S1宣布重大资产重组", body: "主事件正文。", cluster_id: 7 },
-          { id: 3, day: 5, media_id: "paper", headline: "S1重组追踪：监管问询", body: "", cluster_id: 7 },
-          { id: 4, day: 5, media_id: "tv", headline: "S2股价创新高", body: "", cluster_id: null },
+          { id: 1, day: 3, media_id: "tabloid", headline: "传闻：S1将停牌", body: "传闻正文。", headline_en: "Rumor: S1 may halt", body_en: "Rumor copy.", cluster_id: 7 },
+          { id: 2, day: 4, media_id: "wire", headline: "S1宣布重大资产重组", body: "主事件正文。", headline_en: "S1 announces a major restructuring", body_en: "Report copy.", cluster_id: 7 },
+          { id: 3, day: 5, media_id: "paper", headline: "S1重组追踪：监管问询", body: "", headline_en: "S1 restructuring follow-up", body_en: "", cluster_id: 7 },
+          { id: 4, day: 5, media_id: "tv", headline: "S2股价创新高", body: "", headline_en: "S2 hits a new high", body_en: "", cluster_id: null },
         ],
         media_accuracy: {
           tabloid: { reports: 2, hits: 2 },   // < 3 reports → insufficient data
@@ -107,13 +108,13 @@ describe("RightRail news enrichment", () => {
     expect(within(chain as HTMLElement).getByText("Follow-up")).toBeInTheDocument();
     const titles = within(chain as HTMLElement).getAllByText(/Ridgeline Networks/).map(el => el.textContent);
     expect(titles).toEqual([
-      "传闻：Ridgeline Networks将停牌",
-      "Ridgeline Networks宣布重大资产重组",
-      "Ridgeline Networks重组追踪：监管问询",
+      "Rumor: Ridgeline Networks may halt",
+      "Ridgeline Networks announces a major restructuring",
+      "Ridgeline Networks restructuring follow-up",
     ]);
 
     // body expand still works inside a chain
-    const rumorHeadline = within(chain as HTMLElement).getByText("传闻：Ridgeline Networks将停牌");
+    const rumorHeadline = within(chain as HTMLElement).getByText("Rumor: Ridgeline Networks may halt");
     const rumorItem = rumorHeadline.closest(".feed-item")!;
     expect(rumorItem).not.toHaveClass("open");
     fireEvent.click(rumorHeadline);
@@ -125,7 +126,7 @@ describe("RightRail news enrichment", () => {
     expect(screen.getAllByText(/not enough data/).length).toBeGreaterThan(0);
 
     // standalone item (cluster_id: null) renders outside any chain, no badge
-    const solo = screen.getByText("Ridgeline Networks股价创新高").closest(".feed-item")!;
+    const solo = screen.getByText("Ridgeline Networks hits a new high").closest(".feed-item")!;
     expect(solo.closest(".news-chain")).toBeNull();
     expect(solo.querySelector(".acc")).toBeNull();   // tv has no accuracy stats
   });
@@ -140,8 +141,8 @@ describe("RightRail news enrichment", () => {
         forumCalls.push(u);
         const after = new URL(u, "http://x").searchParams.get("after");
         body = after === "0"
-          ? { items: [{ id: 1, day: 4, npc_name: "老韭菜", body: "这票我看着要涨" }] }
-          : { items: [{ id: 2, day: 5, npc_name: "量化小王", body: "模型提示风险", is_agent: true }] };
+          ? { items: [{ id: 1, day: 4, npc_name: "老韭菜", body: "这票我看着要涨", npc_name_en: "Old Chive", body_en: "This one looks ready to rise" }] }
+          : { items: [{ id: 2, day: 5, npc_name: "量化小王", body: "模型提示风险", npc_name_en: "Quant Kid", body_en: "The model flags risk", is_agent: true }] };
       }
       return new Response(JSON.stringify(body), { status: 200 });
     });
@@ -150,19 +151,19 @@ describe("RightRail news enrichment", () => {
 
     // default tab is news; switch to the forum
     fireEvent.click(screen.getByRole("button", { name: "Forum" }));
-    expect(screen.getByText("老韭菜")).toBeInTheDocument();
-    expect(screen.getByText("这票我看着要涨")).toBeInTheDocument();
+    expect(screen.getByText("Old Chive")).toBeInTheDocument();
+    expect(screen.getByText("This one looks ready to rise")).toBeInTheDocument();
 
     // next 30s tick asks for items after the last-seen id and appends
     await act(async () => { await vi.advanceTimersByTimeAsync(30_000); });
-    expect(screen.getByText("量化小王")).toBeInTheDocument();
-    expect(screen.getByText("模型提示风险")).toBeInTheDocument();
-    expect(screen.getByText("量化小王").closest(".feed-item")).toHaveTextContent("Agent");
+    expect(screen.getByText("Quant Kid")).toBeInTheDocument();
+    expect(screen.getByText("The model flags risk")).toBeInTheDocument();
+    expect(screen.getByText("Quant Kid").closest(".feed-item")).toHaveTextContent("Agent");
     expect(forumCalls[0]).toContain("after=0");
     expect(forumCalls.some(u => u.includes("after=1"))).toBe(true);
   });
 
-  it("shows English news/forum fields in en mode, falling back to zh when missing", async () => {
+  it("shows English news/forum fields without leaking zh when English is missing", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async url => {
       const u = String(url);
       let body: unknown = { items: [] };
@@ -181,15 +182,15 @@ describe("RightRail news enrichment", () => {
     // news: English headline (S1 prettified to the alias) + body in en mode
     expect(await screen.findByText("Ridgeline Networks sector under pressure")).toBeInTheDocument();
     expect(screen.getByText("English body.")).toBeInTheDocument();
-    // missing English fields fall back to the Chinese original
-    expect(screen.getByText(/Ridgeline Networks再创新高/)).toBeInTheDocument();
+    // missing English fields do not expose the Chinese original
+    expect(screen.queryByText(/再创新高/)).not.toBeInTheDocument();
 
-    // forum: English npc name/body, null falls back to zh
+    // forum: English npc name/body; untranslated Chinese stays out.
     fireEvent.click(screen.getByRole("button", { name: "Forum" }));
     expect(screen.getByText("OldChive")).toBeInTheDocument();
     expect(screen.getByText("This one's going up")).toBeInTheDocument();
-    expect(screen.getByText("量化小王")).toBeInTheDocument();
-    expect(screen.getByText("模型提示风险")).toBeInTheDocument();
+    expect(screen.queryByText("量化小王")).not.toBeInTheDocument();
+    expect(screen.queryByText("模型提示风险")).not.toBeInTheDocument();
   });
 
   it("shows the forum empty state when there are no posts", async () => {
@@ -207,7 +208,7 @@ describe("RightRail player actions", () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async url => {
       const u = String(url);
       const body = u.includes("/news")
-        ? { items: [{ id: 1, day: 5, media_id: "wire", headline: "S1重组", body: "正文。" }] }
+        ? { items: [{ id: 1, day: 5, media_id: "wire", headline: "S1重组", body: "正文。", headline_en: "S1 restructuring", body_en: "Story." }] }
         : { items: [] };
       return new Response(JSON.stringify(body), { status: 200 });
     });
@@ -238,7 +239,7 @@ describe("RightRail player actions", () => {
       }
       let body: unknown = { items: [] };
       if (u.includes("/news")) body = { items: [
-        { id: 1, day: 5, media_id: "tabloid", headline: "传闻：S1将停牌", body: "正文。" }] };
+        { id: 1, day: 5, media_id: "tabloid", headline: "传闻：S1将停牌", body: "正文。", headline_en: "Rumor: S1 may halt", body_en: "Story." }] };
       return new Response(JSON.stringify(body), { status: 200 });
     });
     render(<UserProviderForTest username="me"><RightRail roomId="1" state={state} aliasOf={() => "Ridgeline Networks"} /></UserProviderForTest>);
@@ -260,7 +261,7 @@ describe("RightRail player actions", () => {
       }
       let body: unknown = { items: [] };
       if (u.includes("/news")) body = { items: [
-        { id: 1, day: 5, media_id: "wire", headline: "S1宣布重组", body: "" }] };
+        { id: 1, day: 5, media_id: "wire", headline: "S1宣布重组", body: "", headline_en: "S1 announces restructuring", body_en: "" }] };
       return new Response(JSON.stringify(body), { status: 200 });
     });
     render(<UserProviderForTest username="me"><RightRail roomId="1" state={state} aliasOf={() => "Ridgeline Networks"} /></UserProviderForTest>);
@@ -275,8 +276,8 @@ describe("RightRail player actions", () => {
       const u = String(url);
       let body: unknown = { items: [] };
       if (u.includes("/news")) body = { items: [
-        { id: 1, day: 4, media_id: "wire", headline: "S1业绩大增", body: "", disputed: true },
-        { id: 2, day: 5, media_id: "tabloid", headline: "传闻：S1利好", body: "", exposed: true },
+        { id: 1, day: 4, media_id: "wire", headline: "S1业绩大增", body: "", headline_en: "S1 earnings surge", body_en: "", disputed: true },
+        { id: 2, day: 5, media_id: "tabloid", headline: "传闻：S1利好", body: "", headline_en: "Rumor: S1 has a catalyst", body_en: "", exposed: true },
       ] };
       return new Response(JSON.stringify(body), { status: 200 });
     });
@@ -284,10 +285,10 @@ describe("RightRail player actions", () => {
 
     expect(await screen.findByText("Manipulation confirmed")).toBeInTheDocument();
     expect(screen.getByText("Disputed")).toBeInTheDocument();
-    const disputedItem = screen.getByText(/Ridgeline Networks业绩大增/).closest(".feed-item")!;
+    const disputedItem = screen.getByText(/Ridgeline Networks earnings surge/).closest(".feed-item")!;
     expect(within(disputedItem as HTMLElement).queryByRole("button", { name: /Investigate/ })).toBeNull();
     // the merely-exposed item can still be investigated
-    const exposedItem = screen.getByText(/传闻：Ridgeline Networks利好/).closest(".feed-item")!;
+    const exposedItem = screen.getByText(/Rumor: Ridgeline Networks has a catalyst/).closest(".feed-item")!;
     expect(within(exposedItem as HTMLElement).getByRole("button", { name: /Investigate/ })).toBeInTheDocument();
   });
 

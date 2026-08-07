@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import { api } from "@core/api";
+import type { Lang } from "@core/i18n";
 
 const TOKEN_KEY = "stocker.pushToken";
 
@@ -21,7 +22,7 @@ Notifications.setNotificationHandler({
  * permission, no EAS project yet, network) degrades silently and never
  * blocks login.
  */
-export async function registerPushToken(): Promise<void> {
+export async function registerPushToken(lang: Lang): Promise<void> {
   try {
     if (!Device.isDevice) return; // simulator: no push tokens
     const perms = await Notifications.getPermissionsAsync();
@@ -32,7 +33,7 @@ export async function registerPushToken(): Promise<void> {
     if (status !== "granted") return;
     const { data: token } = await Notifications.getExpoPushTokenAsync();
     await AsyncStorage.setItem(TOKEN_KEY, token);
-    await api.post("/api/me/push-token", { token });
+    await api.post("/api/me/push-token", { token, lang });
   } catch {
     /* push is best-effort */
   }

@@ -29,5 +29,4 @@ var (
 	ErrBadVisibility         = errors.New("room visibility must be public or private")
 	ErrPublicJoinClosed      = errors.New("this public room is no longer open for joining")
 	ErrRoomFull              = errors.New("this room is full")
-	ErrCopyFill              = errors.New("news copy generation incomplete — please retry")
 )

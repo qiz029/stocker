@@ -11,14 +11,14 @@ func TestPushTokenRoundtrip(t *testing.T) {
 	ctx := context.Background()
 	u := mkUser(t, pool, "pusher")
 
-	if err := AddPushToken(ctx, pool, u.ID, "ExponentPushToken[aaa]"); err != nil {
+	if err := AddPushToken(ctx, pool, u.ID, "ExponentPushToken[aaa]", "en"); err != nil {
 		t.Fatalf("AddPushToken: %v", err)
 	}
 	// Idempotent re-register.
-	if err := AddPushToken(ctx, pool, u.ID, "ExponentPushToken[aaa]"); err != nil {
+	if err := AddPushToken(ctx, pool, u.ID, "ExponentPushToken[aaa]", "zh"); err != nil {
 		t.Fatalf("re-add: %v", err)
 	}
-	if err := AddPushToken(ctx, pool, u.ID, "ExponentPushToken[bbb]"); err != nil {
+	if err := AddPushToken(ctx, pool, u.ID, "ExponentPushToken[bbb]", "en"); err != nil {
 		t.Fatalf("second device: %v", err)
 	}
 
@@ -29,6 +29,10 @@ func TestPushTokenRoundtrip(t *testing.T) {
 	}
 	if n != 2 {
 		t.Fatalf("tokens = %d, want 2", n)
+	}
+	var lang string
+	if err := pool.QueryRow(ctx, `SELECT lang FROM push_tokens WHERE user_id = $1 AND token = $2`, u.ID, "ExponentPushToken[aaa]").Scan(&lang); err != nil || lang != "zh" {
+		t.Fatalf("updated language = %q, err=%v", lang, err)
 	}
 
 	if err := RemovePushToken(ctx, pool, u.ID, "ExponentPushToken[aaa]"); err != nil {
@@ -60,14 +64,14 @@ func TestPushTokensForRoom(t *testing.T) {
 	outsider := mkUser(t, pool, "outsider")
 
 	for _, tok := range []string{"t-other-a", "t-other-b"} {
-		if err := AddPushToken(ctx, pool, other.ID, tok); err != nil {
+		if err := AddPushToken(ctx, pool, other.ID, tok, "zh"); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := AddPushToken(ctx, pool, guest.ID, "t-guest"); err != nil {
+	if err := AddPushToken(ctx, pool, guest.ID, "t-guest", "en"); err != nil {
 		t.Fatal(err)
 	}
-	if err := AddPushToken(ctx, pool, outsider.ID, "t-outsider"); err != nil {
+	if err := AddPushToken(ctx, pool, outsider.ID, "t-outsider", "en"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -77,6 +81,11 @@ func TestPushTokensForRoom(t *testing.T) {
 	}
 	if len(toks) != 2 { // other's two devices; guest excluded; outsider not a member
 		t.Fatalf("tokens = %v, want other's two", toks)
+	}
+	for _, tok := range toks {
+		if tok.Lang != "zh" {
+			t.Fatalf("other token language = %q", tok.Lang)
+		}
 	}
 
 	toks, err = PushTokensForRoom(ctx, pool, room.ID, 0)

@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"unicode"
 
 	"github.com/toddzheng/stocker/server/internal/scenario"
 )
@@ -27,7 +28,15 @@ func TestGenerateWorldAssembles(t *testing.T) {
 		if ev.Headline == "" {
 			t.Fatalf("news %d missing headline", i)
 		}
+		if hasHan(ev.HeadlineEn) || hasHan(ev.BodyEn) {
+			t.Fatalf("news %d English copy contains Han text: %q / %q", i, ev.HeadlineEn, ev.BodyEn)
+		}
 		tracks[ev.Track]++
+	}
+	for i, post := range w.Forum {
+		if hasHan(post.NPCNameEn) || hasHan(post.BodyEn) {
+			t.Fatalf("forum %d English copy contains Han text: %q / %q", i, post.NPCNameEn, post.BodyEn)
+		}
 	}
 	for _, tr := range []Track{TrackHistorical, TrackImpact, TrackNoise} {
 		if tracks[tr] == 0 {
@@ -37,6 +46,10 @@ func TestGenerateWorldAssembles(t *testing.T) {
 	if !sort.SliceIsSorted(w.News, func(i, j int) bool { return w.News[i].Day < w.News[j].Day }) {
 		t.Fatal("news not sorted by day")
 	}
+}
+
+func hasHan(s string) bool {
+	return strings.IndexFunc(s, func(r rune) bool { return unicode.Is(unicode.Han, r) }) >= 0
 }
 
 // Golden: 固定 (scenario, seed) 的世界哈希不随重构漂移。

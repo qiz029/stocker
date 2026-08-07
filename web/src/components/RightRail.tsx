@@ -139,7 +139,7 @@ export default function RightRail({ roomId, state, aliasOf, readOnly = false }: 
             className={`lb-row ${row.username === user.username ? "me" : ""} ${row.bankrupt ? "bankrupt" : ""}`}>
             <span className="rank num">{i + 1}</span>
             {!row.is_agent && <span className="lb-player-avatar">{avatarGlyph(row.avatar_id, row.username)}</span>}
-            <span className="who"><span className="lb-name">{pickL(lang, row.username, row.username_en)}</span>
+            <span className="who"><span className="lb-name">{row.is_agent ? pickL(lang, row.username, row.username_en) : row.username}</span>
               {row.is_agent && <small className="agent-badge">{t("common.agent")}</small>}
               {row.late_join && <small>{t("reveal.lateJoin")}</small>}
               {row.bankrupt && <small className="lb-badge">{t("rail.bankrupt")}</small>}
@@ -161,7 +161,7 @@ export default function RightRail({ roomId, state, aliasOf, readOnly = false }: 
         {events.map(ev => ev.kind === "agent_order" ? (
           <div key={ev.id} className="feed-item agent-action">
             <div className="fi-meta">
-              <span className="forum-npc">{pickL(lang, ev.payload.username ?? "?", ev.payload.username_en)}</span>
+              <span className="forum-npc">{ev.payload.is_agent ? pickL(lang, ev.payload.username ?? "?", ev.payload.username_en) : ev.payload.username ?? "?"}</span>
               {ev.payload.is_agent && <small className="agent-badge">{t("common.agent")}</small>}
               {" · "}<span className="num">{t("rail.tradingDay", { day: ev.day })}</span>
             </div>

@@ -218,7 +218,7 @@ func (s *Server) handleStartRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Notify the other members that the timeline has started; best-effort.
-	go s.notifyRoomMembers(room.ID, userFrom(r).ID, "Stocker", "房间已开局")
+	go s.notifyRoomMembers(room.ID, userFrom(r).ID, "Stocker", "The room has started", "房间已开局")
 	writeJSON(w, http.StatusOK, roomJSON(room, 0, false, true, userFrom(r).ID))
 }
 

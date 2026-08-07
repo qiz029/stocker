@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/toddzheng/stocker/server/internal/engine"
 	"github.com/toddzheng/stocker/server/internal/scenario"
@@ -79,6 +80,7 @@ type forumEnOnlyFiller struct{}
 func (forumEnOnlyFiller) FillCopy(_ context.Context, _ *scenario.Scenario, evs []engine.NewsEvent) {
 	for i := range evs {
 		evs[i].Body = "AI正文。"
+		evs[i].BodyEn = "AI body."
 	}
 }
 
@@ -88,7 +90,7 @@ func (forumEnOnlyFiller) FillForumCopy(_ context.Context, _ *scenario.Scenario, 
 	}
 }
 
-func TestCreateRoomEnOnlyForumCopyStillPersists(t *testing.T) {
+func TestAsyncCopyJobPersistsForumPolish(t *testing.T) {
 	pool := TestDB(t, "store")
 	ctx := context.Background()
 	host := mkUser(t, pool, "host")
@@ -98,8 +100,10 @@ func TestCreateRoomEnOnlyForumCopyStillPersists(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The fill is synchronous: polished copy is already persisted when
-	// CreateRoom returns.
+	worked, err := RunNextCopyJob(ctx, pool, forumEnOnlyFiller{}, time.Now())
+	if err != nil || !worked {
+		t.Fatalf("RunNextCopyJob: worked=%v err=%v", worked, err)
+	}
 	var body, bodyEn string
 	if err := pool.QueryRow(ctx, `
 		SELECT body, body_en FROM room_forum_posts WHERE room_id = $1 ORDER BY id LIMIT 1`,
