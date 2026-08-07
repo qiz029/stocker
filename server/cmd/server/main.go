@@ -49,17 +49,36 @@ func main() {
 		log.Printf("llm news copy disabled (LLM_BASE_URL unset) — template copy")
 	}
 	srv := &http.Server{Addr: addr, Handler: api.Router()}
-	agentCtx, stopAgents := context.WithCancel(ctx)
-	defer stopAgents()
+	workerCtx, stopWorkers := context.WithCancel(ctx)
+	defer stopWorkers()
 	go func() {
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
 		for {
-			if err := store.RunAgentTurns(agentCtx, pool, time.Now()); err != nil && !errors.Is(err, context.Canceled) {
+			cleanupCtx, cancel := context.WithTimeout(workerCtx, 5*time.Second)
+			deleted, err := store.DeleteExpiredLobbyRooms(cleanupCtx, pool)
+			cancel()
+			if err != nil && !errors.Is(err, context.Canceled) {
+				log.Printf("room cleanup: %v", err)
+			} else if deleted > 0 {
+				log.Printf("room cleanup: reclaimed %d expired lobby rooms", deleted)
+			}
+			select {
+			case <-workerCtx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		for {
+			if err := store.RunAgentTurns(workerCtx, pool, time.Now()); err != nil && !errors.Is(err, context.Canceled) {
 				log.Printf("agent turns: %v", err)
 			}
 			select {
-			case <-agentCtx.Done():
+			case <-workerCtx.Done():
 				return
 			case <-ticker.C:
 			}
@@ -68,7 +87,7 @@ func main() {
 	if api.CopyFiller != nil {
 		go func() {
 			for {
-				worked, err := store.RunNextCopyJob(agentCtx, pool, api.CopyFiller, time.Now())
+				worked, err := store.RunNextCopyJob(workerCtx, pool, api.CopyFiller, time.Now())
 				if err != nil && !errors.Is(err, context.Canceled) {
 					log.Printf("copy worker: %v", err)
 				}
@@ -80,7 +99,7 @@ func main() {
 				}
 				timer := time.NewTimer(delay)
 				select {
-				case <-agentCtx.Done():
+				case <-workerCtx.Done():
 					timer.Stop()
 					return
 				case <-timer.C:
@@ -98,7 +117,7 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
-	stopAgents()
+	stopWorkers()
 	shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	_ = srv.Shutdown(shutdownCtx)
