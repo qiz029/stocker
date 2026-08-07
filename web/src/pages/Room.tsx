@@ -103,10 +103,10 @@ export default function Room() {
         <div className="brand" onClick={() => navigate("/")}><em>●</em> Stocker</div>
         <div className="day-pill">
           {room.status === "lobby"
-            ? t("status.waiting")
+            ? `${room.name || t("era.name")} · ${t("status.waiting")}`
             : room.ended
-              ? t("room.endedPill")
-              : <>{t("era.name")} · {t("lobby.dayA")} <b className="num">{curDay}</b> {t("lobby.dayB", { days: room.days })}</>}
+              ? `${room.name || t("era.name")} · ${t("room.endedPill")}`
+              : <>{room.name ? `${room.name} · ` : ""}{t("era.name")} · {t("lobby.dayA")} <b className="num">{curDay}</b> {t("lobby.dayB", { days: room.days })}</>}
         </div>
         {clock && clock.phase !== "ended" && (
           <div className="countdown">

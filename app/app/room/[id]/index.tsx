@@ -109,10 +109,10 @@ export default function RoomScreen() {
         <View style={styles.dayPill}>
           <Text style={styles.dayPillTxt}>
             {room.status === "lobby"
-              ? t("status.waiting")
+              ? `${room.name || t("era.name")} · ${t("status.waiting")}`
               : room.ended
-                ? t("room.endedPill")
-                : `${t("era.name")} · ${t("lobby.dayA")} ${room.current_day ?? 0} ${t("lobby.dayB", { days: room.days })}`}
+                ? `${room.name || t("era.name")} · ${t("room.endedPill")}`
+                : `${room.name ? `${room.name} · ` : ""}${t("era.name")} · ${t("lobby.dayA")} ${room.current_day ?? 0} ${t("lobby.dayB", { days: room.days })}`}
           </Text>
         </View>
         {clock && clock.phase !== "ended" && (

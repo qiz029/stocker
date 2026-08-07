@@ -39,15 +39,21 @@ func TestRoomLifecycleAndState(t *testing.T) {
 	outsider := registerClient(t, s, "outsider")
 
 	created := host.mustJSON("POST", "/api/rooms",
-		map[string]any{"scenario_id": "synthetic-v1", "day_duration_secs": 60}, http.StatusOK)
+		map[string]any{"name": "Opening Bell", "scenario_id": "synthetic-v1", "day_duration_secs": 60}, http.StatusOK)
 	roomID := int64(created["id"].(float64))
 	invite := created["invite_code"].(string)
-	if created["status"] != "lobby" || invite == "" {
+	if created["status"] != "lobby" || created["name"] != "Opening Bell" || invite == "" {
 		t.Fatalf("created room: %v", created)
+	}
+	resp, _ := host.do("POST", "/api/rooms", map[string]any{
+		"name": " ", "scenario_id": "synthetic-v1", "day_duration_secs": 60,
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("blank room name: %d, want 400", resp.StatusCode)
 	}
 
 	// Bad scenario / bad duration.
-	resp, _ := host.do("POST", "/api/rooms", map[string]any{"scenario_id": "nope", "day_duration_secs": 60})
+	resp, _ = host.do("POST", "/api/rooms", map[string]any{"scenario_id": "nope", "day_duration_secs": 60})
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("unknown scenario: %d", resp.StatusCode)
 	}
@@ -149,6 +155,9 @@ func TestPublicRoomSpectateProfileAndJoin(t *testing.T) {
 		t.Fatalf("public rooms = %v", rooms)
 	}
 	listed := rooms[0].(map[string]any)
+	if created["name"] == "" || listed["name"] != created["name"] {
+		t.Fatalf("public room name: created=%v listed=%v", created["name"], listed["name"])
+	}
 	if _, leaksInvite := listed["invite_code"]; leaksInvite {
 		t.Fatalf("public listing leaks invite code: %v", listed)
 	}

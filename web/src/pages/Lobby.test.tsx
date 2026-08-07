@@ -5,11 +5,11 @@ import { UserCtxForTest } from "../App";
 import Lobby from "./Lobby";
 
 const rooms = [
-  { id: 1, invite_code: "ABC", scenario_id: "synthetic-v1", days: 300, status: "running",
+  { id: 1, name: "Opening Bell", invite_code: "ABC", scenario_id: "synthetic-v1", days: 300, status: "running",
     day_duration_secs: 60, started_at: "2026-07-26T12:00:00Z", current_day: 150, ended: false },
-  { id: 2, invite_code: "DEF", scenario_id: "synthetic-v1", days: 300, status: "running",
+  { id: 2, name: "Closing Bell", invite_code: "DEF", scenario_id: "synthetic-v1", days: 300, status: "running",
     day_duration_secs: 60, started_at: "2026-07-01T12:00:00Z", current_day: 299, ended: true },
-  { id: 3, invite_code: "GHI", scenario_id: "synthetic-v1", days: 300, status: "lobby",
+  { id: 3, name: "Night Owls", invite_code: "GHI", scenario_id: "synthetic-v1", days: 300, status: "lobby",
     day_duration_secs: 4032 },
 ];
 
@@ -114,7 +114,7 @@ describe("Lobby", () => {
     await waitFor(() => expect(calls).toContain("POST /api/rooms/join"));
   });
 
-  it("creates a room with the selected scenario and computed duration", async () => {
+  it("opens one create dialog, defaults the room name, and submits it", async () => {
     const bodies: unknown[] = [];
     mockRoutes((url, init) => {
       if (url === "/api/scenarios") return { items: [
@@ -127,24 +127,27 @@ describe("Lobby", () => {
       }
       return { rooms: [] };
     });
-    render(<MemoryRouter><UserCtxForTest.Provider value={{ id: 1, username: "me", profile_complete: true }}><Lobby /></UserCtxForTest.Provider></MemoryRouter>);
+    render(<MemoryRouter><UserCtxForTest.Provider value={{ id: 1, username: "me", display_name: "Market Owl", avatar_id: "owl", profile_complete: false }}><Lobby /></UserCtxForTest.Provider></MemoryRouter>);
     fireEvent.click(await screen.findByRole("button", { name: "＋ Create new room" }));
+    expect(screen.queryByRole("heading", { name: "Choose your player identity" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Open a public timeline" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Room name")).toHaveValue("Market Owl's Room");
+    fireEvent.change(screen.getByLabelText("Room name"), { target: { value: "Opening Bell" } });
     // scenario defaults to the earliest dated entry; pick the 2-week duration
     fireEvent.change(screen.getByRole("combobox", { name: "Game duration" }),
       { target: { value: String(Math.round(2 * 604800 / 750)) } });
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(bodies).toEqual([
-      { scenario_id: "dotcom-2000", day_duration_secs: Math.round(2 * 604800 / 750), visibility: "public" }]));
+      { name: "Opening Bell", scenario_id: "dotcom-2000", day_duration_secs: Math.round(2 * 604800 / 750), visibility: "public" }]));
   });
 
-  it("collects a player identity before opening the create-room dialog", async () => {
-    const calls: string[] = [];
-    mockRoutes((url, init) => {
-      calls.push(`${init?.method ?? "GET"} ${url}`);
+  it("collects genuinely missing identity fields before opening the create dialog", async () => {
+    mockRoutes((url) => {
       if (url === "/api/scenarios") return { items: [{ id: "synthetic-v1", name: "Synthetic", days: 300 }] };
-      if (url === "/api/me/profile") return { id: 1, username: "alice", display_name: "Market Owl", avatar_id: "owl", profile_complete: true };
-      if (url === "/api/leaderboards/eras") return { items: [] };
-      return { rooms: [] };
+      if (url === "/api/me/profile") {
+        return { id: 1, username: "alice", display_name: "Market Owl", avatar_id: "owl", profile_complete: true };
+      }
+      return url === "/api/leaderboards/eras" ? { items: [] } : { rooms: [] };
     });
     render(<MemoryRouter><UserCtxForTest.Provider value={{ id: 1, username: "alice", profile_complete: false }}><Lobby /></UserCtxForTest.Provider></MemoryRouter>);
 
@@ -155,7 +158,7 @@ describe("Lobby", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save & continue" }));
 
     expect(await screen.findByRole("heading", { name: "Open a public timeline" })).toBeInTheDocument();
-    expect(calls).toContain("PUT /api/me/profile");
+    expect(screen.getByLabelText("Room name")).toHaveValue("Market Owl's Room");
   });
 
   it("moves language and profile editing into the mobile account panel", async () => {
@@ -193,7 +196,7 @@ describe("Lobby", () => {
       return { rooms: [] };
     });
     render(<MemoryRouter><UserCtxForTest.Provider value={{ id: 1, username: "alice", profile_complete: false }}><Lobby /></UserCtxForTest.Provider></MemoryRouter>);
-    const room = await screen.findByText("Room #3");
+    const room = await screen.findByText("Night Owls");
     fireEvent.click(room.closest(".hall-room")!.querySelector(".hall-room-action")!);
     fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "Market Fox" } });
     fireEvent.click(screen.getByRole("button", { name: "fox" }));

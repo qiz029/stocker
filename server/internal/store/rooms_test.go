@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,11 +38,11 @@ func TestCreateRoomPersistsWorld(t *testing.T) {
 	host := mkUser(t, pool, "host")
 	sc := mkScenario(t, pool)
 
-	room, err := CreateRoom(ctx, pool, sc, host.ID, 3600, nil)
+	room, err := CreateNamedRoom(ctx, pool, sc, host.ID, 3600, " Opening Bell ", nil)
 	if err != nil {
 		t.Fatalf("CreateRoom: %v", err)
 	}
-	if room.Status != "lobby" || room.Days != sc.Days || room.InviteCode == "" {
+	if room.Name != "Opening Bell" || room.Status != "lobby" || room.Days != sc.Days || room.InviteCode == "" {
 		t.Fatalf("bad room: %+v", room)
 	}
 
@@ -111,6 +112,17 @@ func TestCreateRoomValidatesDayDuration(t *testing.T) {
 	for _, secs := range []int{0, 59, 86401, -5} {
 		if _, err := CreateRoom(context.Background(), pool, sc, host.ID, secs, nil); !errors.Is(err, ErrBadDayDuration) {
 			t.Errorf("duration %d: got %v, want ErrBadDayDuration", secs, err)
+		}
+	}
+}
+
+func TestCreateNamedRoomValidatesName(t *testing.T) {
+	pool := TestDB(t, "store")
+	host := mkUser(t, pool, "host")
+	sc := mkScenario(t, pool)
+	for _, name := range []string{"", " ", "x", "bad\nname", strings.Repeat("x", RoomNameMaxLength+1)} {
+		if _, err := CreateNamedRoom(context.Background(), pool, sc, host.ID, 60, name, nil); !errors.Is(err, ErrBadRoomName) {
+			t.Errorf("name %q: got %v, want ErrBadRoomName", name, err)
 		}
 	}
 }

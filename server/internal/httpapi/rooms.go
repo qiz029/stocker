@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -47,6 +48,7 @@ func roomJSON(room *store.Room, curDay int, ended, started bool, userID int64, m
 	}
 	m := map[string]any{
 		"id":                room.ID,
+		"name":              room.Name,
 		"scenario_id":       room.ScenarioID,
 		"days":              room.Days,
 		"status":            room.Status,
@@ -120,9 +122,10 @@ func (s *Server) roomForMember(w http.ResponseWriter, r *http.Request) (*store.R
 
 func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ScenarioID      string `json:"scenario_id"`
-		DayDurationSecs int    `json:"day_duration_secs"`
-		Visibility      string `json:"visibility"`
+		Name            *string `json:"name"`
+		ScenarioID      string  `json:"scenario_id"`
+		DayDurationSecs int     `json:"day_duration_secs"`
+		Visibility      string  `json:"visibility"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid JSON body")
@@ -132,12 +135,16 @@ func (s *Server) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusUnprocessableEntity, store.ErrBadProfile.Error())
 		return
 	}
+	roomName := userFrom(r).DisplayName + "'s Room"
+	if req.Name != nil {
+		roomName = strings.TrimSpace(*req.Name)
+	}
 	sc, err := store.LoadScenario(r.Context(), s.DB, req.ScenarioID)
 	if err != nil {
 		s.storeErr(w, err)
 		return
 	}
-	room, err := store.CreateRoom(r.Context(), s.DB, sc, userFrom(r).ID, req.DayDurationSecs, s.CopyFiller, req.Visibility)
+	room, err := store.CreateNamedRoom(r.Context(), s.DB, sc, userFrom(r).ID, req.DayDurationSecs, roomName, s.CopyFiller, req.Visibility)
 	if err != nil {
 		s.storeErr(w, err)
 		return

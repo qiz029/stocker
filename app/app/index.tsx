@@ -36,6 +36,7 @@ export default function HallScreen() {
 
   // create-room form
   const [scenarioID, setScenarioID] = useState("");
+  const [roomName, setRoomName] = useState("");
   const [duration, setDuration] = useState(0);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -49,6 +50,11 @@ export default function HallScreen() {
       })
       .catch(() => undefined);
   }, []);
+  useEffect(() => {
+    if (!user) return;
+    const owner = user.display_name?.trim() || user.username;
+    setRoomName(current => current || (lang === "zh" ? `${owner}的房间` : `${owner}'s Room`));
+  }, [lang, user]);
 
   const scenarioName = (id: string) => {
     const sc = scenarios.find(s => s.id === id);
@@ -84,12 +90,12 @@ export default function HallScreen() {
   }
 
   async function createRoom() {
-    if (!scenarioID) return;
+    if (!scenarioID || roomName.trim().length < 2) return;
     setCreating(true);
     setCreateError(null);
     try {
       const room = await api.post<Room>("/api/rooms", {
-        scenario_id: scenarioID, day_duration_secs: activeDuration, visibility: "public",
+        name: roomName.trim(), scenario_id: scenarioID, day_duration_secs: activeDuration, visibility: "public",
       });
       router.push(`/room/${room.id}`);
     } catch (e) {
@@ -112,13 +118,13 @@ export default function HallScreen() {
     return (
       <TouchableOpacity key={room.id} style={styles.card} onPress={() => router.push(`/room/${room.id}`)}>
         <View style={styles.cardTop}>
-          <Text style={styles.cardTitle}>{scenarioName(room.scenario_id)}</Text>
+          <Text style={styles.cardTitle}>{room.name || scenarioName(room.scenario_id)}</Text>
           <Text style={[styles.tag, st === "running" ? styles.tagLive : styles.tagDone]}>
             {st === "lobby" ? t("status.waiting") : st === "ended" ? t("status.ended") : t("status.running")}
           </Text>
         </View>
         <Text style={styles.meta}>
-          {t("lobby.dayA")} {day} {t("lobby.dayB", { days: room.days })}
+          {scenarioName(room.scenario_id)}  ·  {t("lobby.dayA")} {day} {t("lobby.dayB", { days: room.days })}
           {room.invite_code ? `  ·  ${t("lobby.inviteA")} ${room.invite_code}` : ""}
         </Text>
         <View style={styles.progress}>
@@ -166,6 +172,9 @@ export default function HallScreen() {
         {/* create room */}
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>{t("lobby.newRoom")}</Text>
+          <Text style={styles.fieldLabel}>{t("lobby.roomName")}</Text>
+          <TextInput style={styles.roomInput} value={roomName} onChangeText={setRoomName}
+            maxLength={40} autoCorrect={false} returnKeyType="done" />
           <Text style={styles.fieldLabel}>{t("lobby.chooseEra")}</Text>
           {scenarios.map(sc => (
             <TouchableOpacity key={sc.id} style={[styles.eraRow, scenarioID === sc.id && styles.eraRowOn]}
@@ -185,8 +194,8 @@ export default function HallScreen() {
             ))}
           </View>
           {createError && <Text style={styles.error}>{createError}</Text>}
-          <TouchableOpacity style={[styles.submit, (creating || !scenarioID) && styles.disabled]}
-            disabled={creating || !scenarioID} onPress={createRoom}>
+          <TouchableOpacity style={[styles.submit, (creating || !scenarioID || roomName.trim().length < 2) && styles.disabled]}
+            disabled={creating || !scenarioID || roomName.trim().length < 2} onPress={createRoom}>
             <Text style={styles.submitTxt}>{creating ? t("lobby.creating") : t("lobby.create")}</Text>
           </TouchableOpacity>
         </View>
@@ -264,6 +273,11 @@ const styles = StyleSheet.create({
     textTransform: "uppercase", marginTop: 18, marginBottom: 8,
   },
   fieldLabel: { color: colors.ink2, fontSize: 12, marginBottom: 6, marginTop: 4 },
+  roomInput: {
+    backgroundColor: colors.card2, borderWidth: 1, borderColor: colors.line,
+    borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12,
+    color: colors.ink, fontSize: 14,
+  },
   card: {
     backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line,
     borderRadius: 14, padding: 18, marginBottom: 12,

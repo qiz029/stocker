@@ -41,6 +41,7 @@ func (s *Server) storeErr(w http.ResponseWriter, err error) {
 	case errors.Is(err, store.ErrBadProfile):
 		writeErr(w, http.StatusUnprocessableEntity, err.Error())
 	case errors.Is(err, store.ErrBadDayDuration),
+		errors.Is(err, store.ErrBadRoomName),
 		errors.Is(err, store.ErrBadVisibility),
 		errors.Is(err, store.ErrBadOrder),
 		errors.Is(err, store.ErrUnknownInstrument),

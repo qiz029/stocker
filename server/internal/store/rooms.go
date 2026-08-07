@@ -9,7 +9,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -19,9 +22,10 @@ import (
 )
 
 const (
-	InitialCashCents int64 = 10_000_000 // $100,000 (spec §2.2)
-	AgentPlayerCount       = 5
-	MaxHumanPlayers        = 12
+	InitialCashCents  int64 = 10_000_000 // $100,000 (spec §2.2)
+	AgentPlayerCount        = 5
+	MaxHumanPlayers         = 12
+	RoomNameMaxLength       = 40
 )
 
 // NewsCopyFiller rewrites news headlines/bodies. Room creation persists the
@@ -40,6 +44,7 @@ type ForumCopyFiller interface {
 
 type Room struct {
 	ID              int64
+	Name            string
 	InviteCode      string
 	ScenarioID      string
 	Days            int
@@ -51,12 +56,12 @@ type Room struct {
 	Visibility      string // "public" | "private"
 }
 
-const roomCols = `id, invite_code, scenario_id, days, seed, status, day_duration_secs, started_at, host_user_id, visibility`
+const roomCols = `id, name, invite_code, scenario_id, days, seed, status, day_duration_secs, started_at, host_user_id, visibility`
 
 func scanRoom(row pgx.Row) (*Room, error) {
 	r := &Room{}
 	var seed int64
-	err := row.Scan(&r.ID, &r.InviteCode, &r.ScenarioID, &r.Days, &seed,
+	err := row.Scan(&r.ID, &r.Name, &r.InviteCode, &r.ScenarioID, &r.Days, &seed,
 		&r.Status, &r.DayDurationSecs, &r.StartedAt, &r.HostUserID, &r.Visibility)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -107,6 +112,16 @@ func shockJSON(m map[string]float64) any {
 // The fidelity gate (engine.VerifyFidelity) can reject a seed; we retry
 // derived seeds a bounded number of times (spec §4.6: "不达标的参数组合拒绝").
 func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, hostID int64, dayDurationSecs int, _ NewsCopyFiller, visibility ...string) (*Room, error) {
+	return CreateNamedRoom(ctx, db, sc, hostID, dayDurationSecs, "Market Room", nil, visibility...)
+}
+
+// CreateNamedRoom persists a room with the player-facing name chosen by its
+// host. CreateRoom remains as a compatibility wrapper for internal callers.
+func CreateNamedRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, hostID int64, dayDurationSecs int, roomName string, _ NewsCopyFiller, visibility ...string) (*Room, error) {
+	roomName = strings.TrimSpace(roomName)
+	if n := utf8.RuneCountInString(roomName); n < 2 || n > RoomNameMaxLength || strings.IndexFunc(roomName, unicode.IsControl) >= 0 {
+		return nil, ErrBadRoomName
+	}
 	if dayDurationSecs < 60 || dayDurationSecs > 86400 {
 		return nil, ErrBadDayDuration
 	}
@@ -156,9 +171,9 @@ func CreateRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenario, ho
 	var room *Room
 	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
 		r, err := scanRoom(tx.QueryRow(ctx, `
-			INSERT INTO rooms (invite_code, scenario_id, days, seed, day_duration_secs, host_user_id, visibility)
-			VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING `+roomCols,
-			invite, sc.ID, sc.Days, int64(seed), dayDurationSecs, hostID, roomVisibility))
+			INSERT INTO rooms (name, invite_code, scenario_id, days, seed, day_duration_secs, host_user_id, visibility)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING `+roomCols,
+			roomName, invite, sc.ID, sc.Days, int64(seed), dayDurationSecs, hostID, roomVisibility))
 		if err != nil {
 			return err
 		}
@@ -372,7 +387,7 @@ func ListPublicRooms(ctx context.Context, q Querier, limit int) ([]PublicRoomSum
 		limit = 50
 	}
 	rows, err := q.Query(ctx, `
-		SELECT r.id, r.invite_code, r.scenario_id, r.days, r.seed, r.status,
+		SELECT r.id, r.name, r.invite_code, r.scenario_id, r.days, r.seed, r.status,
 			r.day_duration_secs, r.started_at, r.host_user_id, r.visibility,
 			(SELECT COUNT(*)::int FROM room_players rp JOIN users u ON u.id = rp.user_id
 			 WHERE rp.room_id = r.id AND NOT u.is_agent) AS human_players,
@@ -403,7 +418,7 @@ func ListPublicRooms(ctx context.Context, q Querier, limit int) ([]PublicRoomSum
 	for rows.Next() {
 		r := PublicRoomSummary{}
 		var seed int64
-		if err := rows.Scan(&r.ID, &r.InviteCode, &r.ScenarioID, &r.Days, &seed,
+		if err := rows.Scan(&r.ID, &r.Name, &r.InviteCode, &r.ScenarioID, &r.Days, &seed,
 			&r.Status, &r.DayDurationSecs, &r.StartedAt, &r.HostUserID, &r.Visibility,
 			&r.HumanPlayers, &r.LeaderName, &r.LeaderAvatar, &r.LeaderReturn); err != nil {
 			return nil, err
