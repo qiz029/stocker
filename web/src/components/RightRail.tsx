@@ -60,6 +60,7 @@ const DEBUNK_FEE_CENTS = 200_000;
 
 export default function RightRail({ roomId, state, aliasOf, readOnly = false }: Props) {
   const user = useUser();
+  const myAlias = user.display_name?.trim() || "Player";
   const { t, lang } = useT();
   const { toast, node } = useToast();
   const [newsShown, setNewsShown] = useState(8);
@@ -136,7 +137,7 @@ export default function RightRail({ roomId, state, aliasOf, readOnly = false }: 
         <h2>{t("rail.leaderboard")}</h2>
         {state.leaderboard.map((row, i) => (
           <div key={row.username}
-            className={`lb-row ${row.username === user.username ? "me" : ""} ${row.bankrupt ? "bankrupt" : ""}`}>
+            className={`lb-row ${row.username === myAlias ? "me" : ""} ${row.bankrupt ? "bankrupt" : ""}`}>
             <span className="rank num">{i + 1}</span>
             {!row.is_agent && <span className="lb-player-avatar">{avatarGlyph(row.avatar_id, row.username)}</span>}
             <span className="who"><span className="lb-name">{row.is_agent ? pickL(lang, row.username, row.username_en) : row.username}</span>

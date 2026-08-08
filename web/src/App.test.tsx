@@ -26,8 +26,9 @@ describe("App routes", () => {
     expect(await screen.findByText("黑色星期一抄底局")).toBeInTheDocument();
     expect(screen.getByText("互联网泡沫最后一舞")).toBeInTheDocument();
     expect(screen.getByText("Friday Night Traders")).toBeInTheDocument();
-    expect(screen.getByText("market_owl")).toBeInTheDocument();
-    fireEvent.keyDown(screen.getByRole("button", { name: "market_owl account menu" }), { key: "ArrowDown" });
+    expect(screen.getByText("市场猫头鹰")).toBeInTheDocument();
+    expect(screen.queryByText("market_owl")).not.toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("button", { name: "市场猫头鹰 account menu" }), { key: "ArrowDown" });
     const accountMenu = screen.getByRole("menu", { name: "Account" });
     expect(accountMenu).toBeInTheDocument();
     const profileItem = within(accountMenu).getByRole("menuitem", { name: "Profile" });
@@ -48,7 +49,7 @@ describe("App routes", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Join$/ }));
     const waitingRoom = screen.getByText("互联网泡沫最后一舞").closest(".hall-room")!;
     fireEvent.click(waitingRoom.querySelector<HTMLButtonElement>(".hall-room-action")!);
-    fireEvent.click(screen.getByRole("button", { name: "market_owl account menu" }));
+    fireEvent.click(screen.getByRole("button", { name: "市场猫头鹰 account menu" }));
     fireEvent.click(within(screen.getByRole("menu", { name: "Account" })).getByRole("menuitem", { name: "Log out" }));
     expect(await screen.findByPlaceholderText("Username")).toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
@@ -64,11 +65,11 @@ describe("App routes", () => {
     });
     render(<App />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "alice account menu" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Alice account menu" }));
     fireEvent.click(within(screen.getByRole("menu", { name: "Account" })).getByRole("menuitem", { name: "Log out" }));
 
     expect(await screen.findByText("Session store unavailable")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "alice account menu" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Alice account menu" })).toBeInTheDocument();
     expect(screen.queryByPlaceholderText("Username")).not.toBeInTheDocument();
   });
 });

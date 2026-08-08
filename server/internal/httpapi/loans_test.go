@@ -20,6 +20,10 @@ func TestLoanFlow(t *testing.T) {
 
 	host := registerClient(t, s, "host")
 	guest := registerClient(t, s, "guest")
+	host.mustJSON("PUT", "/api/me/profile",
+		map[string]any{"display_name": "Host Owl", "avatar_id": "owl"}, http.StatusOK)
+	guest.mustJSON("PUT", "/api/me/profile",
+		map[string]any{"display_name": "Guest Bear", "avatar_id": "bear"}, http.StatusOK)
 	created := host.mustJSON("POST", "/api/rooms",
 		map[string]any{"scenario_id": "synthetic-v1", "day_duration_secs": 60}, http.StatusOK)
 	roomID := int64(created["id"].(float64))
@@ -128,7 +132,7 @@ func TestLoanFlow(t *testing.T) {
 	}
 	ev := items[0].(map[string]any)
 	payload := ev["payload"].(map[string]any)
-	if ev["kind"] != "bankrupt" || payload["day"].(float64) != 4 || payload["username"] != "guest" {
+	if ev["kind"] != "bankrupt" || payload["day"].(float64) != 4 || payload["username"] != "Guest Bear" {
 		t.Fatalf("bankrupt event: %v", ev)
 	}
 
@@ -141,7 +145,7 @@ func TestLoanFlow(t *testing.T) {
 	var hostRow map[string]any
 	for _, item := range board {
 		row := item.(map[string]any)
-		if row["username"] == "host" {
+		if row["username"] == "Host Owl" {
 			hostRow = row
 		}
 	}
@@ -149,7 +153,7 @@ func TestLoanFlow(t *testing.T) {
 	if hostRow == nil || hostRow["bankrupt"].(bool) {
 		t.Fatalf("leaderboard host: %v", hostRow)
 	}
-	if last["username"] != "guest" || !last["bankrupt"].(bool) {
+	if last["username"] != "Guest Bear" || !last["bankrupt"].(bool) {
 		t.Fatalf("leaderboard last: %v", last)
 	}
 	curve := last["curve"].([]any)

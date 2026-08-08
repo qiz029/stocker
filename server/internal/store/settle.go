@@ -262,15 +262,15 @@ func accrueInterestTx(ctx context.Context, tx pgx.Tx, room *Room, curDay int) er
 		if err := cancelPendingOrdersTx(ctx, tx, room.ID, &b.userID); err != nil {
 			return err
 		}
-		var username string
+		var alias string
 		if err := tx.QueryRow(ctx,
-			`SELECT username FROM users WHERE id = $1`, b.userID).Scan(&username); err != nil {
+			`SELECT COALESCE(NULLIF(display_name, ''), 'Player') FROM users WHERE id = $1`, b.userID).Scan(&alias); err != nil {
 			return err
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO room_events (room_id, day, kind, payload)
 			VALUES ($1, $2, 'bankrupt', jsonb_build_object('day', $3::int, 'username', $4::text))`,
-			room.ID, bankruptAt, bankruptAt, username); err != nil {
+			room.ID, bankruptAt, bankruptAt, alias); err != nil {
 			return err
 		}
 	}

@@ -137,7 +137,6 @@ func TestHypeBustFlowsToEvents(t *testing.T) {
 
 	// Find a user whose first tier-3 hype is caught (deterministic stream).
 	var busted *client
-	var bustedName string
 	for i := 0; i < 100; i++ {
 		name := fmt.Sprintf("roller%d", i)
 		c := registerClient(t, s, name)
@@ -148,13 +147,16 @@ func TestHypeBustFlowsToEvents(t *testing.T) {
 			t.Fatal(err)
 		}
 		if engine.Stream(seed, "manipulation", fmt.Sprint(uid), "0").Float64() < 0.30 {
-			busted, bustedName = c, name
+			busted = c
 			break
 		}
 	}
 	if busted == nil {
 		t.Fatal("no caught user found")
 	}
+	bustedAlias := "Caught Trader"
+	busted.mustJSON("PUT", "/api/me/profile",
+		map[string]any{"display_name": bustedAlias, "avatar_id": "fox"}, http.StatusOK)
 
 	path := fmt.Sprintf("/api/rooms/%d", roomID)
 	res := busted.mustJSON("POST", path+"/actions/hype",
@@ -178,7 +180,7 @@ func TestHypeBustFlowsToEvents(t *testing.T) {
 		t.Fatal("manipulation_bust not in events feed")
 	}
 	payload := bust["payload"].(map[string]any)
-	if payload["username"].(string) != bustedName || payload["instrument_id"].(string) != "S1" {
+	if payload["username"].(string) != bustedAlias || payload["instrument_id"].(string) != "S1" {
 		t.Fatalf("bust payload: %v", payload)
 	}
 

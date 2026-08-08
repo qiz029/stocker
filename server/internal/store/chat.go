@@ -39,8 +39,8 @@ func PostChat(ctx context.Context, q Querier, room *Room, userID int64, day int,
 func ChatSince(ctx context.Context, q Querier, roomID, afterID int64, limit int) ([]ChatMessage, error) {
 	rows, err := q.Query(ctx, `
 		SELECT c.id, u.id,
-		       CASE WHEN u.is_agent THEN u.agent_name ELSE COALESCE(NULLIF(u.display_name, ''), u.username) END,
-		       CASE WHEN u.is_agent THEN COALESCE(u.agent_name_en, u.agent_name) ELSE COALESCE(NULLIF(u.display_name, ''), u.username) END,
+		       CASE WHEN u.is_agent THEN u.agent_name ELSE COALESCE(NULLIF(u.display_name, ''), 'Player') END,
+		       CASE WHEN u.is_agent THEN COALESCE(u.agent_name_en, u.agent_name) ELSE COALESCE(NULLIF(u.display_name, ''), 'Player') END,
 		       u.is_agent, u.avatar_id, c.day, c.text, c.text_en
 		FROM room_chat c JOIN users u ON u.id = c.user_id
 		WHERE c.room_id = $1 AND c.id > $2

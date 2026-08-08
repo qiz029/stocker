@@ -11,6 +11,7 @@ func TestChatPostAndSince(t *testing.T) {
 	pool := TestDB(t, "store")
 	ctx := context.Background()
 	room, guest, _ := mkRunningRoom(t, pool)
+	setTestAlias(t, pool, guest, "Guest Bear")
 
 	id1, err := PostChat(ctx, pool, room, guest.ID, 0, "大家好")
 	if err != nil {
@@ -31,7 +32,7 @@ func TestChatPostAndSince(t *testing.T) {
 	if msgs[1].Text != "科技股要起飞了" { // trimmed
 		t.Fatalf("text not trimmed: %q", msgs[1].Text)
 	}
-	if msgs[0].Username != "guest" || msgs[0].Day != 0 || msgs[1].Day != 3 {
+	if msgs[0].Username != "Guest Bear" || msgs[0].Day != 0 || msgs[1].Day != 3 {
 		t.Fatalf("metadata: %+v", msgs)
 	}
 

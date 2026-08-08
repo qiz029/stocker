@@ -26,7 +26,9 @@ export default function ProfileScreen() {
       });
       setUser(updated);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : t("auth.networkError"));
+      setError(e instanceof ApiError && e.message === "alias already in use"
+        ? t("profile.aliasTaken")
+        : e instanceof ApiError ? e.message : t("auth.networkError"));
     } finally {
       setBusy(false);
     }

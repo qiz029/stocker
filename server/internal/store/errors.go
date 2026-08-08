@@ -5,6 +5,7 @@ import "errors"
 var (
 	ErrNotFound              = errors.New("not found")
 	ErrUsernameTaken         = errors.New("username taken")
+	ErrAliasTaken            = errors.New("alias already in use")
 	ErrEmailTaken            = errors.New("email already in use")
 	ErrBadDayDuration        = errors.New("day duration must be between 60 and 86400 seconds")
 	ErrRoomEnded             = errors.New("room has ended")

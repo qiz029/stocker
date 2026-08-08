@@ -96,7 +96,7 @@ export default function RoomScreen() {
   if (!state || !room) return <SafeAreaView style={styles.safe} />;
 
   const spectator = room.is_member === false;
-  const myRow = user ? state.leaderboard.find(r => r.username === user.username) : undefined;
+  const myRow = user ? state.leaderboard.find(r => r.username === user.display_name?.trim()) : undefined;
   const myRank = myRow ? state.leaderboard.indexOf(myRow) + 1 : null;
   const returnPct = myRow?.return_pct
     ?? (portfolio ? portfolio.total_cents / INITIAL_CASH_CENTS - 1 : 0);

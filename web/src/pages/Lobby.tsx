@@ -68,7 +68,7 @@ function speedOptions(days: number, lang: "en" | "zh"): SpeedChoice[] {
   ];
 }
 function defaultRoomName(user: User, lang: "en" | "zh") {
-  const owner = user.display_name?.trim() || user.username;
+  const owner = user.display_name?.trim() || (lang === "zh" ? "玩家" : "Player");
   return lang === "zh" ? `${owner}的房间` : `${owner}'s Room`;
 }
 
@@ -88,7 +88,7 @@ const hallCopy = {
     roomName: "Room name", era: "Choose an era", duration: "Game speed", createNow: "Create", creating: "Creating room…",
     settings: "Profile",
     account: "Account", accountMenu: "account menu", profileMenu: "Profile", logout: "Log out", logoutFailed: "Log out failed. Please try again.",
-    mockNotice: "Mock preview only — no data was changed.",
+    mockNotice: "Mock preview only — no data was changed.", unnamedAlias: "Set alias", aliasTaken: "This alias is already taken.",
   },
   zh: {
     title: "时代大厅", sub: "找张桌子，看历史重演，或者开启你自己的时间线。",
@@ -104,7 +104,7 @@ const hallCopy = {
     roomName: "房间名称", era: "选择时代", duration: "游戏速度", createNow: "创建", creating: "正在创建房间…",
     settings: "账户",
     account: "账户", accountMenu: "账户菜单", profileMenu: "个人资料", logout: "退出登录", logoutFailed: "退出登录失败，请重试。",
-    mockNotice: "当前为 Mock 预览，不会修改任何数据。",
+    mockNotice: "当前为 Mock 预览，不会修改任何数据。", unnamedAlias: "设置昵称", aliasTaken: "这个昵称已被占用。",
   },
 };
 
@@ -206,6 +206,7 @@ export default function Lobby() {
   const [pendingInvite, setPendingInvite] = useState("");
   const [pendingCreate, setPendingCreate] = useState(false);
   const [profileUser, setProfileUser] = useState<User>(account);
+  const accountAlias = profileUser.display_name?.trim() || c.unnamedAlias;
   const [displayName, setDisplayName] = useState(account.display_name ?? "");
   const [avatarID, setAvatarID] = useState<AvatarID>(account.avatar_id ?? "bull");
   const [scenarioID, setScenarioID] = useState("");
@@ -299,7 +300,7 @@ export default function Lobby() {
         setRoomName(defaultRoomName(updated, lang));
         setDialog("create");
       } else setDialog(null);
-    } catch (err) { toast(err instanceof ApiError ? err.message : t("lobby.joinFailed")); }
+    } catch (err) { toast(err instanceof ApiError && err.message === "alias already in use" ? c.aliasTaken : err instanceof ApiError ? err.message : t("lobby.joinFailed")); }
     finally { setBusy(false); }
   }
   function openCreate() {
@@ -378,7 +379,7 @@ export default function Lobby() {
   }
 
   return <div className="hall has-mobile-nav">
-    <div className="topbar hall-topbar"><div className="brand"><em>●</em> Stocker</div><div className="hall-live"><i /> LIVE HALL</div><div className="spacer"/><DocsLink/><LangSwitch/><div className="hall-account" ref={accountRef}><button ref={accountButtonRef} type="button" className="hall-account-trigger" aria-label={`${profileUser.username} ${c.accountMenu}`} aria-haspopup="menu" aria-expanded={accountOpen} onClick={()=>setAccountOpen(open=>!open)} onKeyDown={event=>{if(event.key!=="ArrowDown"&&event.key!=="ArrowUp")return;event.preventDefault();setAccountOpen(true);const last=event.key==="ArrowUp";requestAnimationFrame(()=>{const items=accountRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]');items?.[last?items.length-1:0]?.focus()})}}><span className="avatar">{avatarGlyph(profileUser.avatar_id, profileUser.username)}</span><span className="hall-account-name">{profileUser.username}</span><span className="hall-account-chevron" aria-hidden="true">⌄</span></button>{accountOpen&&<div className="hall-account-menu" role="menu" aria-label={c.account} onKeyDown={moveAccountMenu}><button type="button" role="menuitem" onClick={openSettings}><span aria-hidden="true">◎</span>{c.profileMenu}</button><button type="button" role="menuitem" className="logout" onClick={()=>void logout()}><span aria-hidden="true">↗</span>{c.logout}</button></div>}</div></div>
+    <div className="topbar hall-topbar"><div className="brand"><em>●</em> Stocker</div><div className="hall-live"><i /> LIVE HALL</div><div className="spacer"/><DocsLink/><LangSwitch/><div className="hall-account" ref={accountRef}><button ref={accountButtonRef} type="button" className="hall-account-trigger" aria-label={`${accountAlias} ${c.accountMenu}`} aria-haspopup="menu" aria-expanded={accountOpen} onClick={()=>setAccountOpen(open=>!open)} onKeyDown={event=>{if(event.key!=="ArrowDown"&&event.key!=="ArrowUp")return;event.preventDefault();setAccountOpen(true);const last=event.key==="ArrowUp";requestAnimationFrame(()=>{const items=accountRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]');items?.[last?items.length-1:0]?.focus()})}}><span className="avatar">{avatarGlyph(profileUser.avatar_id, accountAlias)}</span><span className="hall-account-name">{accountAlias}</span><span className="hall-account-chevron" aria-hidden="true">⌄</span></button>{accountOpen&&<div className="hall-account-menu" role="menu" aria-label={c.account} onKeyDown={moveAccountMenu}><button type="button" role="menuitem" onClick={openSettings}><span aria-hidden="true">◎</span>{c.profileMenu}</button><button type="button" role="menuitem" className="logout" onClick={()=>void logout()}><span aria-hidden="true">↗</span>{c.logout}</button></div>}</div></div>
     <main className="hall-page">
       <section className="hall-hero"><div><span className="hall-eyebrow"><i/> STOCKER / COMMUNITY</span><h1>{c.title}</h1><p>{c.sub}</p></div><div className="hall-actions"><form onSubmit={joinInvite}><input className="hall-invite" aria-label={c.invite} placeholder={c.invite} value={invite} onChange={e=>setInvite(e.target.value)}/><button disabled={!invite.trim()}>{c.join}</button></form><button className="hall-primary" onClick={openCreate}>{c.create}</button></div></section>
       <div className="hall-ribbon"><span><b>{activeRooms}</b>{c.active}</span><span><b>{humanSeats}</b>{c.online}</span><span><b>{scenarios.length}</b>{c.eras}</span>{mostActive?.count ? <span className="ticker">{lang==="zh"?"最活跃":"Most active"} <b>{yearLabel(mostActive.sc)} · {pickL(lang,mostActive.sc.name,mostActive.sc.name_en)}</b></span>:null}</div>
@@ -398,7 +399,7 @@ export default function Lobby() {
         { id: "rankings", icon: "↗", label: lang === "zh" ? "排行" : "Ranks", onSelect: () => selectMobileTab("rankings", "mobile-rankings") },
         { id: "create", icon: "+", label: lang === "zh" ? "开房" : "Create", ariaLabel: lang === "zh" ? "打开创建房间" : "Open create room", primary: true, onSelect: () => { setMobileTab("create"); openCreate(); } },
         { id: "mine", icon: "◎", label: lang === "zh" ? "我的" : "Mine", onSelect: () => { setMobileTab("mine"); (mine?.rooms?.length ?? 0) > 0 ? scrollToMobileSection("mobile-my-rooms") : openCreate(); } },
-        { id: "settings", icon: avatarGlyph(profileUser.avatar_id, profileUser.username), label: c.settings, onSelect: openSettings },
+        { id: "settings", icon: avatarGlyph(profileUser.avatar_id, accountAlias), label: c.settings, onSelect: openSettings },
       ]}
     />
     {node}

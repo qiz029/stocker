@@ -35,7 +35,11 @@ func (s *Server) handlePostChat(w http.ResponseWriter, r *http.Request) {
 	if len(snippet) > 50 {
 		snippet = snippet[:50]
 	}
-	body := userFrom(r).Username + ": " + string(snippet)
+	alias := strings.TrimSpace(userFrom(r).DisplayName)
+	if alias == "" {
+		alias = "Player"
+	}
+	body := alias + ": " + string(snippet)
 	go s.notifyRoomMembers(room.ID, userFrom(r).ID, "Stocker", body, body)
 	writeJSON(w, http.StatusOK, map[string]any{"id": id})
 }

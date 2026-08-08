@@ -46,3 +46,47 @@ func TestMigrateCreatesSchemaAndIsIdempotent(t *testing.T) {
 		t.Fatalf("applied migrations = %d, want %d", applied, len(names))
 	}
 }
+
+func TestUniqueAliasMigrationRepairsLegacyRows(t *testing.T) {
+	pool := TestDB(t, "alias_migration")
+	ctx := context.Background()
+	if _, err := pool.Exec(ctx, `DROP INDEX users_display_name_unique`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `
+		INSERT INTO users (username, password_hash, display_name) VALUES
+			('legacy_alias_a', '!', 'Market Owl'),
+			('legacy_alias_b', '!', 'market owl'),
+			('legacy_alias_blank', '!', ''),
+			('legacy_alias_agent', '!', '西雅图价值客')`); err != nil {
+		t.Fatal(err)
+	}
+	migration, err := migrationsFS.ReadFile("migrations/0021_unique_aliases.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, string(migration)); err != nil {
+		t.Fatalf("reapply unique alias migration: %v", err)
+	}
+
+	var total, distinct, blank, agentCollisions int
+	if err := pool.QueryRow(ctx, `
+		SELECT count(*), count(DISTINCT lower(display_name)),
+			count(*) FILTER (WHERE display_name = ''),
+			count(*) FILTER (WHERE lower(display_name) IN (
+				SELECT lower(agent_name) FROM users WHERE is_agent
+				UNION SELECT lower(agent_name_en) FROM users WHERE is_agent
+			))
+		FROM users WHERE NOT is_agent`).Scan(&total, &distinct, &blank, &agentCollisions); err != nil {
+		t.Fatal(err)
+	}
+	if total != 4 || distinct != total || blank != 0 || agentCollisions != 0 {
+		t.Fatalf("repaired aliases: total=%d distinct=%d blank=%d agent_collisions=%d",
+			total, distinct, blank, agentCollisions)
+	}
+	if _, err := pool.Exec(ctx, `
+		UPDATE users SET display_name = 'MARKET OWL'
+		WHERE username = 'legacy_alias_blank'`); !isConstraintViolation(err, "users_display_name_unique") {
+		t.Fatalf("case-insensitive duplicate alias: %v", err)
+	}
+}

@@ -65,4 +65,18 @@ describe("Profile page", () => {
     expect(screen.getByText("New passwords do not match.")).toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
+
+  it("explains when an alias is already taken", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(
+      JSON.stringify({ error: "alias already in use" }), { status: 409 },
+    ));
+    render(<MemoryRouter><UserCtxForTest.Provider value={{
+      id: 1, username: "alice", display_name: "Market Owl", avatar_id: "owl",
+    }}><Profile /></UserCtxForTest.Provider></MemoryRouter>);
+
+    fireEvent.change(screen.getByLabelText("Alias"), { target: { value: "Taken Alias" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save profile" }));
+
+    expect(await screen.findByText("This alias is already taken.")).toBeInTheDocument();
+  });
 });

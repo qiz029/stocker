@@ -367,6 +367,7 @@ func TestHypeBustFineEventExposed(t *testing.T) {
 	sc := mkScenario(t, pool)
 	room, at := mkActionRoom(t, pool, sc, host.ID)
 	caught, clean := caughtUsers(t, pool, room, at, "roller")
+	setTestAlias(t, pool, caught, "Caught Trader")
 
 	// Determinism: the roll matches the engine stream exactly.
 	res, err := Hype(ctx, pool, room, sc, clean.ID, at(3), "S1", "up", 3)
@@ -410,7 +411,7 @@ func TestHypeBustFineEventExposed(t *testing.T) {
 		WHERE room_id = $1 AND kind = 'manipulation_bust'`, room.ID).Scan(&payload); err != nil {
 		t.Fatalf("bust event: %v", err)
 	}
-	if payload["username"] != caught.Username ||
+	if payload["username"] != caught.DisplayName ||
 		int64(payload["fine_cents"].(float64)) != wantFine ||
 		payload["instrument_id"] != "S1" ||
 		int(payload["day"].(float64)) != 3 {

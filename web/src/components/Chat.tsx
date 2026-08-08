@@ -6,6 +6,7 @@ import { avatarGlyph } from "../avatar";
 
 export default function Chat({ roomId, readOnly = false }: { roomId: string; readOnly?: boolean }) {
   const user = useUser();
+  const myAlias = user.display_name?.trim() || "Player";
   const { t, lang } = useT();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState("");
@@ -62,7 +63,7 @@ export default function Chat({ roomId, readOnly = false }: { roomId: string; rea
       <h2>{t("chat.title")}</h2>
       <div className="chat-list" ref={listRef}>
         {messages.map(m => (
-          <div key={m.id} className={`chat-msg ${!m.is_agent && (m.is_me ?? m.username === user.username) ? "me" : ""} ${m.is_agent ? "agent" : ""}`}>
+          <div key={m.id} className={`chat-msg ${!m.is_agent && (m.is_me ?? m.username === myAlias) ? "me" : ""} ${m.is_agent ? "agent" : ""}`}>
             <div className="cm-meta">
               {!m.is_agent && <span className="chat-avatar">{avatarGlyph(m.avatar_id, m.username)}</span>}
               <b>{m.is_agent ? pickL(lang, m.username, m.username_en) : m.username}</b>

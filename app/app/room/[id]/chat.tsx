@@ -56,7 +56,7 @@ export default function ChatScreen() {
           keyExtractor={m => String(m.id)}
           contentContainerStyle={styles.list}
           renderItem={({ item: m }) => {
-            const mine = !m.is_agent && (m.is_me ?? m.username === user?.username);
+            const mine = !m.is_agent && (m.is_me ?? m.username === user?.display_name?.trim());
             return (
               <View style={[styles.msg, mine && styles.msgMe]}>
                 <View style={styles.metaRow}>

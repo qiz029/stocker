@@ -249,8 +249,8 @@ type LeaderboardRow struct {
 func Leaderboard(ctx context.Context, q Querier, room *Room, curDay int) ([]LeaderboardRow, error) {
 	rows, err := q.Query(ctx, `
 		SELECT rp.user_id,
-			CASE WHEN u.is_agent THEN u.agent_name ELSE COALESCE(NULLIF(u.display_name, ''), u.username) END,
-			CASE WHEN u.is_agent THEN COALESCE(u.agent_name_en, u.agent_name) ELSE COALESCE(NULLIF(u.display_name, ''), u.username) END,
+			CASE WHEN u.is_agent THEN u.agent_name ELSE COALESCE(NULLIF(u.display_name, ''), 'Player') END,
+			CASE WHEN u.is_agent THEN COALESCE(u.agent_name_en, u.agent_name) ELSE COALESCE(NULLIF(u.display_name, ''), 'Player') END,
 			u.is_agent, u.avatar_id, rp.joined_day, rp.bankrupt_day IS NOT NULL
 		FROM room_players rp JOIN users u ON u.id = rp.user_id
 		WHERE rp.room_id = $1`, room.ID)

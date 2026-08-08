@@ -84,6 +84,20 @@ func UserBySession(ctx context.Context, q Querier, token string, now time.Time) 
 }
 
 func UpdateUserProfile(ctx context.Context, q Querier, userID int64, displayName, avatarID, email, description string, socialLinks map[string]string) (*User, error) {
+	var agentConflict bool
+	if err := q.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM users
+			WHERE is_agent AND (
+				lower(agent_name) = lower($1)
+				OR lower(COALESCE(agent_name_en, '')) = lower($1)
+			)
+		)`, displayName).Scan(&agentConflict); err != nil {
+		return nil, err
+	}
+	if agentConflict {
+		return nil, ErrAliasTaken
+	}
 	u := &User{}
 	err := q.QueryRow(ctx, `
 		UPDATE users SET display_name = $2, avatar_id = $3, email = $4, description = $5, social_links = $6 WHERE id = $1
@@ -95,6 +109,9 @@ func UpdateUserProfile(ctx context.Context, q Querier, userID int64, displayName
 	}
 	if isConstraintViolation(err, "users_email_unique") {
 		return nil, ErrEmailTaken
+	}
+	if isConstraintViolation(err, "users_display_name_unique") {
+		return nil, ErrAliasTaken
 	}
 	return u, err
 }

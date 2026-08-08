@@ -395,7 +395,7 @@ func ListPublicRooms(ctx context.Context, q Querier, limit int) ([]PublicRoomSum
 			COALESCE((leader.total_cents - $2)::double precision / $2, 0)
 		FROM rooms r
 		LEFT JOIN LATERAL (
-			SELECT COALESCE(NULLIF(u.display_name, ''), u.username) username,
+			SELECT COALESCE(NULLIF(u.display_name, ''), 'Player') username,
 				u.avatar_id, latest.total_cents
 			FROM (
 				SELECT DISTINCT ON (d.user_id) d.user_id, d.total_cents
@@ -456,7 +456,7 @@ func EraLeaderboard(ctx context.Context, q Querier, now time.Time, limit int) ([
 			JOIN rooms r ON r.id = d.room_id
 			WHERE d.day = r.days - 1
 		), ranked AS (
-			SELECT c.scenario_id, u.id, COALESCE(NULLIF(u.display_name, ''), u.username) username,
+			SELECT c.scenario_id, u.id, COALESCE(NULLIF(u.display_name, ''), 'Player') username,
 				u.avatar_id, (f.total_cents - $1)::double precision / $1 AS return_pct,
 				ROW_NUMBER() OVER (PARTITION BY c.id ORDER BY f.total_cents DESC, u.id) room_rank
 			FROM final_totals f

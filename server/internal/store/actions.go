@@ -351,9 +351,9 @@ func Hype(ctx context.Context, db *pgxpool.Pool, room *Room, sc *scenario.Scenar
 				return err
 			}
 			cash -= fromCash
-			var username string
+			var alias string
 			if err := tx.QueryRow(ctx,
-				`SELECT username FROM users WHERE id = $1`, userID).Scan(&username); err != nil {
+				`SELECT COALESCE(NULLIF(display_name, ''), 'Player') FROM users WHERE id = $1`, userID).Scan(&alias); err != nil {
 				return err
 			}
 			if _, err := tx.Exec(ctx, `
@@ -361,7 +361,7 @@ func Hype(ctx context.Context, db *pgxpool.Pool, room *Room, sc *scenario.Scenar
 				VALUES ($1, $2, 'manipulation_bust', jsonb_build_object(
 					'username', $3::text, 'fine_cents', $4::bigint,
 					'instrument_id', $5::text, 'day', $2::int))`,
-				room.ID, curDay, username, fine, instrumentID); err != nil {
+				room.ID, curDay, alias, fine, instrumentID); err != nil {
 				return err
 			}
 			if _, err := tx.Exec(ctx,

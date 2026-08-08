@@ -17,6 +17,10 @@ func TestChatFlow(t *testing.T) {
 	host := registerClient(t, s, "host")
 	guest := registerClient(t, s, "guest")
 	outsider := registerClient(t, s, "outsider")
+	host.mustJSON("PUT", "/api/me/profile",
+		map[string]any{"display_name": "Host Owl", "avatar_id": "owl"}, http.StatusOK)
+	guest.mustJSON("PUT", "/api/me/profile",
+		map[string]any{"display_name": "Guest Bear", "avatar_id": "bear"}, http.StatusOK)
 	created := host.mustJSON("POST", "/api/rooms",
 		map[string]any{"scenario_id": "synthetic-v1", "day_duration_secs": 60}, http.StatusOK)
 	roomID := int64(created["id"].(float64))
@@ -39,10 +43,10 @@ func TestChatFlow(t *testing.T) {
 	}
 	first := items[0].(map[string]any)
 	second := items[1].(map[string]any)
-	if first["username"] != "host" || first["day"].(float64) != 0 {
+	if first["username"] != "Host Owl" || first["day"].(float64) != 0 {
 		t.Fatalf("first message: %v", first)
 	}
-	if second["username"] != "guest" || second["day"].(float64) != 2 {
+	if second["username"] != "Guest Bear" || second["day"].(float64) != 2 {
 		t.Fatalf("second message: %v", second)
 	}
 

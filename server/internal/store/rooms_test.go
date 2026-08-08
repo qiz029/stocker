@@ -20,7 +20,18 @@ func mkUser(t *testing.T, pool *pgxpool.Pool, name string) *User {
 	if err != nil {
 		t.Fatalf("mkUser(%s): %v", name, err)
 	}
+	setTestAlias(t, pool, u, name)
 	return u
+}
+
+func setTestAlias(t *testing.T, pool *pgxpool.Pool, user *User, alias string) {
+	t.Helper()
+	if _, err := pool.Exec(context.Background(),
+		`UPDATE users SET display_name = $2, avatar_id = 'bull' WHERE id = $1`, user.ID, alias); err != nil {
+		t.Fatalf("setTestAlias(%s): %v", alias, err)
+	}
+	user.DisplayName = alias
+	user.AvatarID = "bull"
 }
 
 func mkScenario(t *testing.T, pool *pgxpool.Pool) *scenario.Scenario {
@@ -140,6 +151,7 @@ func TestEraLeaderboardUsesFinalSnapshotsAcrossEras(t *testing.T) {
 			t.Fatal(err)
 		}
 		host := mkUser(t, pool, hostName)
+		setTestAlias(t, pool, host, hostName+" alias")
 		room, err := CreateRoom(ctx, pool, sc, host.ID, 60, nil, "public")
 		if err != nil {
 			t.Fatal(err)
@@ -191,7 +203,7 @@ func TestEraLeaderboardUsesFinalSnapshotsAcrossEras(t *testing.T) {
 			t.Fatalf("stale snapshot entered leaderboard: %+v", row)
 		}
 	}
-	if got["era-a"] != hostA.Username || got["era-b"] != hostB.Username {
+	if got["era-a"] != hostA.DisplayName || got["era-b"] != hostB.DisplayName {
 		t.Fatalf("leaderboard by era = %v", got)
 	}
 }

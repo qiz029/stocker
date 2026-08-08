@@ -20,6 +20,8 @@ func TestRevealOnlyAfterGameEnds(t *testing.T) {
 	advance := fakeClock(s, t0)
 
 	host := registerClient(t, s, "host")
+	host.mustJSON("PUT", "/api/me/profile",
+		map[string]any{"display_name": "Market Owl", "avatar_id": "owl"}, http.StatusOK)
 	created := host.mustJSON("POST", "/api/rooms",
 		map[string]any{"scenario_id": "synthetic-v1", "day_duration_secs": 60}, http.StatusOK)
 	roomID := int64(created["id"].(float64))
@@ -57,7 +59,7 @@ func TestRevealOnlyAfterGameEnds(t *testing.T) {
 		t.Fatalf("reveal trades: %v", trades)
 	}
 	tr := trades[0].(map[string]any)
-	if tr["username"] != "host" || tr["instrument_id"] != "S1" || tr["day"].(float64) != 1 {
+	if tr["username"] != "Market Owl" || tr["instrument_id"] != "S1" || tr["day"].(float64) != 1 {
 		t.Fatalf("trade: %v", tr)
 	}
 	if len(got["leaderboard"].([]any)) != 1+store.AgentPlayerCount {

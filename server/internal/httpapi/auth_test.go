@@ -121,6 +121,28 @@ func TestExtendedProfileAndPasswordChange(t *testing.T) {
 		map[string]any{"username": "profile_user", "password": "new-password-456"}, http.StatusOK)
 }
 
+func TestAliasMustBeUniqueIgnoringCase(t *testing.T) {
+	s := newServer(t)
+	first := registerIncompleteClient(t, s, "alias_owner")
+	second := registerIncompleteClient(t, s, "alias_challenger")
+
+	first.mustJSON("PUT", "/api/me/profile", map[string]any{
+		"display_name": "Market Owl", "avatar_id": "owl",
+	}, http.StatusOK)
+	resp, body := second.do("PUT", "/api/me/profile", map[string]any{
+		"display_name": "market owl", "avatar_id": "fox",
+	})
+	if resp.StatusCode != http.StatusConflict || !strings.Contains(string(body), "alias already in use") {
+		t.Fatalf("duplicate alias: status %d body %s", resp.StatusCode, body)
+	}
+	resp, body = second.do("PUT", "/api/me/profile", map[string]any{
+		"display_name": "Seattle Value Sage", "avatar_id": "fox",
+	})
+	if resp.StatusCode != http.StatusConflict || !strings.Contains(string(body), "alias already in use") {
+		t.Fatalf("agent alias: status %d body %s", resp.StatusCode, body)
+	}
+}
+
 func TestExtendedProfileValidation(t *testing.T) {
 	tests := []struct {
 		name string

@@ -132,7 +132,7 @@ export default function Room() {
           </button>}
           <DocsLink />
           <LangSwitch />
-          <div className="avatar">{avatarGlyph(user.avatar_id, user.username)}</div>
+          <div className="avatar">{avatarGlyph(user.avatar_id, user.display_name?.trim() || "Player")}</div>
         </div>
       </div>
 

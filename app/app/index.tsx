@@ -52,7 +52,7 @@ export default function HallScreen() {
   }, []);
   useEffect(() => {
     if (!user) return;
-    const owner = user.display_name?.trim() || user.username;
+    const owner = user.display_name?.trim() || (lang === "zh" ? "玩家" : "Player");
     setRoomName(current => current || (lang === "zh" ? `${owner}的房间` : `${owner}'s Room`));
   }, [lang, user]);
 
@@ -145,7 +145,7 @@ export default function HallScreen() {
         <Text style={styles.brand}><Text style={{ color: colors.up }}>●</Text> Stocker</Text>
         <View style={styles.topActions}>
           <LangToggle />
-          {user && <Avatar id={user.avatar_id} username={user.username} size={28} />}
+          {user && <Avatar id={user.avatar_id} username={user.display_name?.trim() || "Player"} size={28} />}
           <TouchableOpacity onPress={() => void logout()} hitSlop={8}>
             <Text style={styles.logout}>⏻</Text>
           </TouchableOpacity>

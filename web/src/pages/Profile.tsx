@@ -13,26 +13,26 @@ const profileCopy = {
   en: {
     back: "Back to Market Hall", eyebrow: "ACCOUNT / IDENTITY", title: "Your profile",
     sub: "Shape how other players see you across every timeline.", preview: "Public preview", member: "Market participant",
-    identity: "Identity", identitySub: "Your public name, avatar, and introduction.", alias: "Alias", aliasHint: "Shown in rooms and rankings",
+    identity: "Identity", identitySub: "Your public name, avatar, and introduction.", alias: "Alias", aliasHint: "Unique across every player-facing screen",
     email: "Email", emailHint: "Private · never shown to other players", description: "Description", descriptionPlaceholder: "Share your investing style, interests, or a little about yourself…",
     avatar: "Choose an avatar", social: "Social links", socialSub: "Optional links shown on your public profile.", website: "Website", x: "X / Twitter", github: "GitHub", linkedin: "LinkedIn",
-    save: "Save profile", saving: "Saving…", saved: "Profile saved", noDescription: "Add a description to introduce yourself.",
+    save: "Save profile", saving: "Saving…", saved: "Profile saved", noAlias: "Choose an alias", noDescription: "Add a description to introduce yourself.",
     security: "Security", securitySub: "Use a strong password you do not reuse elsewhere.", currentPassword: "Current password",
     newPassword: "New password", confirmPassword: "Confirm new password", updatePassword: "Update password", updatingPassword: "Updating…",
     passwordUpdated: "Password updated", passwordMismatch: "New passwords do not match.", mockNotice: "Mock preview updated locally.",
-    saveFailed: "Could not save profile", passwordFailed: "Could not update password",
+    saveFailed: "Could not save profile", aliasTaken: "This alias is already taken.", passwordFailed: "Could not update password",
   },
   zh: {
     back: "返回时代大厅", eyebrow: "账户 / 身份", title: "个人资料",
     sub: "管理你在每条时间线中展示给其他玩家的身份。", preview: "公开预览", member: "市场参与者",
-    identity: "身份资料", identitySub: "你的公开昵称、头像与个人介绍。", alias: "Alias / 昵称", aliasHint: "显示在房间和排行榜中",
+    identity: "身份资料", identitySub: "你的公开昵称、头像与个人介绍。", alias: "Alias / 昵称", aliasHint: "所有玩家界面唯一显示",
     email: "邮箱", emailHint: "仅自己可见 · 不向其他玩家展示", description: "个人介绍", descriptionPlaceholder: "介绍一下你的投资风格、兴趣，或者你自己……",
     avatar: "选择头像", social: "社交链接", socialSub: "可选，将展示在你的公开资料中。", website: "个人网站", x: "X / Twitter", github: "GitHub", linkedin: "LinkedIn",
-    save: "保存资料", saving: "保存中…", saved: "个人资料已保存", noDescription: "添加一段介绍，让大家认识你。",
+    save: "保存资料", saving: "保存中…", saved: "个人资料已保存", noAlias: "设置昵称", noDescription: "添加一段介绍，让大家认识你。",
     security: "安全设置", securitySub: "请使用未在其他网站重复使用的强密码。", currentPassword: "当前密码",
     newPassword: "新密码", confirmPassword: "确认新密码", updatePassword: "更新密码", updatingPassword: "更新中…",
     passwordUpdated: "密码已更新", passwordMismatch: "两次输入的新密码不一致。", mockNotice: "Mock 预览已在本地更新。",
-    saveFailed: "保存个人资料失败", passwordFailed: "更新密码失败",
+    saveFailed: "保存个人资料失败", aliasTaken: "这个昵称已被占用。", passwordFailed: "更新密码失败",
   },
 };
 
@@ -67,6 +67,7 @@ export default function Profile() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordBusy, setPasswordBusy] = useState(false);
   const [passwordError, setPasswordError] = useState("");
+  const visibleAlias = alias.trim() || c.noAlias;
 
   const activeLinks = useMemo(() => socialNetworks.filter(({ key }) => isSafePreviewLink(links[key])), [links]);
 
@@ -81,7 +82,7 @@ export default function Profile() {
       updateAccount(updated);
       toast(mockHall ? c.mockNotice : c.saved);
     } catch (err) {
-      toast(err instanceof ApiError ? err.message : c.saveFailed);
+      toast(err instanceof ApiError && err.message === "alias already in use" ? c.aliasTaken : err instanceof ApiError ? err.message : c.saveFailed);
     } finally {
       setSaving(false);
     }
@@ -110,7 +111,7 @@ export default function Profile() {
     <header className="topbar profile-topbar">
       <button type="button" className="brand profile-brand" onClick={()=>navigate(hallPath)}><em>●</em> Stocker</button>
       <div className="spacer"/><DocsLink/><LangSwitch/>
-      <div className="profile-top-account"><span className="avatar">{avatarGlyph(avatarID, account.username)}</span><span>{account.username}</span></div>
+      <div className="profile-top-account"><span className="avatar">{avatarGlyph(avatarID, visibleAlias)}</span><span>{visibleAlias}</span></div>
     </header>
     <main className="profile-shell">
       <button type="button" className="profile-back" aria-label={c.back} onClick={()=>navigate(hallPath)}>← {c.back}</button>
@@ -118,8 +119,8 @@ export default function Profile() {
       <div className="profile-layout">
         <aside className="profile-preview">
           <div className="profile-preview-grid" aria-hidden="true"/><span className="profile-preview-label">{c.preview}</span>
-          <div className="profile-preview-avatar">{avatarGlyph(avatarID, account.username)}</div>
-          <h2>{alias.trim() || account.username}</h2><p className="profile-handle">@{account.username}</p>
+          <div className="profile-preview-avatar">{avatarGlyph(avatarID, visibleAlias)}</div>
+          <h2>{visibleAlias}</h2>
           <p className={`profile-preview-description ${description.trim()?"":"empty"}`}>{description.trim() || c.noDescription}</p>
           <div className="profile-preview-links">{activeLinks.map(({key,icon})=><a href={links[key]} target="_blank" rel="noreferrer" aria-label={`${c[key]} link`} key={key}>{icon}</a>)}</div>
           <div className="profile-member"><i/><span>{c.member}</span></div>

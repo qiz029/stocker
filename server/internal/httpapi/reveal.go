@@ -58,8 +58,8 @@ func (s *Server) handleReveal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tradeRows, err := s.DB.Query(r.Context(), `
-		SELECT COALESCE(u.agent_name, u.username),
-			CASE WHEN u.is_agent THEN COALESCE(u.agent_name_en, u.agent_name) ELSE u.username END,
+		SELECT CASE WHEN u.is_agent THEN u.agent_name ELSE COALESCE(NULLIF(u.display_name, ''), 'Player') END,
+			CASE WHEN u.is_agent THEN COALESCE(u.agent_name_en, u.agent_name) ELSE COALESCE(NULLIF(u.display_name, ''), 'Player') END,
 			u.is_agent,
 			t.instrument_id, t.side, t.day, t.price, t.shares, t.amount_cents
 		FROM trades t JOIN users u ON u.id = t.user_id
