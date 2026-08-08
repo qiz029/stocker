@@ -30,6 +30,7 @@ func (s *Server) storeErr(w http.ResponseWriter, err error) {
 	case errors.Is(err, store.ErrNotFound):
 		writeErr(w, http.StatusNotFound, err.Error())
 	case errors.Is(err, store.ErrUsernameTaken),
+		errors.Is(err, store.ErrEmailTaken),
 		errors.Is(err, store.ErrAlreadyJoined),
 		errors.Is(err, store.ErrRoomFull),
 		errors.Is(err, store.ErrPublicJoinClosed),

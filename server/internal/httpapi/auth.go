@@ -3,7 +3,10 @@ package httpapi
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"net/http"
+	"net/mail"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
@@ -27,9 +30,14 @@ var allowedAvatars = map[string]bool{
 }
 
 func userJSON(u *store.User) map[string]any {
+	links := u.SocialLinks
+	if links == nil {
+		links = map[string]string{}
+	}
 	return map[string]any{
 		"id": u.ID, "username": u.Username, "display_name": u.DisplayName,
-		"avatar_id": u.AvatarID, "profile_complete": u.ProfileComplete(),
+		"avatar_id": u.AvatarID, "email": u.Email, "description": u.Description,
+		"social_links": links, "profile_complete": u.ProfileComplete(),
 	}
 }
 
@@ -135,24 +143,115 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, userJSON(u))
 }
 
-func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		DisplayName string `json:"display_name"`
-		AvatarID    string `json:"avatar_id"`
+type profileRequest struct {
+	DisplayName string             `json:"display_name"`
+	AvatarID    string             `json:"avatar_id"`
+	Email       *string            `json:"email"`
+	Description *string            `json:"description"`
+	SocialLinks *map[string]string `json:"social_links"`
+}
+
+var allowedSocialLinks = map[string]bool{
+	"website": true, "x": true, "github": true, "linkedin": true,
+}
+
+func validateProfileRequest(req *profileRequest) error {
+	req.DisplayName = strings.TrimSpace(req.DisplayName)
+	if utf8.RuneCountInString(req.DisplayName) < 2 || utf8.RuneCountInString(req.DisplayName) > 24 || !allowedAvatars[req.AvatarID] {
+		return fmt.Errorf("alias must be 2-24 characters and a valid avatar is required")
 	}
+	if req.Email != nil {
+		email := strings.ToLower(strings.TrimSpace(*req.Email))
+		if email != "" {
+			parsed, err := mail.ParseAddress(email)
+			if err != nil || parsed.Address != email || len(email) > 254 {
+				return fmt.Errorf("invalid email address")
+			}
+		}
+		req.Email = &email
+	}
+	if req.Description != nil {
+		description := strings.TrimSpace(*req.Description)
+		if utf8.RuneCountInString(description) > 500 {
+			return fmt.Errorf("description must be at most 500 characters")
+		}
+		req.Description = &description
+	}
+	if req.SocialLinks != nil {
+		normalized := make(map[string]string, len(*req.SocialLinks))
+		for network, raw := range *req.SocialLinks {
+			if !allowedSocialLinks[network] {
+				return fmt.Errorf("unsupported social link: %s", network)
+			}
+			value := strings.TrimSpace(raw)
+			if value == "" {
+				continue
+			}
+			parsed, err := url.ParseRequestURI(value)
+			if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" || len(value) > 200 {
+				return fmt.Errorf("social links must be valid http or https URLs")
+			}
+			normalized[network] = value
+		}
+		req.SocialLinks = &normalized
+	}
+	return nil
+}
+
+func (s *Server) handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
+	var req profileRequest
 	if err := readJSON(r, &req); err != nil {
 		writeErr(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
-	req.DisplayName = strings.TrimSpace(req.DisplayName)
-	if utf8.RuneCountInString(req.DisplayName) < 2 || utf8.RuneCountInString(req.DisplayName) > 24 || !allowedAvatars[req.AvatarID] {
-		writeErr(w, http.StatusBadRequest, "display name must be 2-24 characters and a valid avatar is required")
+	current := userFrom(r)
+	if req.Email == nil {
+		req.Email = &current.Email
+	}
+	if req.Description == nil {
+		req.Description = &current.Description
+	}
+	if req.SocialLinks == nil {
+		req.SocialLinks = &current.SocialLinks
+	}
+	if err := validateProfileRequest(&req); err != nil {
+		writeErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	u, err := store.UpdateUserProfile(r.Context(), s.DB, userFrom(r).ID, req.DisplayName, req.AvatarID)
+	u, err := store.UpdateUserProfile(r.Context(), s.DB, current.ID, req.DisplayName, req.AvatarID, *req.Email, *req.Description, *req.SocialLinks)
 	if err != nil {
 		s.storeErr(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, userJSON(u))
+}
+
+func (s *Server) handleUpdatePassword(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		CurrentPassword string `json:"current_password"`
+		NewPassword     string `json:"new_password"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if len(req.NewPassword) < 8 || len(req.NewPassword) > 72 {
+		writeErr(w, http.StatusBadRequest, "new password must be 8-72 characters")
+		return
+	}
+	current := userFrom(r)
+	if bcrypt.CompareHashAndPassword([]byte(current.PasswordHash), []byte(req.CurrentPassword)) != nil {
+		writeErr(w, http.StatusBadRequest, "current password is incorrect")
+		return
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		s.storeErr(w, err)
+		return
+	}
+	if err := store.UpdateUserPassword(r.Context(), s.DB, current.ID, string(hash)); err != nil {
+		s.storeErr(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "password updated"})
 }

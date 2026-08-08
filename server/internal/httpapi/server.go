@@ -35,6 +35,7 @@ func (s *Server) Router() http.Handler {
 		r.Post("/api/logout", s.handleLogout)
 		r.Get("/api/me", s.handleMe)
 		r.Put("/api/me/profile", s.handleUpdateProfile)
+		r.Put("/api/me/password", s.handleUpdatePassword)
 		r.Post("/api/me/push-token", s.handleAddPushToken)
 		r.Delete("/api/me/push-token", s.handleRemovePushToken)
 		r.Get("/api/scenarios", s.handleScenarios)

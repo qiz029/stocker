@@ -38,8 +38,9 @@ describe("App routes", () => {
     fireEvent.keyDown(logoutItem, { key: "Home" });
     expect(profileItem).toHaveFocus();
     fireEvent.click(profileItem);
-    expect(screen.getByRole("heading", { name: "Account settings" })).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("heading", { name: "Your profile" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Back to Market Hall" }));
+    await screen.findByText("黑色星期一抄底局");
     fireEvent.click(screen.getByRole("button", { name: "＋ Create new room" }));
     expect(screen.getByLabelText("Room name")).toHaveValue("市场猫头鹰's Room");
     fireEvent.click(screen.getByRole("button", { name: /^Create$/ }));
@@ -47,9 +48,6 @@ describe("App routes", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Join$/ }));
     const waitingRoom = screen.getByText("互联网泡沫最后一舞").closest(".hall-room")!;
     fireEvent.click(waitingRoom.querySelector<HTMLButtonElement>(".hall-room-action")!);
-    fireEvent.click(screen.getByRole("button", { name: /^Profile$/ }));
-    fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "Mock Owl" } });
-    fireEvent.click(screen.getByRole("button", { name: /^Save changes$/ }));
     fireEvent.click(screen.getByRole("button", { name: "market_owl account menu" }));
     fireEvent.click(within(screen.getByRole("menu", { name: "Account" })).getByRole("menuitem", { name: "Log out" }));
     expect(await screen.findByPlaceholderText("Username")).toBeInTheDocument();

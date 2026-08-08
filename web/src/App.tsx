@@ -9,6 +9,7 @@ import Stock from "./pages/Stock";
 import Reveal from "./pages/Reveal";
 import News from "./pages/News";
 import Docs from "./pages/Docs";
+import Profile from "./pages/Profile";
 import { hallMockEnabled, hallMockUser } from "./devHallFixtures";
 
 // Exported so page/component tests can provide a fake user.
@@ -43,6 +44,7 @@ function Shell() {
       <UserUpdateCtx.Provider value={setUser}>
         <Routes>
           <Route path="" element={<Lobby />} />
+          <Route path="profile" element={<Profile />} />
           <Route path="rooms/:roomId" element={<Room />} />
           <Route path="rooms/:roomId/i/:instrumentId" element={<Stock />} />
           <Route path="rooms/:roomId/news/:newsId" element={<News />} />

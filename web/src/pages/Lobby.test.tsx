@@ -1,5 +1,5 @@
 import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { UserCtxForTest } from "../App";
 import Lobby from "./Lobby";
@@ -166,30 +166,15 @@ describe("Lobby", () => {
     expect(screen.getByLabelText("Room name")).toHaveValue("Market Owl's Room");
   });
 
-  it("moves language and profile editing into the mobile account panel", async () => {
-    const calls: { url: string; method: string; body?: unknown }[] = [];
-    mockRoutes((url, init) => {
-      calls.push({ url, method: init?.method ?? "GET", body: init?.body ? JSON.parse(String(init.body)) : undefined });
+  it("routes the mobile account entry to the standalone profile page", async () => {
+    mockRoutes((url) => {
       if (url === "/api/scenarios") return { items: [] };
-      if (url === "/api/me/profile") return { id: 1, username: "alice", display_name: "Market Fox", avatar_id: "fox", profile_complete: true };
       return url === "/api/leaderboards/eras" ? { items: [] } : { rooms: [] };
     });
-    render(<MemoryRouter><UserCtxForTest.Provider value={{ id: 1, username: "alice", display_name: "Alice", avatar_id: "bull", profile_complete: true }}><Lobby /></UserCtxForTest.Provider></MemoryRouter>);
+    render(<MemoryRouter initialEntries={["/"]}><UserCtxForTest.Provider value={{ id: 1, username: "alice", display_name: "Alice", avatar_id: "bull", profile_complete: true }}><Routes><Route path="/" element={<Lobby/>}/><Route path="/profile" element={<h1>Standalone profile</h1>}/></Routes></UserCtxForTest.Provider></MemoryRouter>);
 
     fireEvent.click(await screen.findByRole("button", { name: "Profile" }));
-    expect(screen.getByRole("heading", { name: "Account settings" })).toBeInTheDocument();
-    expect(screen.getByText("Language")).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "Market Fox" } });
-    fireEvent.click(screen.getByRole("button", { name: "fox" }));
-    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
-
-    await waitFor(() => expect(calls).toContainEqual({
-      url: "/api/me/profile", method: "PUT", body: { display_name: "Market Fox", avatar_id: "fox" },
-    }));
-    await waitFor(() => expect(screen.queryByRole("heading", { name: "Account settings" })).not.toBeInTheDocument());
-    fireEvent.click(screen.getByRole("button", { name: "alice account menu" }));
-    fireEvent.click(within(screen.getByRole("menu", { name: "Account" })).getByRole("menuitem", { name: "Log out" }));
-    await waitFor(() => expect(calls).toContainEqual({ url: "/api/logout", method: "POST" }));
+    expect(screen.getByRole("heading", { name: "Standalone profile" })).toBeInTheDocument();
   });
 
   it("requires a display name and avatar before joining a public waiting room", async () => {

@@ -11,6 +11,14 @@ export const hallMockUser: User = {
   username: "market_owl",
   display_name: "市场猫头鹰",
   avatar_id: "owl",
+  email: "market.owl@example.com",
+  description: "长期价值投资者，也喜欢在市场最嘈杂的时候保持耐心。关注科技周期、宏观叙事和群体心理。",
+  social_links: {
+    website: "https://example.com/market-owl",
+    x: "https://x.com/market_owl",
+    github: "https://github.com/market-owl",
+    linkedin: "https://www.linkedin.com/in/market-owl",
+  },
   profile_complete: true,
 };
 

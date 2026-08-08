@@ -86,8 +86,7 @@ const hallCopy = {
     saveContinue: "Save & continue",
     createTitle: "Open a public timeline", createSub: "Players can spectate immediately. Waiting rooms allow them to complete a profile and join.",
     roomName: "Room name", era: "Choose an era", duration: "Game speed", createNow: "Create", creating: "Creating room…",
-    settings: "Profile", settingsTitle: "Account settings", settingsSub: "Manage how you appear in the Market Hall and choose your language.",
-    language: "Language", settingsCancel: "Cancel", settingsSave: "Save changes", settingsSaved: "Profile updated",
+    settings: "Profile",
     account: "Account", accountMenu: "account menu", profileMenu: "Profile", logout: "Log out", logoutFailed: "Log out failed. Please try again.",
     mockNotice: "Mock preview only — no data was changed.",
   },
@@ -103,8 +102,7 @@ const hallCopy = {
     saveContinue: "保存并继续",
     createTitle: "开启公开时间线", createSub: "所有人可以直接围观；等待开局时，完成资料即可加入。",
     roomName: "房间名称", era: "选择时代", duration: "游戏速度", createNow: "创建", creating: "正在创建房间…",
-    settings: "账户", settingsTitle: "账户设置", settingsSub: "管理你在时代大厅中的玩家身份与界面语言。",
-    language: "界面语言", settingsCancel: "取消", settingsSave: "保存修改", settingsSaved: "资料已更新",
+    settings: "账户",
     account: "账户", accountMenu: "账户菜单", profileMenu: "个人资料", logout: "退出登录", logoutFailed: "退出登录失败，请重试。",
     mockNotice: "当前为 Mock 预览，不会修改任何数据。",
   },
@@ -203,7 +201,7 @@ export default function Lobby() {
   const [filter, setFilter] = useState<string>("all");
   const [boardEra, setBoardEra] = useState<string>("all");
   const [invite, setInvite] = useState("");
-  const [dialog, setDialog] = useState<"profile" | "create" | "settings" | null>(null);
+  const [dialog, setDialog] = useState<"profile" | "create" | null>(null);
   const [pendingRoom, setPendingRoom] = useState<PublicRoom | null>(null);
   const [pendingInvite, setPendingInvite] = useState("");
   const [pendingCreate, setPendingCreate] = useState(false);
@@ -229,7 +227,6 @@ export default function Lobby() {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       if (dialog === "profile") closeProfile();
-      else if (dialog === "settings") closeSettings();
       else setDialog(null);
     };
     window.addEventListener("keydown", onKeyDown);
@@ -319,24 +316,7 @@ export default function Lobby() {
   }
   function openSettings() {
     setAccountOpen(false);
-    setDisplayName(profileUser.display_name ?? "");
-    setAvatarID(profileUser.avatar_id ?? "bull");
-    setMobileTab("settings");
-    setDialog("settings");
-  }
-  function closeSettings() {
-    setDialog(null);
-    setMobileTab("market");
-  }
-  async function saveSettings(e: FormEvent) {
-    e.preventDefault(); setBusy(true);
-    try {
-      const updated = mockHall
-        ? { ...profileUser, display_name: displayName.trim(), avatar_id: avatarID, profile_complete: true }
-        : await api.put<User>("/api/me/profile", { display_name: displayName.trim(), avatar_id: avatarID });
-      setProfileUser(updated); updateAccount(updated); closeSettings(); toast(c.settingsSaved);
-    } catch (err) { toast(err instanceof ApiError ? err.message : t("lobby.joinFailed")); }
-    finally { setBusy(false); }
+    navigate(mockHall ? "/profile?mock=hall" : "/profile");
   }
   async function logout() {
     setAccountOpen(false);
@@ -408,7 +388,7 @@ export default function Lobby() {
       </div>
       {(mine?.rooms?.length??0)>0&&<section className="hall-mine" id="mobile-my-rooms"><header><h2>{c.mine}</h2><span>{mine!.rooms.length}</span></header><div>{mine!.rooms.slice(0,4).map(room=><HallRoomRow key={room.id} room={room} scenarios={scenarios} c={c} lang={lang} dense onWatch={()=>openRoom(room.id)}/>)}</div></section>}
     </main>
-    {(dialog==="profile"||dialog==="settings")&&<div className="hall-dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)(dialog==="settings"?closeSettings():closeProfile())}}><form className={`hall-dialog ${dialog==="settings"?"hall-settings":""}`} role="dialog" aria-modal="true" aria-labelledby="profile-title" onSubmit={dialog==="settings"?saveSettings:saveProfileAndJoin}><h2 id="profile-title">{dialog==="settings"?c.settingsTitle:c.profileTitle}</h2><p>{dialog==="settings"?c.settingsSub:c.profileSub}</p>{dialog==="settings"&&<div className="hall-setting-row"><span>{c.language}</span><LangSwitch/></div>}<label>{c.displayName}<input autoFocus minLength={2} maxLength={24} required value={displayName} onChange={e=>setDisplayName(e.target.value)}/></label><label>{c.avatar}<div className="hall-avatars">{avatarIDs.map(id=><button type="button" aria-label={id} aria-pressed={avatarID===id} className={`hall-avatar-option ${avatarID===id?"on":""}`} key={id} onClick={()=>setAvatarID(id)}>{avatarGlyphs[id]}</button>)}</div></label><div className="hall-dialog-actions"><button type="button" onClick={dialog==="settings"?closeSettings:closeProfile}>{dialog==="settings"?c.settingsCancel:c.cancel}</button><button className="confirm" disabled={busy||displayName.trim().length<2}>{busy?"…":dialog==="settings"?c.settingsSave:pendingCreate?c.saveContinue:c.saveJoin}</button></div></form></div>}
+    {dialog==="profile"&&<div className="hall-dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)closeProfile()}}><form className="hall-dialog" role="dialog" aria-modal="true" aria-labelledby="profile-title" onSubmit={saveProfileAndJoin}><h2 id="profile-title">{c.profileTitle}</h2><p>{c.profileSub}</p><label>{c.displayName}<input autoFocus minLength={2} maxLength={24} required value={displayName} onChange={e=>setDisplayName(e.target.value)}/></label><label>{c.avatar}<div className="hall-avatars">{avatarIDs.map(id=><button type="button" aria-label={id} aria-pressed={avatarID===id} className={`hall-avatar-option ${avatarID===id?"on":""}`} key={id} onClick={()=>setAvatarID(id)}>{avatarGlyphs[id]}</button>)}</div></label><div className="hall-dialog-actions"><button type="button" onClick={closeProfile}>{c.cancel}</button><button className="confirm" disabled={busy||displayName.trim().length<2}>{busy?"…":pendingCreate?c.saveContinue:c.saveJoin}</button></div></form></div>}
     {dialog==="create"&&<div className="hall-dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setDialog(null)}}><div className="hall-dialog hall-create" role="dialog" aria-modal="true" aria-labelledby="create-title"><h2 id="create-title">{c.createTitle}</h2><p>{c.createSub}</p><label>{c.roomName}<input autoFocus aria-label={c.roomName} minLength={2} maxLength={40} required value={roomName} onChange={e=>setRoomName(e.target.value)}/></label><div className="era-timeline" role="radiogroup" aria-label={c.era} data-era-count={scenarios.length} style={{"--era-count":Math.max(1,scenarios.length)} as React.CSSProperties}>{scenarios.map((sc,index)=>{const visual=eraVisuals[sc.id];const selected=scenarioID===sc.id;return <button type="button" role="radio" aria-checked={selected} tabIndex={selected?0:-1} data-era-year={scenarioYear(sc)} key={sc.id} className={`era-card ${selected?"selected":""}`} style={{"--era-accent":visual?.accent??"#00c805"} as React.CSSProperties} onClick={()=>{setScenarioID(sc.id);setDuration(0)}} onKeyDown={e=>moveEra(e,index)}>{index<scenarios.length-1&&<span className="era-link"/>}<span className="era-node"/>{visual&&<img className="era-card-art" src={visual.image} alt=""/>}<span className="era-card-shade"/><span className="era-card-index">{String(index+1).padStart(2,"0")}</span><span className="era-card-copy"><strong className="era-year">{yearLabel(sc)}</strong><span className="era-title">{pickL(lang,sc.name,sc.name_en).replace(/^\s*(?:19|20)\d{2}\s*[·—:-]?\s*/,"")}</span><span className="era-days">{sc.days} {lang==="zh"?"个交易日":"trading days"}</span></span><span className="era-card-state">{selected?(lang==="zh"?"已选择":"Selected"):(lang==="zh"?"选择时代":"Select era")}</span></button>})}</div><SpeedPicker days={scenarios.find(sc=>sc.id===scenarioID)?.days??300} lang={lang} value={duration} label={c.duration} onChange={setDuration}/><div className="hall-dialog-actions"><button onClick={()=>setDialog(null)}>{c.cancel}</button><button className="confirm" onClick={createRoom} disabled={busy||!scenarioID||roomName.trim().length<2}>{busy?c.creating:c.createNow}</button></div></div></div>}
     <MobileNav
       label={lang === "zh" ? "大厅导航" : "Hall navigation"}

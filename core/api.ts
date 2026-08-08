@@ -40,7 +40,12 @@ export const api = {
 
 /* ---------- API types (mirror the Go handlers exactly) ---------- */
 export type AvatarID = "bull" | "bear" | "fox" | "owl" | "shark" | "tiger" | "rocket" | "diamond";
-export type User = { id: number; username: string; display_name?: string; avatar_id?: AvatarID; profile_complete?: boolean };
+export type SocialLinkKey = "website" | "x" | "github" | "linkedin";
+export type User = {
+  id: number; username: string; display_name?: string; avatar_id?: AvatarID;
+  email?: string; description?: string; social_links?: Partial<Record<SocialLinkKey, string>>;
+  profile_complete?: boolean;
+};
 export type ScenarioInfo = { id: string; name: string; days: number; name_en?: string };
 export type Room = {
   id: number; name?: string; invite_code?: string; scenario_id: string; days: number;
