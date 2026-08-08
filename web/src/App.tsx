@@ -9,6 +9,7 @@ import Stock from "./pages/Stock";
 import Reveal from "./pages/Reveal";
 import News from "./pages/News";
 import Docs from "./pages/Docs";
+import { hallMockEnabled, hallMockUser } from "./devHallFixtures";
 
 // Exported so page/component tests can provide a fake user.
 export const UserCtxForTest = createContext<User | null>(null);
@@ -22,6 +23,11 @@ function Shell() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    if (hallMockEnabled()) {
+      setUser(hallMockUser);
+      setChecked(true);
+      return;
+    }
     api.get<User>("/api/me")
       .then(setUser)
       .catch(() => setUser(null))
