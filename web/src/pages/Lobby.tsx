@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, ApiError, AvatarID, EraLeader, PublicRoom, Room, ScenarioInfo, User } from "../api";
 import { LangSwitch, pickL, useT } from "../i18n";
@@ -88,6 +88,7 @@ const hallCopy = {
     roomName: "Room name", era: "Choose an era", duration: "Game speed", createNow: "Create", creating: "Creating room…",
     settings: "Profile", settingsTitle: "Account settings", settingsSub: "Manage how you appear in the Market Hall and choose your language.",
     language: "Language", settingsCancel: "Cancel", settingsSave: "Save changes", settingsSaved: "Profile updated",
+    account: "Account", accountMenu: "account menu", profileMenu: "Profile", logout: "Log out", logoutFailed: "Log out failed. Please try again.",
     mockNotice: "Mock preview only — no data was changed.",
   },
   zh: {
@@ -104,6 +105,7 @@ const hallCopy = {
     roomName: "房间名称", era: "选择时代", duration: "游戏速度", createNow: "创建", creating: "正在创建房间…",
     settings: "账户", settingsTitle: "账户设置", settingsSub: "管理你在时代大厅中的玩家身份与界面语言。",
     language: "界面语言", settingsCancel: "取消", settingsSave: "保存修改", settingsSaved: "资料已更新",
+    account: "账户", accountMenu: "账户菜单", profileMenu: "个人资料", logout: "退出登录", logoutFailed: "退出登录失败，请重试。",
     mockNotice: "当前为 Mock 预览，不会修改任何数据。",
   },
 };
@@ -213,6 +215,9 @@ export default function Lobby() {
   const [duration, setDuration] = useState(0);
   const [busy, setBusy] = useState(false);
   const [mobileTab, setMobileTab] = useState("market");
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountRef = useRef<HTMLDivElement>(null);
+  const accountButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => { (mockHall
     ? Promise.resolve({ items: hallMockScenarios })
@@ -230,6 +235,23 @@ export default function Lobby() {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [dialog]);
+  useEffect(() => {
+    if (!accountOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!accountRef.current?.contains(event.target as Node)) setAccountOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setAccountOpen(false);
+      accountButtonRef.current?.focus();
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [accountOpen]);
 
   const publicRooms = (publicData?.rooms ?? []).filter(room => filter === "all" || room.scenario_id === filter);
   const leaders = (boardData?.items ?? []).filter(row => boardEra === "all" || row.scenario_id === boardEra).slice(0, 8);
@@ -296,6 +318,7 @@ export default function Lobby() {
     setDialog(null); setPendingRoom(null); setPendingInvite(""); setPendingCreate(false);
   }
   function openSettings() {
+    setAccountOpen(false);
     setDisplayName(profileUser.display_name ?? "");
     setAvatarID(profileUser.avatar_id ?? "bull");
     setMobileTab("settings");
@@ -314,6 +337,32 @@ export default function Lobby() {
       setProfileUser(updated); updateAccount(updated); closeSettings(); toast(c.settingsSaved);
     } catch (err) { toast(err instanceof ApiError ? err.message : t("lobby.joinFailed")); }
     finally { setBusy(false); }
+  }
+  async function logout() {
+    setAccountOpen(false);
+    if (!mockHall) {
+      try { await api.post("/api/logout"); }
+      catch (err) {
+        if (!(err instanceof ApiError && err.status === 401)) {
+          toast(err instanceof ApiError ? err.message : c.logoutFailed);
+          return;
+        }
+      }
+    }
+    updateAccount(null);
+    navigate("/");
+  }
+  function moveAccountMenu(event: React.KeyboardEvent<HTMLDivElement>) {
+    const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')];
+    const current = items.indexOf(document.activeElement as HTMLButtonElement);
+    let next = current;
+    if (event.key === "ArrowDown") next = (current + 1) % items.length;
+    else if (event.key === "ArrowUp") next = (current - 1 + items.length) % items.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = items.length - 1;
+    else return;
+    event.preventDefault();
+    items[next]?.focus();
   }
   async function createRoom() {
     if (mockHall) { setDialog(null); toast(c.mockNotice); return; }
@@ -349,7 +398,7 @@ export default function Lobby() {
   }
 
   return <div className="hall has-mobile-nav">
-    <div className="topbar hall-topbar"><div className="brand"><em>●</em> Stocker</div><div className="hall-live"><i /> LIVE HALL</div><div className="spacer"/><DocsLink/><LangSwitch/><div className="avatar">{avatarGlyph(profileUser.avatar_id, profileUser.username)}</div></div>
+    <div className="topbar hall-topbar"><div className="brand"><em>●</em> Stocker</div><div className="hall-live"><i /> LIVE HALL</div><div className="spacer"/><DocsLink/><LangSwitch/><div className="hall-account" ref={accountRef}><button ref={accountButtonRef} type="button" className="hall-account-trigger" aria-label={`${profileUser.username} ${c.accountMenu}`} aria-haspopup="menu" aria-expanded={accountOpen} onClick={()=>setAccountOpen(open=>!open)} onKeyDown={event=>{if(event.key!=="ArrowDown"&&event.key!=="ArrowUp")return;event.preventDefault();setAccountOpen(true);const last=event.key==="ArrowUp";requestAnimationFrame(()=>{const items=accountRef.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]');items?.[last?items.length-1:0]?.focus()})}}><span className="avatar">{avatarGlyph(profileUser.avatar_id, profileUser.username)}</span><span className="hall-account-name">{profileUser.username}</span><span className="hall-account-chevron" aria-hidden="true">⌄</span></button>{accountOpen&&<div className="hall-account-menu" role="menu" aria-label={c.account} onKeyDown={moveAccountMenu}><button type="button" role="menuitem" onClick={openSettings}><span aria-hidden="true">◎</span>{c.profileMenu}</button><button type="button" role="menuitem" className="logout" onClick={()=>void logout()}><span aria-hidden="true">↗</span>{c.logout}</button></div>}</div></div>
     <main className="hall-page">
       <section className="hall-hero"><div><span className="hall-eyebrow"><i/> STOCKER / COMMUNITY</span><h1>{c.title}</h1><p>{c.sub}</p></div><div className="hall-actions"><form onSubmit={joinInvite}><input className="hall-invite" aria-label={c.invite} placeholder={c.invite} value={invite} onChange={e=>setInvite(e.target.value)}/><button disabled={!invite.trim()}>{c.join}</button></form><button className="hall-primary" onClick={openCreate}>{c.create}</button></div></section>
       <div className="hall-ribbon"><span><b>{activeRooms}</b>{c.active}</span><span><b>{humanSeats}</b>{c.online}</span><span><b>{scenarios.length}</b>{c.eras}</span>{mostActive?.count ? <span className="ticker">{lang==="zh"?"最活跃":"Most active"} <b>{yearLabel(mostActive.sc)} · {pickL(lang,mostActive.sc.name,mostActive.sc.name_en)}</b></span>:null}</div>

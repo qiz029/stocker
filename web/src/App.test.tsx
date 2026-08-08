@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 
@@ -26,6 +26,20 @@ describe("App routes", () => {
     expect(await screen.findByText("黑色星期一抄底局")).toBeInTheDocument();
     expect(screen.getByText("互联网泡沫最后一舞")).toBeInTheDocument();
     expect(screen.getByText("Friday Night Traders")).toBeInTheDocument();
+    expect(screen.getByText("market_owl")).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole("button", { name: "market_owl account menu" }), { key: "ArrowDown" });
+    const accountMenu = screen.getByRole("menu", { name: "Account" });
+    expect(accountMenu).toBeInTheDocument();
+    const profileItem = within(accountMenu).getByRole("menuitem", { name: "Profile" });
+    const logoutItem = within(accountMenu).getByRole("menuitem", { name: "Log out" });
+    await waitFor(() => expect(profileItem).toHaveFocus());
+    fireEvent.keyDown(profileItem, { key: "ArrowDown" });
+    expect(logoutItem).toHaveFocus();
+    fireEvent.keyDown(logoutItem, { key: "Home" });
+    expect(profileItem).toHaveFocus();
+    fireEvent.click(profileItem);
+    expect(screen.getByRole("heading", { name: "Account settings" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     fireEvent.click(screen.getByRole("button", { name: "＋ Create new room" }));
     expect(screen.getByLabelText("Room name")).toHaveValue("市场猫头鹰's Room");
     fireEvent.click(screen.getByRole("button", { name: /^Create$/ }));
@@ -36,6 +50,27 @@ describe("App routes", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Profile$/ }));
     fireEvent.change(screen.getByLabelText("Display name"), { target: { value: "Mock Owl" } });
     fireEvent.click(screen.getByRole("button", { name: /^Save changes$/ }));
+    fireEvent.click(screen.getByRole("button", { name: "market_owl account menu" }));
+    fireEvent.click(within(screen.getByRole("menu", { name: "Account" })).getByRole("menuitem", { name: "Log out" }));
+    expect(await screen.findByPlaceholderText("Username")).toBeInTheDocument();
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("keeps the account active when server logout fails", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url === "/api/me") return new Response(JSON.stringify({ id: 1, username: "alice", display_name: "Alice", avatar_id: "owl", profile_complete: true }), { status: 200 });
+      if (url === "/api/logout") return new Response(JSON.stringify({ error: "Session store unavailable" }), { status: 500 });
+      if (url === "/api/scenarios" || url === "/api/leaderboards/eras") return new Response(JSON.stringify({ items: [] }), { status: 200 });
+      return new Response(JSON.stringify({ rooms: [] }), { status: 200 });
+    });
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "alice account menu" }));
+    fireEvent.click(within(screen.getByRole("menu", { name: "Account" })).getByRole("menuitem", { name: "Log out" }));
+
+    expect(await screen.findByText("Session store unavailable")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "alice account menu" })).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("Username")).not.toBeInTheDocument();
   });
 });

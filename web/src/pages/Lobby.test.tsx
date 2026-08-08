@@ -186,6 +186,10 @@ describe("Lobby", () => {
     await waitFor(() => expect(calls).toContainEqual({
       url: "/api/me/profile", method: "PUT", body: { display_name: "Market Fox", avatar_id: "fox" },
     }));
+    await waitFor(() => expect(screen.queryByRole("heading", { name: "Account settings" })).not.toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "alice account menu" }));
+    fireEvent.click(within(screen.getByRole("menu", { name: "Account" })).getByRole("menuitem", { name: "Log out" }));
+    await waitFor(() => expect(calls).toContainEqual({ url: "/api/logout", method: "POST" }));
   });
 
   it("requires a display name and avatar before joining a public waiting room", async () => {

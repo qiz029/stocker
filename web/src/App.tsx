@@ -14,7 +14,7 @@ import { hallMockEnabled, hallMockUser } from "./devHallFixtures";
 // Exported so page/component tests can provide a fake user.
 export const UserCtxForTest = createContext<User | null>(null);
 export const useUser = () => useContext(UserCtxForTest)!;
-const UserUpdateCtx = createContext<(user: User) => void>(() => undefined);
+const UserUpdateCtx = createContext<(user: User | null) => void>(() => undefined);
 export const useUpdateUser = () => useContext(UserUpdateCtx);
 
 function Shell() {
