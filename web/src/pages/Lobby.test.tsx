@@ -133,12 +133,13 @@ describe("Lobby", () => {
     expect(screen.getByRole("heading", { name: "Open a public timeline" })).toBeInTheDocument();
     expect(screen.getByLabelText("Room name")).toHaveValue("Market Owl's Room");
     fireEvent.change(screen.getByLabelText("Room name"), { target: { value: "Opening Bell" } });
-    // scenario defaults to the earliest dated entry; pick the 2-week duration
-    fireEvent.change(screen.getByRole("combobox", { name: "Game duration" }),
-      { target: { value: String(Math.round(2 * 604800 / 750)) } });
+    const durationPicker = screen.getByRole("radiogroup", { name: "Game duration" });
+    expect(within(durationPicker).getByRole("radio", { name: /2 weeks/ })).toHaveAttribute("aria-checked", "true");
+    expect(within(durationPicker).getByRole("radio", { name: /Test run.*total.*1 min/ })).toBeInTheDocument();
+    fireEvent.click(within(durationPicker).getByRole("radio", { name: /4 weeks/ }));
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(bodies).toEqual([
-      { name: "Opening Bell", scenario_id: "dotcom-2000", day_duration_secs: Math.round(2 * 604800 / 750), visibility: "public" }]));
+      { name: "Opening Bell", scenario_id: "dotcom-2000", day_duration_secs: Math.round(4 * 604800 / 750), visibility: "public" }]));
   });
 
   it("collects genuinely missing identity fields before opening the create dialog", async () => {
