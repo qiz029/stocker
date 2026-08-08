@@ -41,7 +41,7 @@ function yearLabel(sc: ScenarioInfo) {
   const year = scenarioYear(sc);
   return year === Number.MAX_SAFE_INTEGER ? "ALT" : String(year);
 }
-type DurationChoice = { title: string; detail: string; value: number; recommended?: boolean };
+type SpeedChoice = { title: string; detail: string; value: number };
 function totalTimeLabel(totalSeconds: number, lang: "en" | "zh") {
   const totalMinutes = Math.round(totalSeconds / 60);
   const hours = Math.floor(totalMinutes / 60);
@@ -49,22 +49,23 @@ function totalTimeLabel(totalSeconds: number, lang: "en" | "zh") {
   if (lang === "zh") return `总计约 ${hours} 小时${minutes ? ` ${minutes} 分钟` : ""}`;
   return `~${hours} hr${minutes ? ` ${minutes} min` : ""} total`;
 }
-function durationOptions(days: number, lang: "en" | "zh"): DurationChoice[] {
-  const result: DurationChoice[] = [1, 2, 4].map(weeks => {
-    const secs = Math.max(60, Math.round((weeks * 604800) / days));
-    return {
-      title: lang === "zh" ? `${weeks} 周` : `${weeks} ${weeks === 1 ? "week" : "weeks"}`,
-      detail: lang === "zh" ? `每交易日约 ${Math.round(secs / 60)} 分钟` : `~${Math.round(secs / 60)} min / trading day`,
-      value: secs,
-      recommended: weeks === 2,
-    };
-  });
-  result.push({
-    title: lang === "zh" ? "测试局" : "Test run",
-    detail: `${totalTimeLabel(days * 60, lang)} · ${lang === "zh" ? "每交易日 1 分钟" : "1 min / trading day"}`,
-    value: 60,
-  });
-  return result;
+function speedOptions(days: number, lang: "en" | "zh"): SpeedChoice[] {
+  const pace = (weeks: number) => {
+    const value = Math.max(60, Math.round((weeks * 604800) / days));
+    const total = lang === "zh" ? `总计 ${weeks} 周` : `${weeks} ${weeks === 1 ? "week" : "weeks"} total`;
+    const perDay = lang === "zh" ? `每交易日约 ${Math.round(value / 60)} 分钟` : `~${Math.round(value / 60)} min / trading day`;
+    return { value, detail: `${total} · ${perDay}` };
+  };
+  return [
+    { title: lang === "zh" ? "拟真" : "Realistic", ...pace(4) },
+    { title: lang === "zh" ? "均衡" : "Balanced", ...pace(2) },
+    { title: lang === "zh" ? "快速" : "Fast", ...pace(1) },
+    {
+      title: lang === "zh" ? "极速" : "Blitz",
+      detail: `${totalTimeLabel(days * 60, lang)} · ${lang === "zh" ? "每交易日 1 分钟" : "1 min / trading day"}`,
+      value: 60,
+    },
+  ];
 }
 function defaultRoomName(user: User, lang: "en" | "zh") {
   const owner = user.display_name?.trim() || user.username;
@@ -84,7 +85,7 @@ const hallCopy = {
     displayName: "Display name", avatar: "Avatar", cancel: "Keep watching", saveJoin: "Save & join",
     saveContinue: "Save & continue",
     createTitle: "Open a public timeline", createSub: "Players can spectate immediately. Waiting rooms allow them to complete a profile and join.",
-    roomName: "Room name", era: "Choose an era", duration: "Game duration", createNow: "Create", creating: "Creating room…",
+    roomName: "Room name", era: "Choose an era", duration: "Game speed", createNow: "Create", creating: "Creating room…",
     settings: "Profile", settingsTitle: "Account settings", settingsSub: "Manage how you appear in the Market Hall and choose your language.",
     language: "Language", settingsCancel: "Cancel", settingsSave: "Save changes", settingsSaved: "Profile updated",
     mockNotice: "Mock preview only — no data was changed.",
@@ -100,7 +101,7 @@ const hallCopy = {
     displayName: "显示名称", avatar: "头像", cancel: "继续围观", saveJoin: "保存并加入",
     saveContinue: "保存并继续",
     createTitle: "开启公开时间线", createSub: "所有人可以直接围观；等待开局时，完成资料即可加入。",
-    roomName: "房间名称", era: "选择时代", duration: "游戏时长", createNow: "创建", creating: "正在创建房间…",
+    roomName: "房间名称", era: "选择时代", duration: "游戏速度", createNow: "创建", creating: "正在创建房间…",
     settings: "账户", settingsTitle: "账户设置", settingsSub: "管理你在时代大厅中的玩家身份与界面语言。",
     language: "界面语言", settingsCancel: "取消", settingsSave: "保存修改", settingsSaved: "资料已更新",
     mockNotice: "当前为 Mock 预览，不会修改任何数据。",
@@ -139,11 +140,12 @@ function HallRoomRow({ room, scenarios, c, lang, onWatch, onJoin, dense = false 
   );
 }
 
-function DurationPicker({ days, lang, value, label, onChange }: {
+function SpeedPicker({ days, lang, value, label, onChange }: {
   days: number; lang: "en" | "zh"; value: number; label: string; onChange: (value: number) => void;
 }) {
-  const options = durationOptions(days, lang);
+  const options = speedOptions(days, lang);
   const active = value || options[1]!.value;
+  const [hintedValue, setHintedValue] = useState<number | null>(null);
   function move(event: React.KeyboardEvent<HTMLButtonElement>, index: number) {
     let next = index;
     if (event.key === "ArrowRight" || event.key === "ArrowDown") next = (index + 1) % options.length;
@@ -153,20 +155,27 @@ function DurationPicker({ days, lang, value, label, onChange }: {
     else return;
     event.preventDefault();
     onChange(options[next]!.value);
-    event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
+    event.currentTarget.closest(".speed-options")?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[next]?.focus();
   }
-  return <section className="duration-field">
-    <div className="duration-field-head"><span>{label}</span><small>{lang === "zh" ? "选择历史推进的节奏" : "Choose how fast history moves"}</small></div>
-    <div className="duration-picker" role="radiogroup" aria-label={label}>
-      {options.map((option, index) => { const selected = active === option.value; return <button
-        type="button" role="radio" aria-checked={selected} tabIndex={selected ? 0 : -1}
-        className={`duration-choice ${selected ? "selected" : ""}`} key={option.value}
-        onClick={() => onChange(option.value)} onKeyDown={event => move(event, index)}>
-        <span className="duration-choice-check" aria-hidden="true">{selected ? "✓" : ""}</span>
-        <strong>{option.title}</strong>
-        <span className="duration-choice-detail">{option.detail}</span>
-        {option.recommended && <span className="duration-choice-badge">{lang === "zh" ? "推荐" : "Balanced"}</span>}
-      </button>; })}
+  return <section className="speed-field">
+    <div className="speed-field-head"><span>{label}</span><small>{lang === "zh" ? "悬停查看实际速度" : "Hover to see the exact pace"}</small></div>
+    <div className="speed-picker" role="radiogroup" aria-label={label}>
+      <div className="speed-options">
+        {options.map((option, index) => { const selected = active === option.value; const hinted = hintedValue === option.value; const tipID = `speed-tip-${option.value}`; return <div className="speed-option-wrap" key={option.value}>
+          <button type="button" role="radio" aria-label={option.title} aria-checked={selected} aria-describedby={hinted ? tipID : undefined} tabIndex={selected ? 0 : -1}
+            className={`speed-option ${selected ? "selected" : ""}`}
+            onClick={() => onChange(option.value)} onKeyDown={event => move(event, index)}
+            onMouseEnter={() => setHintedValue(option.value)} onMouseLeave={() => setHintedValue(null)}
+            onFocus={() => setHintedValue(option.value)} onBlur={() => setHintedValue(null)}>
+            <span className="speed-option-dot" aria-hidden="true"/><strong>{option.title}</strong>
+          </button>
+          {hinted && <span className="speed-tooltip" id={tipID} role="tooltip">{option.detail}</span>}
+        </div>; })}
+      </div>
+      <div className="speed-spectrum" aria-hidden="true">
+        <div className="speed-spectrum-track"><div className="speed-spectrum-points">{options.map(option => <i className={active === option.value ? "selected" : ""} key={option.value}/>)}</div></div>
+        <div className="speed-spectrum-labels"><span>{lang === "zh" ? "拟真" : "REALISTIC"}</span><span>{lang === "zh" ? "快" : "FAST"}</span></div>
+      </div>
     </div>
   </section>;
 }
@@ -311,7 +320,7 @@ export default function Lobby() {
     setBusy(true);
     try {
       const sc = scenarios.find(item => item.id === scenarioID);
-      const secs = duration || durationOptions(sc?.days ?? 300, lang)[1]!.value;
+      const secs = duration || speedOptions(sc?.days ?? 300, lang)[1]!.value;
       const room = await api.post<Room>("/api/rooms", { name: roomName.trim(), scenario_id: scenarioID, day_duration_secs: secs, visibility: "public" });
       setDialog(null); await Promise.all([reloadMine(), reloadPublic()]); navigate(`/rooms/${room.id}`);
     } catch (err) { toast(err instanceof ApiError ? err.message : t("lobby.createFailed")); }
@@ -351,7 +360,7 @@ export default function Lobby() {
       {(mine?.rooms?.length??0)>0&&<section className="hall-mine" id="mobile-my-rooms"><header><h2>{c.mine}</h2><span>{mine!.rooms.length}</span></header><div>{mine!.rooms.slice(0,4).map(room=><HallRoomRow key={room.id} room={room} scenarios={scenarios} c={c} lang={lang} dense onWatch={()=>openRoom(room.id)}/>)}</div></section>}
     </main>
     {(dialog==="profile"||dialog==="settings")&&<div className="hall-dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)(dialog==="settings"?closeSettings():closeProfile())}}><form className={`hall-dialog ${dialog==="settings"?"hall-settings":""}`} role="dialog" aria-modal="true" aria-labelledby="profile-title" onSubmit={dialog==="settings"?saveSettings:saveProfileAndJoin}><h2 id="profile-title">{dialog==="settings"?c.settingsTitle:c.profileTitle}</h2><p>{dialog==="settings"?c.settingsSub:c.profileSub}</p>{dialog==="settings"&&<div className="hall-setting-row"><span>{c.language}</span><LangSwitch/></div>}<label>{c.displayName}<input autoFocus minLength={2} maxLength={24} required value={displayName} onChange={e=>setDisplayName(e.target.value)}/></label><label>{c.avatar}<div className="hall-avatars">{avatarIDs.map(id=><button type="button" aria-label={id} aria-pressed={avatarID===id} className={`hall-avatar-option ${avatarID===id?"on":""}`} key={id} onClick={()=>setAvatarID(id)}>{avatarGlyphs[id]}</button>)}</div></label><div className="hall-dialog-actions"><button type="button" onClick={dialog==="settings"?closeSettings:closeProfile}>{dialog==="settings"?c.settingsCancel:c.cancel}</button><button className="confirm" disabled={busy||displayName.trim().length<2}>{busy?"…":dialog==="settings"?c.settingsSave:pendingCreate?c.saveContinue:c.saveJoin}</button></div></form></div>}
-    {dialog==="create"&&<div className="hall-dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setDialog(null)}}><div className="hall-dialog hall-create" role="dialog" aria-modal="true" aria-labelledby="create-title"><h2 id="create-title">{c.createTitle}</h2><p>{c.createSub}</p><label>{c.roomName}<input autoFocus aria-label={c.roomName} minLength={2} maxLength={40} required value={roomName} onChange={e=>setRoomName(e.target.value)}/></label><div className="era-timeline" role="radiogroup" aria-label={c.era} data-era-count={scenarios.length} style={{"--era-count":Math.max(1,scenarios.length)} as React.CSSProperties}>{scenarios.map((sc,index)=>{const visual=eraVisuals[sc.id];const selected=scenarioID===sc.id;return <button type="button" role="radio" aria-checked={selected} tabIndex={selected?0:-1} data-era-year={scenarioYear(sc)} key={sc.id} className={`era-card ${selected?"selected":""}`} style={{"--era-accent":visual?.accent??"#00c805"} as React.CSSProperties} onClick={()=>{setScenarioID(sc.id);setDuration(0)}} onKeyDown={e=>moveEra(e,index)}>{index<scenarios.length-1&&<span className="era-link"/>}<span className="era-node"/>{visual&&<img className="era-card-art" src={visual.image} alt=""/>}<span className="era-card-shade"/><span className="era-card-index">{String(index+1).padStart(2,"0")}</span><span className="era-card-copy"><strong className="era-year">{yearLabel(sc)}</strong><span className="era-title">{pickL(lang,sc.name,sc.name_en).replace(/^\s*(?:19|20)\d{2}\s*[·—:-]?\s*/,"")}</span><span className="era-days">{sc.days} {lang==="zh"?"个交易日":"trading days"}</span></span><span className="era-card-state">{selected?(lang==="zh"?"已选择":"Selected"):(lang==="zh"?"选择时代":"Select era")}</span></button>})}</div><DurationPicker days={scenarios.find(sc=>sc.id===scenarioID)?.days??300} lang={lang} value={duration} label={c.duration} onChange={setDuration}/><div className="hall-dialog-actions"><button onClick={()=>setDialog(null)}>{c.cancel}</button><button className="confirm" onClick={createRoom} disabled={busy||!scenarioID||roomName.trim().length<2}>{busy?c.creating:c.createNow}</button></div></div></div>}
+    {dialog==="create"&&<div className="hall-dialog-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setDialog(null)}}><div className="hall-dialog hall-create" role="dialog" aria-modal="true" aria-labelledby="create-title"><h2 id="create-title">{c.createTitle}</h2><p>{c.createSub}</p><label>{c.roomName}<input autoFocus aria-label={c.roomName} minLength={2} maxLength={40} required value={roomName} onChange={e=>setRoomName(e.target.value)}/></label><div className="era-timeline" role="radiogroup" aria-label={c.era} data-era-count={scenarios.length} style={{"--era-count":Math.max(1,scenarios.length)} as React.CSSProperties}>{scenarios.map((sc,index)=>{const visual=eraVisuals[sc.id];const selected=scenarioID===sc.id;return <button type="button" role="radio" aria-checked={selected} tabIndex={selected?0:-1} data-era-year={scenarioYear(sc)} key={sc.id} className={`era-card ${selected?"selected":""}`} style={{"--era-accent":visual?.accent??"#00c805"} as React.CSSProperties} onClick={()=>{setScenarioID(sc.id);setDuration(0)}} onKeyDown={e=>moveEra(e,index)}>{index<scenarios.length-1&&<span className="era-link"/>}<span className="era-node"/>{visual&&<img className="era-card-art" src={visual.image} alt=""/>}<span className="era-card-shade"/><span className="era-card-index">{String(index+1).padStart(2,"0")}</span><span className="era-card-copy"><strong className="era-year">{yearLabel(sc)}</strong><span className="era-title">{pickL(lang,sc.name,sc.name_en).replace(/^\s*(?:19|20)\d{2}\s*[·—:-]?\s*/,"")}</span><span className="era-days">{sc.days} {lang==="zh"?"个交易日":"trading days"}</span></span><span className="era-card-state">{selected?(lang==="zh"?"已选择":"Selected"):(lang==="zh"?"选择时代":"Select era")}</span></button>})}</div><SpeedPicker days={scenarios.find(sc=>sc.id===scenarioID)?.days??300} lang={lang} value={duration} label={c.duration} onChange={setDuration}/><div className="hall-dialog-actions"><button onClick={()=>setDialog(null)}>{c.cancel}</button><button className="confirm" onClick={createRoom} disabled={busy||!scenarioID||roomName.trim().length<2}>{busy?c.creating:c.createNow}</button></div></div></div>}
     <MobileNav
       label={lang === "zh" ? "大厅导航" : "Hall navigation"}
       active={mobileTab}

@@ -133,10 +133,14 @@ describe("Lobby", () => {
     expect(screen.getByRole("heading", { name: "Open a public timeline" })).toBeInTheDocument();
     expect(screen.getByLabelText("Room name")).toHaveValue("Market Owl's Room");
     fireEvent.change(screen.getByLabelText("Room name"), { target: { value: "Opening Bell" } });
-    const durationPicker = screen.getByRole("radiogroup", { name: "Game duration" });
-    expect(within(durationPicker).getByRole("radio", { name: /2 weeks/ })).toHaveAttribute("aria-checked", "true");
-    expect(within(durationPicker).getByRole("radio", { name: /Test run.*total.*1 min/ })).toBeInTheDocument();
-    fireEvent.click(within(durationPicker).getByRole("radio", { name: /4 weeks/ }));
+    const speedPicker = screen.getByRole("radiogroup", { name: "Game speed" });
+    expect(within(speedPicker).getByRole("radio", { name: "Balanced" })).toHaveAttribute("aria-checked", "true");
+    expect(within(speedPicker).getByRole("radio", { name: "Blitz" })).toBeInTheDocument();
+    expect(within(speedPicker).queryByText("Test run")).not.toBeInTheDocument();
+    const realistic = within(speedPicker).getByRole("radio", { name: "Realistic" });
+    fireEvent.mouseEnter(realistic);
+    expect(screen.getByRole("tooltip")).toHaveTextContent(/4 weeks.*~54 min \/ trading day/);
+    fireEvent.click(realistic);
     fireEvent.click(screen.getByRole("button", { name: "Create" }));
     await waitFor(() => expect(bodies).toEqual([
       { name: "Opening Bell", scenario_id: "dotcom-2000", day_duration_secs: Math.round(4 * 604800 / 750), visibility: "public" }]));
