@@ -25,7 +25,7 @@ export default function RoomScreen() {
   const { t, lang, user } = useSession();
 
   const { data: state, error, reload: reloadState } = usePoll(
-    () => api.get<RoomState>(`/api/rooms/${roomId}`), 30_000, [roomId]);
+    () => api.get<RoomState>(`/api/rooms/${roomId}`), 5_000, [roomId]);
   const isMember = state ? state.room.is_member !== false : false;
   const { data: portfolio, reload: reloadPortfolio } = usePoll(
     () => (isMember ? api.get<Portfolio>(`/api/rooms/${roomId}/portfolio`) : Promise.resolve(null)),

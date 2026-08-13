@@ -73,12 +73,13 @@ export default function RightRail({ roomId, state, aliasOf, readOnly = false }: 
   useEffect(() => {
     setVerdicts(loadDebunkVerdicts(user.id, roomId));
   }, [roomId, user.id]);
+  const feedPollMs = state.room.day_duration_secs < 60 ? 5_000 : 30_000;
   const { items: newsItems, extra: newsExtra } = useIncrementalFeed<NewsItem, NewsResponse>(
-    after => fetchNews(roomId, after), 30_000, roomId);
+    after => fetchNews(roomId, after), feedPollMs, roomId);
   const { items: eventsItems } = useIncrementalFeed<EventItem, { items: EventItem[] }>(
-    after => api.get<{ items: EventItem[] }>(`/api/rooms/${roomId}/events?after=${after}`), 30_000, roomId);
+    after => api.get<{ items: EventItem[] }>(`/api/rooms/${roomId}/events?after=${after}`), feedPollMs, roomId);
   const { items: forumItems } = useIncrementalFeed<ForumItem, { items: ForumItem[] }>(
-    after => fetchForum(roomId, after), 30_000, roomId);
+    after => fetchForum(roomId, after), feedPollMs, roomId);
 
   const accuracy = newsExtra?.media_accuracy;
   const groups = groupNews(newsItems);

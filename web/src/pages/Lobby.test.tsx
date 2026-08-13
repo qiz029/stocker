@@ -136,6 +136,7 @@ describe("Lobby", () => {
     const speedPicker = screen.getByRole("radiogroup", { name: "Game speed" });
     expect(within(speedPicker).getByRole("radio", { name: "Balanced" })).toHaveAttribute("aria-checked", "true");
     expect(within(speedPicker).getByRole("radio", { name: "Blitz" })).toBeInTheDocument();
+    expect(within(speedPicker).getByRole("radio", { name: "Flash" })).toBeInTheDocument();
     expect(within(speedPicker).queryByText("Test run")).not.toBeInTheDocument();
     const realistic = within(speedPicker).getByRole("radio", { name: "Realistic" });
     fireEvent.mouseEnter(realistic);

@@ -122,9 +122,10 @@ func CreateNamedRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenari
 	if n := utf8.RuneCountInString(roomName); n < 2 || n > RoomNameMaxLength || strings.IndexFunc(roomName, unicode.IsControl) >= 0 {
 		return nil, ErrBadRoomName
 	}
-	if dayDurationSecs < 60 || dayDurationSecs > 86400 {
+	if dayDurationSecs < engine.FastestMinDayDurationSecs || dayDurationSecs > 86400 {
 		return nil, ErrBadDayDuration
 	}
+	tempo := engine.NewTempo(dayDurationSecs)
 	roomVisibility := "private"
 	if len(visibility) > 0 && visibility[0] != "" {
 		roomVisibility = visibility[0]
@@ -151,6 +152,7 @@ func CreateNamedRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenari
 	if world == nil {
 		return nil, fmt.Errorf("world generation failed after 10 seeds: %w", lastErr)
 	}
+	world = tempo.CompressWorld(sc, world)
 	if seed != base {
 		log.Printf("room: scenario %s took %d world-gen attempts (fidelity rejections are by design; see spec §4.6)", sc.ID, seed-base+1)
 	}
@@ -227,13 +229,18 @@ func CreateNamedRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenari
 			pgx.CopyFromRows(posts)); err != nil {
 			return err
 		}
-		jobs := make([][]any, sc.Days)
-		for day := 0; day < sc.Days; day++ {
-			jobs[day] = []any{room.ID, day}
-		}
-		if _, err := tx.CopyFrom(ctx, pgx.Identifier{"room_copy_jobs"},
-			[]string{"room_id", "day"}, pgx.CopyFromRows(jobs)); err != nil {
-			return err
+		// Compressed rooms intentionally use the deterministic bilingual
+		// templates already stored above. Their clock outruns remote LLM copy,
+		// so queueing hundreds of jobs would only create stale work.
+		if !tempo.Compressed() {
+			jobs := make([][]any, sc.Days)
+			for day := 0; day < sc.Days; day++ {
+				jobs[day] = []any{room.ID, day}
+			}
+			if _, err := tx.CopyFrom(ctx, pgx.Identifier{"room_copy_jobs"},
+				[]string{"room_id", "day"}, pgx.CopyFromRows(jobs)); err != nil {
+				return err
+			}
 		}
 		// Initial option chain: the first 2 expiries, strikes anchored to
 		// the day-0 close. Settlement keeps the chain rolling from there.

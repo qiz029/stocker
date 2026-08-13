@@ -57,7 +57,7 @@ func TestRoomLifecycleAndState(t *testing.T) {
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("unknown scenario: %d", resp.StatusCode)
 	}
-	resp, _ = host.do("POST", "/api/rooms", map[string]any{"scenario_id": "synthetic-v1", "day_duration_secs": 5})
+	resp, _ = host.do("POST", "/api/rooms", map[string]any{"scenario_id": "synthetic-v1", "day_duration_secs": 1})
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("bad duration: %d", resp.StatusCode)
 	}

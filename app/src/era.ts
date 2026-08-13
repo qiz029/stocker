@@ -1,5 +1,6 @@
 import type { ScenarioInfo } from "@core/api";
 import type { Lang } from "@core/i18n";
+import { fastestDayDuration } from "@core/tempo";
 
 /* Era helpers ported from web/src/pages/Lobby.tsx (without the avif art). */
 
@@ -31,6 +32,10 @@ export function durationOptions(days: number, lang: Lang): [string, number][] {
       : `${weeks} weeks (~${Math.round(secs / 60)} min/day)`, secs];
   });
   result.push([lang === "zh" ? "测试局（每交易日 1 分钟）" : "Test game (1 min/day)", 60]);
+  const fastest = fastestDayDuration(days);
+  result.push([lang === "zh"
+    ? `闪电局（约 ${Math.round(days * fastest / 60)} 分钟，精简动态）`
+    : `Flash (~${Math.round(days * fastest / 60)} min, condensed activity)`, fastest]);
   return result;
 }
 

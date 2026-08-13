@@ -62,7 +62,7 @@ export function useIncrementalFeed<T extends { id: number }, R extends { items: 
     const t = setInterval(() => void fetchNew(), intervalMs);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resetKey]);
+  }, [resetKey, intervalMs]);
 
   return { items, extra };
 }

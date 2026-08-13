@@ -24,13 +24,13 @@ export default function InstrumentScreen() {
   const { t, lang } = useSession();
 
   const { data: state, error } = usePoll(
-    () => api.get<RoomState>(`/api/rooms/${roomId}`), 30_000, [roomId]);
+    () => api.get<RoomState>(`/api/rooms/${roomId}`), 5_000, [roomId]);
   const isMember = state ? state.room.is_member !== false : false;
   const { data: portfolio, reload: reloadPortfolio } = usePoll(
     () => (isMember ? api.get<Portfolio>(`/api/rooms/${roomId}/portfolio`) : Promise.resolve(null)),
-    30_000, [roomId, isMember]);
+    5_000, [roomId, isMember]);
   const { data: prices } = usePoll(
-    () => api.get<PriceResponse>(`/api/rooms/${roomId}/prices/${instrumentId}`), 30_000,
+    () => api.get<PriceResponse>(`/api/rooms/${roomId}/prices/${instrumentId}`), 5_000,
     [roomId, instrumentId]);
 
   const clock = useSimClock(state?.room);

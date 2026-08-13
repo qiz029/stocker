@@ -22,11 +22,12 @@ export default function FeedScreen() {
   const router = useRouter();
   const { t, lang } = useSession();
   const [tab, setTab] = useState<"events" | "forum">("events");
-  const { data: state } = usePoll(() => api.get<RoomState>(`/api/rooms/${roomId}`), 30_000, [roomId]);
+  const { data: state } = usePoll(() => api.get<RoomState>(`/api/rooms/${roomId}`), 5_000, [roomId]);
+  const feedPollMs = state?.room.day_duration_secs && state.room.day_duration_secs < 60 ? 5_000 : 30_000;
   const { items: events } = useIncrementalFeed<EventItem, { items: EventItem[] }>(
-    after => api.get<{ items: EventItem[] }>(`/api/rooms/${roomId}/events?after=${after}`), 30_000, roomId!);
+    after => api.get<{ items: EventItem[] }>(`/api/rooms/${roomId}/events?after=${after}`), feedPollMs, roomId!);
   const { items: forum } = useIncrementalFeed<ForumItem, { items: ForumItem[] }>(
-    after => fetchForum(roomId!, after), 30_000, roomId!);
+    after => fetchForum(roomId!, after), feedPollMs, roomId!);
 
   const aliasOf = (id: string) => state?.instruments.find(i => i.id === id)?.alias ?? id;
 

@@ -120,7 +120,7 @@ func TestCreateRoomValidatesDayDuration(t *testing.T) {
 	pool := TestDB(t, "store")
 	host := mkUser(t, pool, "host")
 	sc := mkScenario(t, pool)
-	for _, secs := range []int{0, 59, 86401, -5} {
+	for _, secs := range []int{0, 1, 86401, -5} {
 		if _, err := CreateRoom(context.Background(), pool, sc, host.ID, secs, nil); !errors.Is(err, ErrBadDayDuration) {
 			t.Errorf("duration %d: got %v, want ErrBadDayDuration", secs, err)
 		}

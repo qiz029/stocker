@@ -27,6 +27,16 @@ export function useRoomData(roomId: string) {
   const { data: tradesRes, reload: reloadTrades } = usePoll(
     () => isMember ? api.get<{ items: Trade[] }>(`/api/rooms/${roomId}/trades`) : Promise.resolve({ items: [] }), 30_000, [roomId, isMember]);
 
+  useEffect(() => {
+    if (!state || state.room.day_duration_secs >= 60 || state.room.ended) return;
+    const timer = setInterval(() => {
+      void reloadState();
+      void reloadPortfolio();
+      void reloadTrades();
+    }, 3_000);
+    return () => clearInterval(timer);
+  }, [state?.room.day_duration_secs, state?.room.ended, reloadState, reloadPortfolio, reloadTrades]);
+
   const [series, setSeries] = useState<Record<string, number[]>>({});
   const [ohlc, setOhlc] = useState<Record<string, OHLC[]>>({});
   const fetchedDay = useRef(-1);

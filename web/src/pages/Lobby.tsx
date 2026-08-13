@@ -16,6 +16,7 @@ import { avatarGlyph, avatarGlyphs, avatarIDs } from "../avatar";
 import {
   hallMockEnabled, hallMockLeaders, hallMockMine, hallMockPublicRooms, hallMockScenarios,
 } from "../devHallFixtures";
+import { fastestDayDuration } from "../../../core/tempo";
 
 type EraVisual = { year: number; image: string; accent: string };
 const eraVisuals: Record<string, EraVisual> = {
@@ -56,6 +57,7 @@ function speedOptions(days: number, lang: "en" | "zh"): SpeedChoice[] {
     const perDay = lang === "zh" ? `每交易日约 ${Math.round(value / 60)} 分钟` : `~${Math.round(value / 60)} min / trading day`;
     return { value, detail: `${total} · ${perDay}` };
   };
+  const fastest = fastestDayDuration(days);
   return [
     { title: lang === "zh" ? "拟真" : "Realistic", ...pace(4) },
     { title: lang === "zh" ? "均衡" : "Balanced", ...pace(2) },
@@ -64,6 +66,11 @@ function speedOptions(days: number, lang: "en" | "zh"): SpeedChoice[] {
       title: lang === "zh" ? "极速" : "Blitz",
       detail: `${totalTimeLabel(days * 60, lang)} · ${lang === "zh" ? "每交易日 1 分钟" : "1 min / trading day"}`,
       value: 60,
+    },
+    {
+      title: lang === "zh" ? "闪电" : "Flash",
+      detail: `${totalTimeLabel(days * fastest, lang)} · ${lang === "zh" ? "精简新闻、论坛与 Agent 行动" : "condensed news, forum, and Agent activity"}`,
+      value: fastest,
     },
   ];
 }
@@ -161,7 +168,7 @@ function SpeedPicker({ days, lang, value, label, onChange }: {
     <div className="speed-field-head"><span>{label}</span><small>{lang === "zh" ? "悬停查看实际速度" : "Hover to see the exact pace"}</small></div>
     <div className="speed-picker" role="radiogroup" aria-label={label}>
       <div className="speed-options">
-        {options.map((option, index) => { const selected = active === option.value; const hinted = hintedValue === option.value; const tipID = `speed-tip-${option.value}`; return <div className="speed-option-wrap" key={option.value}>
+        {options.map((option, index) => { const selected = active === option.value; const hinted = hintedValue === option.value; const tipID = `speed-tip-${index}`; return <div className="speed-option-wrap" key={option.title}>
           <button type="button" role="radio" aria-label={option.title} aria-checked={selected} aria-describedby={hinted ? tipID : undefined} tabIndex={selected ? 0 : -1}
             className={`speed-option ${selected ? "selected" : ""}`}
             onClick={() => onChange(option.value)} onKeyDown={event => move(event, index)}

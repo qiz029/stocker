@@ -66,6 +66,63 @@ func TestAgentTurnsPlaceLabeledOrdersOncePerDay(t *testing.T) {
 	}
 }
 
+func TestCompressedAgentTurnsUseRotatingBeatCadence(t *testing.T) {
+	pool := TestDB(t, "store")
+	ctx := context.Background()
+	host := mkUser(t, pool, "fast_host")
+	sc := scenarioMustLoad(t, pool)
+	room, err := CreateRoom(ctx, pool, sc, host.ID, 2, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t0 := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
+	if _, err := StartRoom(ctx, pool, room.ID, host.ID, t0); err != nil {
+		t.Fatal(err)
+	}
+	if err := RunAgentTurns(ctx, pool, t0); err != nil {
+		t.Fatal(err)
+	}
+
+	var turns int
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM agent_turns WHERE room_id = $1`, room.ID).Scan(&turns); err != nil {
+		t.Fatal(err)
+	}
+	if turns != 2 {
+		t.Fatalf("day-0 compressed turns = %d, want 2", turns)
+	}
+	var copyJobs int
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM room_copy_jobs WHERE room_id = $1`, room.ID).Scan(&copyJobs); err != nil {
+		t.Fatal(err)
+	}
+	if copyJobs != 0 {
+		t.Fatalf("compressed copy jobs = %d, want 0", copyJobs)
+	}
+
+	// Two seconds per day and a 24-second beat means no more decisions until day 12.
+	if err := RunAgentTurns(ctx, pool, t0.Add(22*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM agent_turns WHERE room_id = $1`, room.ID).Scan(&turns); err != nil {
+		t.Fatal(err)
+	}
+	if turns != 2 {
+		t.Fatalf("between-beat compressed turns = %d, want 2", turns)
+	}
+	if err := RunAgentTurns(ctx, pool, t0.Add(24*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM agent_turns WHERE room_id = $1`, room.ID).Scan(&turns); err != nil {
+		t.Fatal(err)
+	}
+	if turns != 4 {
+		t.Fatalf("second-beat compressed turns = %d, want 4", turns)
+	}
+}
+
 func TestAgentPersonasDiscussInForumInsteadOfNarratingTradesInChat(t *testing.T) {
 	pool := TestDB(t, "store")
 	ctx := context.Background()

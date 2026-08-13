@@ -7,7 +7,7 @@ var (
 	ErrUsernameTaken         = errors.New("username taken")
 	ErrAliasTaken            = errors.New("alias already in use")
 	ErrEmailTaken            = errors.New("email already in use")
-	ErrBadDayDuration        = errors.New("day duration must be between 60 and 86400 seconds")
+	ErrBadDayDuration        = errors.New("day duration must be between 2 and 86400 seconds")
 	ErrRoomEnded             = errors.New("room has ended")
 	ErrRoomNotRunning        = errors.New("room is not running")
 	ErrAlreadyJoined         = errors.New("already joined this room")

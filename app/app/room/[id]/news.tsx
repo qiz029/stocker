@@ -58,9 +58,10 @@ export default function NewsScreen() {
   const { id: roomId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { t, lang, user } = useSession();
-  const { data: state } = usePoll(() => api.get<RoomState>(`/api/rooms/${roomId}`), 30_000, [roomId]);
+  const { data: state } = usePoll(() => api.get<RoomState>(`/api/rooms/${roomId}`), 5_000, [roomId]);
+  const feedPollMs = state?.room.day_duration_secs && state.room.day_duration_secs < 60 ? 5_000 : 30_000;
   const { items, extra } = useIncrementalFeed<NewsItem, NewsResponse>(
-    after => fetchNews(roomId!, after), 30_000, roomId!);
+    after => fetchNews(roomId!, after), feedPollMs, roomId!);
   const [verdicts, setVerdicts] = useState<Record<number, DebunkVerdict>>({});
   const [notice, setNotice] = useState<string | null>(null);
 

@@ -13,9 +13,9 @@ export default function TradesScreen() {
   const { id: roomId } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { t } = useSession();
-  const { data: state } = usePoll(() => api.get<RoomState>(`/api/rooms/${roomId}`), 30_000, [roomId]);
+  const { data: state } = usePoll(() => api.get<RoomState>(`/api/rooms/${roomId}`), 5_000, [roomId]);
   const { data: tradesRes } = usePoll(
-    () => api.get<{ items: Trade[] }>(`/api/rooms/${roomId}/trades`), 30_000, [roomId]);
+    () => api.get<{ items: Trade[] }>(`/api/rooms/${roomId}/trades`), 5_000, [roomId]);
 
   const aliasOf = (id: string) => state?.instruments.find(i => i.id === id)?.alias ?? id;
   const trades = [...(tradesRes?.items ?? [])].sort((a, b) => b.day - a.day);

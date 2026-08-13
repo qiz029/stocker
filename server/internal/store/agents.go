@@ -100,6 +100,7 @@ func runAgentRoom(ctx context.Context, db *pgxpool.Pool, room *Room, now time.Ti
 		if len(agents) != AgentPlayerCount {
 			return fmt.Errorf("found %d agents, want %d", len(agents), AgentPlayerCount)
 		}
+		tempo := engine.NewTempo(room.DayDurationSecs)
 		joinedDay := agents[0].joinedDay
 		for _, agent := range agents[1:] {
 			if agent.joinedDay != joinedDay {
@@ -124,6 +125,9 @@ func runAgentRoom(ctx context.Context, db *pgxpool.Pool, room *Room, now time.Ti
 		// open without rewinding any room-level settlement watermarks.
 		for day := max(joinedDay, lastTurnDay+1); day <= lastDecisionDay; day++ {
 			for _, agent := range agents {
+				if !tempo.AgentActs(day, agent.slot, len(agents)) {
+					continue
+				}
 				if err := takeAgentTurn(ctx, tx, room, day, instruments, agent); err != nil {
 					return err
 				}
