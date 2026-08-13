@@ -277,6 +277,41 @@ button { font-family: inherit; cursor: pointer; }
 .chart-box { position: relative; margin: 10px 0 4px; }
 canvas.chart { width: 100%; height: auto; display: block; touch-action: none; }
 
+/* pulsing dot on the live tip of the hero chart */
+.live-dot {
+  position: absolute; width: 9px; height: 9px; border-radius: 50%;
+  transform: translate(-50%, -50%); pointer-events: none; z-index: 2;
+  transition: left 0.18s linear, top 0.18s linear;
+}
+.live-dot.up { background: var(--up); color: var(--up); }
+.live-dot.down { background: var(--down); color: var(--down); }
+.live-dot::after {
+  content: ""; position: absolute; inset: -3px; border-radius: 50%;
+  border: 2px solid currentColor;
+  animation: live-dot-pulse 1.6s ease-out infinite;
+}
+@keyframes live-dot-pulse {
+  0% { transform: scale(0.6); opacity: 0.9; }
+  70%, 100% { transform: scale(2); opacity: 0; }
+}
+
+/* day rollover banner */
+.day-banner {
+  position: fixed; top: 84px; left: 50%; transform: translateX(-50%);
+  z-index: 60; pointer-events: none;
+  padding: 10px 26px; border-radius: 999px;
+  background: rgba(20, 24, 30, 0.94); border: 1px solid var(--line);
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.4);
+  font-size: 1.05rem; font-weight: 650; letter-spacing: 0.02em; white-space: nowrap;
+  animation: day-banner 2.4s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+@keyframes day-banner {
+  0% { opacity: 0; transform: translateX(-50%) translateY(-14px) scale(0.94); }
+  12% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  78% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-8px) scale(0.98); }
+}
+
 .ranges { display: flex; gap: 4px; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
 .ranges button {
   background: none; border: none; color: var(--ink2);
@@ -290,6 +325,7 @@ canvas.chart { width: 100%; height: auto; display: block; touch-action: none; }
   text-transform: uppercase; color: var(--ink2); margin-bottom: 6px;
 }
 .row {
+  position: relative;
   display: grid; grid-template-columns: minmax(0, 1.4fr) 88px minmax(96px, 0.7fr);
   align-items: center; gap: 14px;
   padding: 11px 2px; border-bottom: 1px solid var(--line);
@@ -310,11 +346,35 @@ canvas.chart { width: 100%; height: auto; display: block; touch-action: none; }
 .pill.down { color: var(--down); background: var(--down-soft); }
 .row .pnl { font-size: 0.74rem; margin-top: 3px; }
 
+/* quote change flash (retriggered by remounting the element on each change) */
+.flash-up, .flash-down { border-radius: 6px; padding: 1px 6px; margin: -1px -6px; }
+.flash-up { animation: flash-up 0.7s ease-out; }
+.flash-down { animation: flash-down 0.7s ease-out; }
+@keyframes flash-up {
+  0% { background: var(--up-soft); color: var(--up); }
+  100% { background: transparent; }
+}
+@keyframes flash-down {
+  0% { background: var(--down-soft); color: var(--down); }
+  100% { background: transparent; }
+}
+
+/* order-fill glow overlay on a held-position row */
+.row-glow {
+  position: absolute; inset: 0; border-radius: 10px; pointer-events: none;
+  animation: row-glow 0.9s ease-out;
+}
+@keyframes row-glow {
+  0% { background: rgba(255,255,255,0.07); box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14); }
+  100% { background: transparent; box-shadow: inset 0 0 0 1px transparent; }
+}
+
 /* asset breakdown card */
 .assets .asset-bar {
   display: flex; height: 10px; border-radius: 6px; overflow: hidden;
   background: var(--card-2); margin: 8px 0 12px;
 }
+.asset-bar .seg { transition: width 0.6s ease; }
 .asset-bar .seg.cash { background: var(--up); }
 .asset-bar .seg.inv { background: #4a5468; }
 .asset-bar .seg.debt { background: var(--down); }
@@ -360,7 +420,11 @@ canvas.chart { width: 100%; height: auto; display: block; touch-action: none; }
   border-radius: 6px; padding: 1px 7px; font-size: 0.7rem;
 }
 
-.feed-item { padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 0.84rem; }
+.feed-item { padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 0.84rem; animation: feed-in 0.32s ease; }
+@keyframes feed-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
 .feed-item:last-child { border-bottom: none; }
 .feed-item .fi-meta { color: var(--ink3); font-size: 0.72rem; margin-bottom: 1px; }
 .feed-item.whale { border-left: 3px solid var(--up); padding-left: 10px; margin-left: -10px; }
@@ -733,10 +797,16 @@ canvas.chart { width: 100%; height: auto; display: block; touch-action: none; }
   opacity: 0; pointer-events: none; transition: opacity 0.25s, transform 0.25s;
   z-index: 40; white-space: nowrap;
 }
-.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); animation: toast-pop 0.22s ease; }
+@keyframes toast-pop {
+  from { transform: translateX(-50%) translateY(6px) scale(0.96); }
+  to { transform: translateX(-50%) translateY(0) scale(1); }
+}
 .err-banner { color: var(--down); font-size: 0.82rem; padding: 8px 0; }
 @media (prefers-reduced-motion: reduce) {
-  .toast, .feed-item.news .fi-title::after, .era-card, .era-card-art, .era-node, .era-card::after { transition: none; }
+  .toast, .feed-item.news .fi-title::after, .era-card, .era-card-art, .era-node, .era-card::after,
+  .asset-bar .seg, .live-dot { transition: none; }
+  .feed-item, .day-banner, .live-dot::after, .toast.show, .flash-up, .flash-down, .row-glow { animation: none; }
 }
 .lb-player-avatar { width: 24px; height: 24px; display: inline-grid; place-items: center; margin-right: 7px; border-radius: 50%; background: #252b35; font-size: .72rem; }
 .chat-avatar { width: 20px; height: 20px; display: inline-grid; place-items: center; margin-right: 5px; border-radius: 50%; background: #252b35; font-size: .62rem; }

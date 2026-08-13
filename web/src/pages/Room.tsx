@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, ApiError, AvatarID, User } from "../api";
 import { fmtCents, fmt$, fmtPct, fmtSignedCents } from "../format";
@@ -8,6 +8,7 @@ import { dayLabel } from "../simClock";
 import { useToast } from "../Toast";
 import { useUpdateUser, useUser } from "../App";
 import HeroChart from "../components/HeroChart";
+import TweenedNumber from "../components/TweenedNumber";
 import InstrumentRow from "../components/InstrumentRow";
 import LoanPanel from "../components/LoanPanel";
 import OptionPositions from "../components/OptionPositions";
@@ -34,6 +35,22 @@ export default function Room() {
   const [joining, setJoining] = useState(false);
   const [mobileTab, setMobileTab] = useState<"trend" | "stocks" | "bank" | "activity">("trend");
 
+  // Day rollover banner: fires when the polled current_day advances.
+  const [bannerDay, setBannerDay] = useState<number | null>(null);
+  const prevDay = useRef<number | null>(null);
+  const roomRunning = state?.room.status === "running" && !state?.room.ended;
+  const polledDay = state?.room.current_day;
+  useEffect(() => {
+    if (!roomRunning || polledDay === undefined) return;
+    if (prevDay.current !== null && polledDay > prevDay.current) setBannerDay(polledDay);
+    prevDay.current = polledDay;
+  }, [roomRunning, polledDay]);
+  useEffect(() => {
+    if (bannerDay === null) return;
+    const timer = setTimeout(() => setBannerDay(null), 2600);
+    return () => clearTimeout(timer);
+  }, [bannerDay]);
+
   useEffect(() => {
     if (!showProfile) return;
     const onKeyDown = (event: KeyboardEvent) => {
@@ -53,6 +70,10 @@ export default function Room() {
   const aliasOf = (id: string) => state.instruments.find(i => i.id === id)?.alias ?? id;
   const dateLabel = clock ? dayLabel(clock.day, lang) : "";
   const spectator = room.is_member === false;
+  // Wall-clock start of the current sim day; drives the hero chart's intraday crawl.
+  const liveDayStartMs = room.started_at && clock && !room.ended
+    ? new Date(room.started_at).getTime() + clock.day * room.day_duration_secs * 1000
+    : null;
 
   // Asset breakdown: cash / invested / debt against a net total.
   const investedCents = (portfolio?.positions ?? []).reduce((s, p) => s + p.value_cents, 0);
@@ -155,7 +176,8 @@ export default function Room() {
             <div className="room-main-column">
               <section className="room-tab-panel room-trend-panel" id="mobile-room-trend" aria-label={lang === "zh" ? "趋势与持仓" : "Trend and holdings"}>
               {curve.length > 0 && (
-                <HeroChart label={t("room.totalAssets")} series={curve} startDay={0} formatValue={fmtCents} intradaySeed={Number(roomId)} />
+                <HeroChart label={t("room.totalAssets")} series={curve} startDay={0} formatValue={fmtCents}
+                  intradaySeed={Number(roomId)} liveDayStartMs={liveDayStartMs} liveDaySecs={room.day_duration_secs} />
               )}
 
               {portfolio && (
@@ -166,10 +188,10 @@ export default function Room() {
                     <i className="seg inv" style={{ width: `${(investedCents / assetBase) * 100}%` }} />
                     {debtCents > 0 && <i className="seg debt" style={{ width: `${(debtCents / assetBase) * 100}%` }} />}
                   </div>
-                  <div className="est"><span>{t("room.cash")}</span><b className="num">{fmtCents(cashCents)}</b></div>
-                  <div className="est"><span>{t("room.assetsInvested")}</span><b className="num">{fmtCents(investedCents)}</b></div>
-                  <div className="est"><span>{t("room.assetsDebt")}</span><b className="num">{fmtCents(debtCents)}</b></div>
-                  <div className="est"><span>{t("room.assetsNet")}</span><b className="num">{fmtCents(portfolio.total_cents)}</b></div>
+                  <div className="est"><span>{t("room.cash")}</span><b className="num"><TweenedNumber value={cashCents} format={fmtCents} /></b></div>
+                  <div className="est"><span>{t("room.assetsInvested")}</span><b className="num"><TweenedNumber value={investedCents} format={fmtCents} /></b></div>
+                  <div className="est"><span>{t("room.assetsDebt")}</span><b className="num"><TweenedNumber value={debtCents} format={fmtCents} /></b></div>
+                  <div className="est"><span>{t("room.assetsNet")}</span><b className="num"><TweenedNumber value={portfolio.total_cents} format={fmtCents} /></b></div>
                   {debtCents > 0 && (
                     <p className="note">
                       {t("room.assetsRate", { pct: ratePct })} · {t("room.assetsToLine", { amount: fmtCents(Math.max(0, (portfolio.max_debt_cents ?? 0) - debtCents)) })}
@@ -187,6 +209,8 @@ export default function Room() {
                     price={fmt$(p.close)}
                     pill={fmtPct(p.close / (series[p.instrument_id]?.[0] ?? p.close) - 1)}
                     pillUp={p.close >= (series[p.instrument_id]?.[0] ?? p.close)}
+                    priceValue={p.close}
+                    sharesValue={p.shares}
                     pnl={{
                       text: t("room.positionPnl", {
                         avg: fmt$(p.avg_cost), amount: fmtSignedCents(p.pnl_cents), pct: fmtPct(p.pnl_pct),
@@ -224,6 +248,7 @@ export default function Room() {
                       price={q ? fmt$(q.close) : "—"}
                       pill={q ? fmtPct(q.close / q.prev_close - 1) : ""}
                       pillUp={q ? q.close >= q.prev_close : true}
+                      priceValue={q?.close}
                       sparkSeries={s.slice(Math.max(0, s.length - 30))}
                       onClick={() => navigate(`/rooms/${roomId}/i/${inst.id}`)}
                     />
@@ -261,6 +286,11 @@ export default function Room() {
           { id: "activity", icon: "◉", label: lang === "zh" ? "动态" : "Activity", onSelect: () => selectMobileTab("activity") },
         ]}
       />
+      {bannerDay !== null && (
+        <div key={bannerDay} className="day-banner num" onAnimationEnd={() => setBannerDay(null)}>
+          {dayLabel(bannerDay, lang)}
+        </div>
+      )}
       {node}
     </div>
   );

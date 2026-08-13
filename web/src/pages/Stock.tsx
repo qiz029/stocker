@@ -4,6 +4,7 @@ import { fmt$, fmtPct, prettifyHeadline } from "../format";
 import { LangSwitch, mediaName, pickL, useT } from "../i18n";
 import { useRoomData, useSimClock } from "../roomData";
 import { useIncrementalFeed } from "../useIncrementalFeed";
+import { useChangeFlash } from "../useChangeFlash";
 import { useState } from "react";
 import CandleChart from "../components/CandleChart";
 import ActionPanel from "../components/ActionPanel";
@@ -23,6 +24,10 @@ export default function Stock() {
     after => fetchNews(roomId!, after), 30_000, roomId!);
   const [openNews, setOpenNews] = useState<number | null>(null);
   const [mobileTab, setMobileTab] = useState("quote");
+
+  // Flash the close price in the stat strip when a poll brings a new value.
+  const closesLive = series[instrumentId!] ?? [];
+  const closeFlash = useChangeFlash(closesLive.length ? closesLive[closesLive.length - 1]! : 0);
 
   if (!state) return null;
   const spectator = state.room.is_member === false;
@@ -64,7 +69,10 @@ export default function Stock() {
             />
           )}
           <div className="stat-strip num">
-            <div><span className="k">{t("stock.todayClose")}</span>{fmt$(last)}</div>
+            <div><span className="k">{t("stock.todayClose")}</span><span
+              key={closeFlash.nonce}
+              className={closeFlash.nonce ? (closeFlash.dir >= 0 ? "flash-up" : "flash-down") : undefined}
+            >{fmt$(last)}</span></div>
             <div><span className="k">{t("stock.prevClose")}</span>{fmt$(prev)}</div>
             <div><span className="k">{t("stock.high3m")}</span>{q3m.length ? fmt$(Math.max(...q3m)) : "—"}</div>
             <div><span className="k">{t("stock.low3m")}</span>{q3m.length ? fmt$(Math.min(...q3m)) : "—"}</div>
