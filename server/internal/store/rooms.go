@@ -46,6 +46,7 @@ type Room struct {
 	ID              int64
 	Name            string
 	InviteCode      string
+	ShareToken      string
 	ScenarioID      string
 	Days            int
 	Seed            uint64
@@ -56,12 +57,12 @@ type Room struct {
 	Visibility      string // "public" | "private"
 }
 
-const roomCols = `id, name, invite_code, scenario_id, days, seed, status, day_duration_secs, started_at, host_user_id, visibility`
+const roomCols = `id, name, invite_code, share_token, scenario_id, days, seed, status, day_duration_secs, started_at, host_user_id, visibility`
 
 func scanRoom(row pgx.Row) (*Room, error) {
 	r := &Room{}
 	var seed int64
-	err := row.Scan(&r.ID, &r.Name, &r.InviteCode, &r.ScenarioID, &r.Days, &seed,
+	err := row.Scan(&r.ID, &r.Name, &r.InviteCode, &r.ShareToken, &r.ScenarioID, &r.Days, &seed,
 		&r.Status, &r.DayDurationSecs, &r.StartedAt, &r.HostUserID, &r.Visibility)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -169,13 +170,17 @@ func CreateNamedRoom(ctx context.Context, db *pgxpool.Pool, sc *scenario.Scenari
 	if err != nil {
 		return nil, err
 	}
+	shareToken, err := newInviteCode()
+	if err != nil {
+		return nil, err
+	}
 
 	var room *Room
 	err = pgx.BeginFunc(ctx, db, func(tx pgx.Tx) error {
 		r, err := scanRoom(tx.QueryRow(ctx, `
-			INSERT INTO rooms (name, invite_code, scenario_id, days, seed, day_duration_secs, host_user_id, visibility)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING `+roomCols,
-			roomName, invite, sc.ID, sc.Days, int64(seed), dayDurationSecs, hostID, roomVisibility))
+			INSERT INTO rooms (name, invite_code, share_token, scenario_id, days, seed, day_duration_secs, host_user_id, visibility)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING `+roomCols,
+			roomName, invite, shareToken, sc.ID, sc.Days, int64(seed), dayDurationSecs, hostID, roomVisibility))
 		if err != nil {
 			return err
 		}
@@ -279,6 +284,13 @@ func GetRoom(ctx context.Context, q Querier, id int64) (*Room, error) {
 
 func GetRoomByInvite(ctx context.Context, q Querier, code string) (*Room, error) {
 	return scanRoom(q.QueryRow(ctx, `SELECT `+roomCols+` FROM rooms WHERE invite_code = $1`, code))
+}
+
+// GetRoomByShareToken resolves the read-only public share link token. The
+// token never grants membership; it only unlocks the blind-box-safe
+// battle-report page.
+func GetRoomByShareToken(ctx context.Context, q Querier, token string) (*Room, error) {
+	return scanRoom(q.QueryRow(ctx, `SELECT `+roomCols+` FROM rooms WHERE share_token = $1`, token))
 }
 
 // JoinRoom seats a user. Mid-game joiners start on the current day with

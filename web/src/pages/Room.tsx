@@ -98,6 +98,12 @@ export default function Room() {
     toast(t("room.inviteCopied", { code: room!.invite_code }));
   }
 
+  function copyShareLink() {
+    if (!room!.share_token) return;
+    void navigator.clipboard?.writeText(`${window.location.origin}/share/${room!.share_token}`);
+    toast(t("room.shareReportCopied"));
+  }
+
   async function joinAsPlayer(e: FormEvent) {
     e.preventDefault(); setJoining(true);
     try {
@@ -148,6 +154,9 @@ export default function Room() {
               <span className="room-action-label">{t("room.reveal")}</span><span className="room-action-mark" aria-hidden="true">↗</span>
             </button>
           )}
+          {!spectator && room.share_token && <button className="invite room-topbar-action" aria-label={t("room.shareReport")} onClick={copyShareLink}>
+            <span className="room-action-label">{t("room.shareReport")}</span><span className="room-action-mark" aria-hidden="true">↗</span>
+          </button>}
           {!spectator && <button className="invite room-topbar-action" aria-label={t("room.invite")} onClick={copyInvite}>
             <span className="room-action-label">{t("room.invite")}</span><span className="room-action-mark" aria-hidden="true">＋</span>
           </button>}

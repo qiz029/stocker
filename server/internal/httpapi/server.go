@@ -30,6 +30,8 @@ func (s *Server) Router() http.Handler {
 	r := chi.NewRouter()
 	r.Post("/api/register", s.handleRegister)
 	r.Post("/api/login", s.handleLogin)
+	// Public read-only battle report; the share token is the capability.
+	r.Get("/share/{token}", s.handleSharePage)
 	r.Group(func(r chi.Router) {
 		r.Use(s.requireAuth)
 		r.Post("/api/logout", s.handleLogout)

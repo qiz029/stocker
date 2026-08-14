@@ -17,8 +17,8 @@ func mkBareRoom(t *testing.T, pool *pgxpool.Pool, sc *scenario.Scenario, hostID 
 	t.Helper()
 	var id int64
 	err := pool.QueryRow(context.Background(), `
-		INSERT INTO rooms (invite_code, scenario_id, days, seed, day_duration_secs, host_user_id)
-		VALUES ($1, $2, $3, 1, 60, $4) RETURNING id`,
+		INSERT INTO rooms (invite_code, share_token, scenario_id, days, seed, day_duration_secs, host_user_id)
+		VALUES ($1, $1 || '.share', $2, $3, 1, 60, $4) RETURNING id`,
 		code, sc.ID, sc.Days, hostID).Scan(&id)
 	if err != nil {
 		t.Fatalf("mkBareRoom: %v", err)

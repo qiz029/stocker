@@ -59,6 +59,7 @@ func roomJSON(room *store.Room, curDay int, ended, started bool, userID int64, m
 	}
 	if member {
 		m["invite_code"] = room.InviteCode
+		m["share_token"] = room.ShareToken
 	}
 	if room.StartedAt != nil {
 		m["started_at"] = room.StartedAt.UTC().Format(time.RFC3339)

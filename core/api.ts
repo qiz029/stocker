@@ -48,7 +48,7 @@ export type User = {
 };
 export type ScenarioInfo = { id: string; name: string; days: number; name_en?: string };
 export type Room = {
-  id: number; name?: string; invite_code?: string; scenario_id: string; days: number;
+  id: number; name?: string; invite_code?: string; share_token?: string; scenario_id: string; days: number;
   status: "lobby" | "running"; day_duration_secs: number;
   started_at?: string; current_day?: number; ended?: boolean; is_host?: boolean;
   visibility?: "public" | "private"; is_member?: boolean;
